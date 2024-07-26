@@ -26,7 +26,7 @@ import de.dnpm.ccdn.util.Logging
   val service =
     new MVHReportingService(
       Config.instance,
-      Repository.getInstance.get,
+      ReportQueue.getInstance.get,
       DNPM.Connector.getInstance.get,
       BfArM.Connector.getInstance.get
     )
@@ -42,7 +42,7 @@ import de.dnpm.ccdn.util.Logging
 class MVHReportingService
 (
   config: Config,
-  repo: Repository,
+  queue: ReportQueue,
   dnpm: DNPM.Connector,
   bfarm: BfArM.Connector
 )(
@@ -111,8 +111,7 @@ extends Logging:
                 log.info(s"Polling SubmissionReports of site '${site.display.getOrElse(site.code)}'")
             
                 val period =
-                  repo.lastPollingTime(site)
-                    .toOption
+                  queue.lastPollingTime(site)
                     .map(Period(_))
             
                 dnpm.dataSubmissionReports(
@@ -123,8 +122,9 @@ extends Logging:
                 .andThen {
                   case Success(Right(reports)) =>
                     log.debug(s"Enqueueing ${reports.size} reports")
-                    repo.save(reports)
-                      .foreach(_ => repo.setLastPollingTime(site,now))
+                    queue
+                      .addAll(reports)
+                      .setLastPollingTime(site,now)
                 }   
             }
           )
@@ -138,30 +138,21 @@ extends Logging:
 
       }
     
-    
   private[core] def uploadReports: Future[Unit] =
     log.info("Uploading SubmissionReports...")
-    repo.submissionReports match
-      case Right(reports) =>
-        Future.sequence(
-          reports
-            .map(
-              report =>
-              bfarm
-                .upload(toBfArMReport(report))
-                .andThen{ 
-                  case Success(Right(_)) =>
-                    log.debug("Upload successful")
-                    repo.delete(report)
-                }
-            )
+    Future.sequence(
+      queue.entries
+        .map(
+          report =>
+          bfarm
+            .upload(toBfArMReport(report))
+            .andThen{ 
+              case Success(Right(_)) =>
+                log.debug("Upload successful")
+                queue.remove(report)
+            }
         )
-        .map(_ => ())
-
-      case Left(err) =>
-        s"Problem loading reports from repo: $err"
-          .tap(log.error)
-          .pipe(new Exception(_))
-          .pipe(Future.failed)
+    )
+    .map(_ => ())
 
 

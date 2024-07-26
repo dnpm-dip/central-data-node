@@ -17,14 +17,15 @@ final class Tests extends AsyncFlatSpec
   System.setProperty("dnpm.ccdn.polling.timeunit",timeUnit.toString)
 
 
-  val repo  = FakeRepository
+//  val repo  = FakeRepository
+  val reportQueue  = FakeReportQueue
   val dnpm  = DNPM.Connector.getInstance.get
   val bfarm = BfArM.Connector.getInstance.get
 
   val service =
     new MVHReportingService(
       Config.instance,
-      repo,
+      reportQueue,
       dnpm, 
       bfarm
     )
@@ -36,11 +37,11 @@ final class Tests extends AsyncFlatSpec
       
       pollingResult <- service.pollReports
       
-      _ = repo.queue must not be (empty)
+      _ = reportQueue.queue must not be (empty)
 
       uploadResult <- service.uploadReports
       
-    } yield repo.queue must be (empty)
+    } yield reportQueue.queue must be (empty)
 
   }
 

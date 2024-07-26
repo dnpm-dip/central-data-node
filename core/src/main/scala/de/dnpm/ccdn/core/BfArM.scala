@@ -74,23 +74,3 @@ object BfArM:
 
   object Connector extends SPILoader[ConnectorProvider]
 
-
-
-
-
-
-/*
-trait BfArMOps[F[_],Env,Err]:
-
-  type Executable[T] = Env ?=> F[Either[Err,T]]
-
-  def upload(report: BfArMSubmissionReport): Executable[BfArMSubmissionReport]
-
-
-
-type BfArMConnector = BfArMOps[Future,ExecutionContext,String]
-
-trait BfArMConnectorProvider extends SPI[BfArMConnector]
-
-object BfArMConnector extends SPILoader[BfArMConnectorProvider]
-*/

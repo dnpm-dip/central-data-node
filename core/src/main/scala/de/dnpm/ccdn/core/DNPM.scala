@@ -73,26 +73,3 @@ object DNPM:
   object Connector extends SPILoader[ConnectorProvider]
 
 
-
-
-/*
-trait DNPMOps[F[_],Env,Err]:
-
-  def siteInfos: Env ?=> F[Either[Err,List[SiteDomains]]]
-
-  def dataSubmissionReports(
-    site: Coding[Site],
-    domains: Set[Domain],
-    period: Option[Period[LocalDateTime]] = None
-  ): Env ?=> F[Either[Err,Seq[DNPMSubmissionReport]]]
-//  ): Env ?=> F[Either[Err,Seq[DataSubmissionReport]]]
-
-
-
-type DNPMConnector = DNPMOps[Future,ExecutionContext,String]
-
-trait DNPMConnectorProvider extends SPI[DNPMConnector]
-
-object DNPMConnector extends SPILoader[DNPMConnectorProvider]
-*/
-
