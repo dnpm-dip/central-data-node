@@ -9,7 +9,7 @@ import de.dnpm.ccdn.util.{
 
 
 
-trait QueueOps[T,Err]:
+trait QueueOps[T]:
 
   def setLastPollingTime(
     site: Coding[Site],
@@ -38,7 +38,7 @@ trait QueueOps[T,Err]:
 
 
 
-type ReportQueue = QueueOps[DNPM.SubmissionReport,String]
+type ReportQueue = QueueOps[DNPM.SubmissionReport]
 
 trait ReportQueueProvider extends SPI[ReportQueue]
 

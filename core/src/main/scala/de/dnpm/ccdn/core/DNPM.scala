@@ -22,18 +22,18 @@ import play.api.libs.json.{
 
 object DNPM:
 
+  enum UseCase:
+    case MTB, RD
+
+  object UseCase extends JsonFormatting[UseCase]:
+    override val names =
+      Map(
+        MTB -> "MTB",
+        RD  -> "RD"
+      )
+
+
   object SubmissionReport:
-
-    enum Domain:
-      case Oncology
-      case RareDiseases
-
-    object Domain extends JsonFormatting[Domain]:
-      val names =
-        Map(
-          Oncology     -> "oncology",
-          RareDiseases -> "rare-diseases"
-        )
 
     given Format[SubmissionReport] =
       Json.format[SubmissionReport]
@@ -43,7 +43,7 @@ object DNPM:
   (
     createdOn: LocalDateTime,
     site: Coding[Site],
-    domain: SubmissionReport.Domain,
+    domain: UseCase,
     transferTAN: Id[TTAN],
     submissionType: SubmissionType,
     sequencingType: SequencingType,
@@ -52,15 +52,12 @@ object DNPM:
 
 
 
-  type SiteDomains = (Coding[Site],Set[SubmissionReport.Domain])
-
   trait ConnectorOps[F[_],Env,Err]:
 
-    def siteInfos: Env ?=> F[Either[Err,List[SiteDomains]]]
+    def sites: Env ?=> F[Either[Err,List[Coding[Site]]]]
 
     def dataSubmissionReports(
       site: Coding[Site],
-      domains: Set[SubmissionReport.Domain],
       period: Option[Period[LocalDateTime]] = None
     ): Env ?=> F[Either[Err,Seq[SubmissionReport]]]
 

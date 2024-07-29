@@ -53,10 +53,10 @@ extends Logging:
   private val executor: ScheduledExecutorService =
     Executors.newSingleThreadScheduledExecutor
 
-  private var task: Option[JavaFuture[?]] = None
+  private var scheduledTask: Option[JavaFuture[?]] = None
 
   def start: Unit =
-    task =
+    scheduledTask =
       Some(
         executor.scheduleAtFixedRate(
           () => {
@@ -73,17 +73,17 @@ extends Logging:
    
    
   def stop: Unit =
-    task.foreach(_.cancel(false))
+    scheduledTask.foreach(_.cancel(false))
 
 
 
-  val toDiseaseType =
+  private val toDiseaseType =
     Map(
-      DNPM.SubmissionReport.Domain.Oncology     -> BfArM.SubmissionReport.DiseaseType.Oncological,
-      DNPM.SubmissionReport.Domain.RareDiseases -> BfArM.SubmissionReport.DiseaseType.Rare
+      DNPM.UseCase.MTB -> BfArM.SubmissionReport.DiseaseType.Oncological,
+      DNPM.UseCase.RD  -> BfArM.SubmissionReport.DiseaseType.Rare
     ) 
 
-  val toBfArMReport: DNPM.SubmissionReport => BfArM.SubmissionReport =
+  private val toBfArMReport: DNPM.SubmissionReport => BfArM.SubmissionReport =
 
     case DNPM.SubmissionReport(created,site,domain,ttan,submType,seqType,qcPassed) =>
       BfArM.SubmissionReport(
@@ -101,14 +101,14 @@ extends Logging:
 
   private[core] def pollReports: Future[Unit] =
     log.info("Polling DNPM-SubmissionReports...")
-    dnpm.siteInfos
+    dnpm.sites
       .flatMap {
-        case Right(siteInfos) =>
+        case Right(sites) =>
           Future.sequence(
-            siteInfos.map {
-              (site,domains) =>
+            sites.map {
+              site =>
             
-                log.info(s"Polling SubmissionReports of site '${site.display.getOrElse(site.code)}'")
+                log.debug(s"Polling SubmissionReports of site '${site.display.getOrElse(site.code)}'")
             
                 val period =
                   queue.lastPollingTime(site)
@@ -116,7 +116,6 @@ extends Logging:
             
                 dnpm.dataSubmissionReports(
                   site,
-                  domains,
                   period
                 )
                 .andThen {
@@ -137,6 +136,7 @@ extends Logging:
             .pipe(Future.failed)
 
       }
+
     
   private[core] def uploadReports: Future[Unit] =
     log.info("Uploading SubmissionReports...")

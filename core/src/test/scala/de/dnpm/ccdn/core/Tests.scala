@@ -7,8 +7,7 @@ import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.must.Matchers._
 
 
-final class Tests extends AsyncFlatSpec
-{
+final class Tests extends AsyncFlatSpec:
 
   val rate = 3
   val timeUnit = SECONDS
@@ -47,4 +46,3 @@ final class Tests extends AsyncFlatSpec
 
 
 
-}

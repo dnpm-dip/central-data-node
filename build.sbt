@@ -18,6 +18,7 @@ lazy val global = project
   )
   .aggregate(
     core,
+    connectors
   )
 
 
@@ -34,31 +35,19 @@ lazy val core = project
     )
   )
 
-/*
-lazy val api = project
+lazy val connectors = project
   .settings(
-    name := "pan-app-api",
+    name := "ccdn-connectors",
     settings,
     libraryDependencies ++= Seq(
       dependencies.scalatest,
+      dependencies.play_ahc,
+      dependencies.play_ahc_js,
     )
   )
   .dependsOn(
     core
   )
-
-lazy val impl = project
-  .settings(
-    name := "pan-app-impl",
-    settings,
-    libraryDependencies ++= Seq(
-      dependencies.scalatest,
-    )
-  )
-  .dependsOn(
-    api
-  )
-*/
 
 
 //-----------------------------------------------------------------------------
@@ -67,11 +56,13 @@ lazy val impl = project
 
 lazy val dependencies =
   new {
-    val scalatest  = "org.scalatest"      %% "scalatest"       % "3.2.18" % Test
-    val slf4j      = "org.slf4j"          %  "slf4j-api"       % "2.0.13"
-    val logback    = "ch.qos.logback"     %  "logback-classic" % "1.5.6" % Test
-    val cats_core  = "org.typelevel"      %% "cats-core"       % "2.12.0"
-    val play_json  = "org.playframework"  %% "play-json"       % "3.0.3"
+    val scalatest   = "org.scalatest"     %% "scalatest"               % "3.2.18" % Test
+    val slf4j       = "org.slf4j"         %  "slf4j-api"               % "2.0.13"
+    val logback     = "ch.qos.logback"    %  "logback-classic"         % "1.5.6" % Test
+    val cats_core   = "org.typelevel"     %% "cats-core"               % "2.12.0"
+    val play_json   = "org.playframework" %% "play-json"               % "3.0.3"
+    val play_ahc    = "org.playframework" %% "play-ahc-ws-standalone"  % "3.0.5"
+    val play_ahc_js = "org.playframework" %% "play-ws-standalone-json" % "3.0.5"
   }
 
 
