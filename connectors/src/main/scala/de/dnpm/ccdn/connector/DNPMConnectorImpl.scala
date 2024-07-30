@@ -26,10 +26,7 @@ import play.api.libs.ws.{
 }
 import play.api.libs.ws.JsonBodyReadables._
 import play.api.libs.ws.DefaultBodyReadables._
-import de.dnpm.ccdn.util.{
-  JsonFormatting,
-  Logging
-}
+import de.dnpm.ccdn.util.Logging
 import de.dnpm.ccdn.core.{
   Coding,
   DNPM,

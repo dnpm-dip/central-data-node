@@ -13,7 +13,10 @@ import scala.collection.concurrent.{
   Map,
   TrieMap
 }
-import scala.util.Using
+import scala.util.{
+  Try,
+  Using
+}
 import scala.util.chaining._
 import play.api.libs.json.{
   Json,
@@ -32,7 +35,7 @@ import de.dnpm.ccdn.core.{
 
 final class ReportQueueProviderImpl extends ReportQueueProvider: 
   override def getInstance: ReportQueue =
-    ???
+    FSBackedReportQueue.instance
 
 
 object FSBackedReportQueue:
@@ -58,13 +61,12 @@ with Logging:
 
 
   private val pollingTimes: Map[Code[Site],LocalDateTime] = 
-    import scala.collection.immutable.Map
-    TrieMap.from(
-      Json.parse(new FileInputStream(pollingTimesFile))
-        .pipe(Json.fromJson[Map[Code[Site],LocalDateTime]](_))
-        .get
-    )
-
+    Try(new FileInputStream(pollingTimesFile))
+      .map(Json.parse)
+      .map(Json.fromJson[scala.collection.immutable.Map[Code[Site],LocalDateTime]](_).get)
+      .map(TrieMap.from)
+      .getOrElse(TrieMap.empty)
+    
 
   private val queue: Queue[DNPM.SubmissionReport] =
     dir.listFiles(

@@ -6,14 +6,13 @@ import java.time.{
   LocalDateTime
 }
 import play.api.libs.json.{
-  Json,
   Format,
   Reads,
   Writes
 }
 import de.dnpm.ccdn.util.{
   Id,
-  JsonFormatting
+  json,
 }
 
 
@@ -31,15 +30,17 @@ enum SubmissionType:
   case Correction
   case Other
 
-object SubmissionType extends JsonFormatting[SubmissionType]:
-  val names =
-    Map(
-      Initial    -> "initial",
-      Addition   -> "addition",  
-      Correction -> "correction",
-      Other      -> "other"
-    )
 
+object SubmissionType:
+  given Format[SubmissionType]=
+    json.enumFormat(
+      Map(
+        Initial    -> "initial",
+        Addition   -> "addition",  
+        Correction -> "correction",
+        Other      -> "other"
+      )
+    )
 
 
 enum SequencingType:
@@ -49,13 +50,15 @@ enum SequencingType:
   case WGSLr
   case None
 
-object SequencingType extends JsonFormatting[SequencingType]:
-  val names =
-    Map(
-      Panel -> "panel",
-      WES   -> "wes",  
-      WGS   -> "wgs",
-      WGSLr -> "wgs_lr",
-      None  -> "none"
-    )
+object SequencingType:
+  given Format[SequencingType] =
+    json.enumFormat[SequencingType](
+      Map(
+        Panel -> "panel",
+        WES   -> "wes",  
+        WGS   -> "wgs",
+        WGSLr -> "wgs_lr",
+        None  -> "none"
+      )
+  )
 

@@ -9,10 +9,10 @@ import play.api.libs.ws.ahc.StandaloneAhcWSClient
 
 object HttpClient:
 
-  private lazy implicit val system: ActorSystem =
+  lazy given system: ActorSystem =
     ActorSystem()
 
-  private lazy implicit val materializer: Materializer =
+  lazy given materializer: Materializer =
     SystemMaterializer(system).materializer
 
   lazy val instance =

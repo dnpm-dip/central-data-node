@@ -27,10 +27,7 @@ import play.api.libs.ws.{
 import play.api.libs.ws.JsonBodyReadables._
 import play.api.libs.ws.JsonBodyWritables._
 import play.api.libs.ws.DefaultBodyWritables._
-import de.dnpm.ccdn.util.{
-  JsonFormatting,
-  Logging
-}
+import de.dnpm.ccdn.util.Logging
 import de.dnpm.ccdn.core.BfArM
 import BfArM.SubmissionReport
 

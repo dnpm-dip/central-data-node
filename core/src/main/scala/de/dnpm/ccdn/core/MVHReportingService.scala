@@ -134,7 +134,6 @@ extends Logging:
             .tap(log.error)
             .pipe(new Exception(_))
             .pipe(Future.failed)
-
       }
 
     

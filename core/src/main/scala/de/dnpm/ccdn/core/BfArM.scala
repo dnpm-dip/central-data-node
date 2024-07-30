@@ -7,14 +7,12 @@ import scala.concurrent.{
 }
 import de.dnpm.ccdn.util.{
   Id,
-  JsonFormatting,
+  json,
   SPI,
   SPILoader
 }
 import play.api.libs.json.{
   Json,
-  Format,
-  Reads,
   Writes
 }
 
@@ -26,20 +24,26 @@ object BfArM:
     enum DataCategory:
       case Clinical
 
-    object DataCategory extends JsonFormatting[DataCategory]:
-      val names =
-        Map(Clinical -> "clinical")
 
     enum DiseaseType:
       case Oncological
       case Rare
 
-    object DiseaseType extends JsonFormatting[DiseaseType]:
-      val names =
-        Map(
-          Oncological -> "oncological",
-          Rare        -> "rare"
+    object DataCategory:
+      given Writes[DataCategory] =
+        json.enumWrites[DataCategory](
+          Map(Clinical -> "clinical")
         )
+
+    object DiseaseType:
+      given Writes[DiseaseType] =
+        json.enumWrites[DiseaseType](
+          Map(
+            Oncological -> "oncological",
+            Rare        -> "rare"
+          )
+        )
+
 
     given Writes[SubmissionReport] =
       Json.writes[SubmissionReport]

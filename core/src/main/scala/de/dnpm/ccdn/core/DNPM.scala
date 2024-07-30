@@ -8,7 +8,7 @@ import scala.concurrent.{
 }
 import de.dnpm.ccdn.util.{
   Id,
-  JsonFormatting,
+  json,
   SPI,
   SPILoader
 }
@@ -25,17 +25,19 @@ object DNPM:
   enum UseCase:
     case MTB, RD
 
-  object UseCase extends JsonFormatting[UseCase]:
-    override val names =
-      Map(
-        MTB -> "MTB",
-        RD  -> "RD"
+  object UseCase:
+    given Format[UseCase] =
+      json.enumFormat[UseCase](
+        Map(
+          MTB -> "MTB",
+          RD  -> "RD"
+        )
       )
 
 
   object SubmissionReport:
 
-    given Format[SubmissionReport] =
+    inline given Format[SubmissionReport] =
       Json.format[SubmissionReport]
 
 

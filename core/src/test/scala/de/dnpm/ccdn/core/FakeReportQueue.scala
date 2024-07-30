@@ -8,6 +8,11 @@ import scala.collection.concurrent.{
   TrieMap
 }
 
+import scala.util.chaining._
+import play.api.libs.json.Json.{
+  toJson,
+  prettyPrint
+}
 
 
 final class FakeReportQueueProvider extends ReportQueueProvider:
@@ -49,7 +54,7 @@ object FakeReportQueue extends ReportQueue:
   override def addAll(
     ts: Seq[DNPM.SubmissionReport]
   ): this.type =
-    queue ++= ts
+    queue ++= ts.tapEach(toJson(_).pipe(prettyPrint).tap(println))
     this
 
 
