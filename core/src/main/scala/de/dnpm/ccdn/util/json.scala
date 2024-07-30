@@ -24,7 +24,6 @@ object json:
       m.map { (k,v) => (v,k) }
 
 
-
   // Based on example from: https://alexn.org/blog/2023/05/25/scala-enums/
   private inline def allInstances[ET <: Tuple, T]: List[T] =
     inline erasedValue[ET] match
@@ -40,15 +39,6 @@ object json:
 
 
 
-  inline def enumReads[T <: Enum: Mirror.SumOf]: Reads[T] =
-    val names = defaultNames[T]
-    Reads.of[String]
-      .collect(
-        JsonValidationError(s"Invalid enum value, expected one of {${names.values.mkString(",")}}")
-      )(
-        names.invert
-      )
-
   def enumReads[T <: Enum](names: Map[String,T]): Reads[T] =
     Reads.of[String]
       .collect(
@@ -57,19 +47,16 @@ object json:
         names
       )
 
+  inline def enumReads[T <: Enum: Mirror.SumOf]: Reads[T] =
+    enumReads[T](defaultNames[T].invert)
 
-  inline def enumWrites[T <: Enum: Mirror.SumOf]: Writes[T] =
-    Writes.of[String].contramap(defaultNames[T])
 
   def enumWrites[T <: Enum](names: T => String): Writes[T] =
     Writes.of[String].contramap(names)
 
+  inline def enumWrites[T <: Enum: Mirror.SumOf]: Writes[T] =
+    enumWrites[T](defaultNames[T])
 
-  inline def enumFormat[T <: Enum: Mirror.SumOf]: Format[T] =
-    Format(
-      enumReads[T],
-      enumWrites[T]
-    )
 
   def enumFormat[T <: Enum](names: Map[T,String]): Format[T] =
     Format(
@@ -77,3 +64,5 @@ object json:
       enumWrites[T](names)
     )
 
+  inline def enumFormat[T <: Enum: Mirror.SumOf]: Format[T] =
+    enumFormat[T](defaultNames[T])
