@@ -45,7 +45,7 @@ object DNPM:
   (
     createdOn: LocalDateTime,
     site: Coding[Site],
-    domain: UseCase,
+    useCase: UseCase,
     transferTAN: Id[TTAN],
     submissionType: SubmissionType,
     sequencingType: SequencingType,

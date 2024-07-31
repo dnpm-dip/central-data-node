@@ -19,7 +19,7 @@ import scala.util.chaining._
 import de.dnpm.ccdn.util.Logging
 
 
-@main def run: Unit =
+@main def exec: Unit =
 
   import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -31,11 +31,14 @@ import de.dnpm.ccdn.util.Logging
       BfArM.Connector.getInstance.get
     )
 
+  Runtime.getRuntime.addShutdownHook(
+    new Thread: 
+      override def run =
+        println("Shutting down MVH Reporting service...")
+        service.stop
+  )
+
   service.start
-
-  while (true){ }
-
-
 
 
 
@@ -50,12 +53,17 @@ class MVHReportingService
 )
 extends Logging:
 
+  import DNPM.UseCase._
+  import BfArM.SubmissionReport.DiseaseType._
+
+
   private val executor: ScheduledExecutorService =
     Executors.newSingleThreadScheduledExecutor
 
   private var scheduledTask: Option[JavaFuture[?]] = None
 
   def start: Unit =
+    log.info("Starting MVH Reporting service")
     scheduledTask =
       Some(
         executor.scheduleAtFixedRate(
@@ -73,26 +81,27 @@ extends Logging:
    
    
   def stop: Unit =
+    log.info("Stopping MVH Reporting service")
     scheduledTask.foreach(_.cancel(false))
 
 
+  extension(uc: DNPM.UseCase)
+    def toDiseaseType: BfArM.SubmissionReport.DiseaseType =
+      uc match
+        case MTB => Oncological
+        case RD  => Rare
 
-  private val toDiseaseType =
-    Map(
-      DNPM.UseCase.MTB -> BfArM.SubmissionReport.DiseaseType.Oncological,
-      DNPM.UseCase.RD  -> BfArM.SubmissionReport.DiseaseType.Rare
-    ) 
 
   private val toBfArMReport: DNPM.SubmissionReport => BfArM.SubmissionReport =
 
-    case DNPM.SubmissionReport(created,site,domain,ttan,submType,seqType,qcPassed) =>
+    case DNPM.SubmissionReport(created,site,useCase,ttan,submType,seqType,qcPassed) =>
       BfArM.SubmissionReport(
         created.toLocalDate,
         submType,
         ttan,
         config.submitterIds(site.code),
         config.dataNodeId,
-        toDiseaseType(domain),
+        useCase.toDiseaseType,
         BfArM.SubmissionReport.DataCategory.Clinical,
         seqType,
         qcPassed        
@@ -108,7 +117,7 @@ extends Logging:
             sites.map {
               site =>
             
-                log.debug(s"Polling SubmissionReports of site '${site.display.getOrElse(site.code)}'")
+                log.info(s"Polling SubmissionReports of site '${site.display.getOrElse(site.code)}'")
             
                 val period =
                   queue.lastPollingTime(site)
@@ -124,6 +133,10 @@ extends Logging:
                     queue
                       .addAll(reports)
                       .setLastPollingTime(site,now)
+
+                  case _ =>
+                    log.error(s"Error(s) occurred polling SubmissionReports of site '${site.display.getOrElse(site.code)}")
+
                 }   
             }
           )

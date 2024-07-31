@@ -1,6 +1,6 @@
 { 
   "polling": {
-    "period": 3,
+    "period": 10,
     "timeUnit": "SECONDS"
   },
   "dataNodeId":"KDK__DNPM",

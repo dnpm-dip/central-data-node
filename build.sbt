@@ -5,6 +5,13 @@ ThisBuild / organization := "de.dnpm"
 ThisBuild / scalaVersion := "3.4.2"
 ThisBuild / version      := "1.0-SNAPSHOT"
 
+ThisBuild / assemblyMergeStrategy := {
+  case PathList("META-INF", "services", xs @ _*) => MergeStrategy.first
+  case PathList("META-INF", xs @ _*)             => MergeStrategy.discard
+  case "reference.conf"                          => MergeStrategy.concat
+  case x                                         => MergeStrategy.first
+}
+
 
 //-----------------------------------------------------------------------------
 // PROJECTS
@@ -32,7 +39,9 @@ lazy val core = project
       dependencies.slf4j,
       dependencies.logback,
       dependencies.play_json,
-    )
+    ),
+    assembly / assemblyJarName := "dnpm-ccdn-core.jar",
+    assembly / mainClass       := Some("de.dnpm.ccdn.core.exec")
   )
 
 lazy val connectors = project
@@ -43,7 +52,8 @@ lazy val connectors = project
       dependencies.scalatest,
       dependencies.play_ahc,
       dependencies.play_ahc_js,
-    )
+    ),
+    assembly / assemblyJarName := "dnpm-ccdn-connectors.jar",
   )
   .dependsOn(
     core
@@ -58,7 +68,7 @@ lazy val dependencies =
   new {
     val scalatest   = "org.scalatest"     %% "scalatest"               % "3.2.18" % Test
     val slf4j       = "org.slf4j"         %  "slf4j-api"               % "2.0.13"
-    val logback     = "ch.qos.logback"    %  "logback-classic"         % "1.5.6" % Test
+    val logback     = "ch.qos.logback"    %  "logback-classic"         % "1.5.6"
     val cats_core   = "org.typelevel"     %% "cats-core"               % "2.12.0"
     val play_json   = "org.playframework" %% "play-json"               % "3.0.3"
     val play_ahc    = "org.playframework" %% "play-ahc-ws-standalone"  % "3.0.5"

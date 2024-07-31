@@ -6,7 +6,6 @@ import org.apache.pekko.stream._
 import play.api.libs.ws.StandaloneWSClient
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
 
-
 object HttpClient:
 
   lazy given system: ActorSystem =

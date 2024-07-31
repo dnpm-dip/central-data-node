@@ -32,7 +32,7 @@ enum SubmissionType:
 
 
 object SubmissionType:
-  given Format[SubmissionType]=
+  given Format[SubmissionType] =
     json.enumFormat(
       Map(
         Initial    -> "initial",
@@ -41,7 +41,6 @@ object SubmissionType:
         Other      -> "other"
       )
     )
-
 
 enum SequencingType:
   case Panel

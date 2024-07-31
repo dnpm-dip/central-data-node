@@ -15,6 +15,7 @@ import scala.collection.concurrent.{
 }
 import scala.util.{
   Try,
+  Failure,
   Using
 }
 import scala.util.chaining._
@@ -34,39 +35,47 @@ import de.dnpm.ccdn.core.{
 
 
 final class ReportQueueProviderImpl extends ReportQueueProvider: 
+
   override def getInstance: ReportQueue =
     FSBackedReportQueue.instance
 
 
-object FSBackedReportQueue:
+
+object FSBackedReportQueue extends Logging:
+
+  private val prop =
+    "dnpm.ccdn.queue.dir"
 
   lazy val instance =
-    new FSBackedReportQueue(
-      new File(System.getProperty("dnpm.ccdn.queue.dir"))
-    )
+    Try(new File(System.getProperty(prop)))
+      .map(new FSBackedReportQueue(_))
+      .recoverWith { 
+        case t =>
+          log.error(s"Couldn't set up Report Queue, most likely due to undefined property '$prop'",t)
+          Failure(t)
+      }
+      .get
+    
 
 
-
-final class FSBackedReportQueue
-(
+final class FSBackedReportQueue(
   val dir: File
 )
-extends ReportQueue
-with Logging:
+extends ReportQueue with Logging:
 
   dir.mkdirs
+
 
   private val pollingTimesFile: File =
     new File(dir,"PollingTimes.json")
 
 
-  private val pollingTimes: Map[Code[Site],LocalDateTime] = 
+  private val pollingTimes: Map[String,LocalDateTime] = 
     Try(new FileInputStream(pollingTimesFile))
       .map(Json.parse)
-      .map(Json.fromJson[scala.collection.immutable.Map[Code[Site],LocalDateTime]](_).get)
+      .map(Json.fromJson[scala.collection.immutable.Map[String,LocalDateTime]](_).get)
       .map(TrieMap.from)
       .getOrElse(TrieMap.empty)
-    
 
   private val queue: Queue[DNPM.SubmissionReport] =
     dir.listFiles(
@@ -101,29 +110,32 @@ with Logging:
     site: Coding[Site],
     dt: LocalDateTime
   ): this.type =
-    (pollingTimes += site.code -> dt)
-      .tap(save(_,pollingTimesFile))
+    Try(pollingTimes += site.code.toString -> dt)
+      .map(save(_,pollingTimesFile))
+      .recover { 
+        case t => log.warn("Problem updating polling times",t)
+      }
     this
 
 
   override def lastPollingTime(
     site: Coding[Site]
   ): Option[LocalDateTime] =
-    pollingTimes.get(site.code)
+    pollingTimes.get(site.code.toString)
 
 
   override def add(
-    t: DNPM.SubmissionReport
+    report: DNPM.SubmissionReport
   ): this.type = 
-    save(t,file(t))
-    queue += t
+    Try(queue += report)
+      .map(_ => save(report,file(report)))
     this
 
 
   override def addAll(
-    ts: Seq[DNPM.SubmissionReport]
+    reports: Seq[DNPM.SubmissionReport]
   ): this.type =
-    ts.foreach(add)
+    reports.foreach(add)
     this
 
 
@@ -132,9 +144,12 @@ with Logging:
 
 
   override def remove(
-    t: DNPM.SubmissionReport
+    report: DNPM.SubmissionReport
   ): this.type =
-    file(t).delete
-    queue -= t
+    Try(queue -= report)
+      .map(_ => file(report).delete)
+      .recover { 
+        case t => log.warn("Problem removing report",t)
+      }
     this
 

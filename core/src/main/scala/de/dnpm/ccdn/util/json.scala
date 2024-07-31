@@ -19,24 +19,22 @@ import play.api.libs.json.{
 object json:
 
 
-  extension[T <: Enum](m: Map[T,String])
-    def invert: Map[String,T] =
-      m.map { (k,v) => (v,k) }
+  private def invert[T <: Enum](m: Map[T,String]) =
+    m.map { (k,v) => (v,k) }
 
 
-  // Based on example from: https://alexn.org/blog/2023/05/25/scala-enums/
-  private inline def allInstances[ET <: Tuple, T]: List[T] =
+  // Based on examples from:
+  // - https://docs.scala-lang.org/scala3/reference/contextual/derivation.html
+  // - https://alexn.org/blog/2023/05/25/scala-enums/
+  private inline def summonInstances[ET <: Tuple, T]: List[T] =
     inline erasedValue[ET] match
-      case EmptyTuple => Nil
-      case _: (t *: ts)  =>
-        summonInline[ValueOf[t]].value.asInstanceOf[T] :: allInstances[ts, T]
-
+      case EmptyTuple   => Nil
+      case _: (t *: ts) => summonInline[ValueOf[t]].value.asInstanceOf[T] :: summonInstances[ts, T]
 
   private inline def defaultNames[T <: Enum](using m: Mirror.SumOf[T]): Map[T,String] =
-    allInstances[m.MirroredElemTypes, m.MirroredType]
+    summonInstances[m.MirroredElemTypes, m.MirroredType]
       .map(t => t -> t.toString)
       .toMap
-
 
 
   def enumReads[T <: Enum](names: Map[String,T]): Reads[T] =
@@ -48,7 +46,7 @@ object json:
       )
 
   inline def enumReads[T <: Enum: Mirror.SumOf]: Reads[T] =
-    enumReads[T](defaultNames[T].invert)
+    enumReads[T](invert(defaultNames[T]))
 
 
   def enumWrites[T <: Enum](names: T => String): Writes[T] =
@@ -60,7 +58,7 @@ object json:
 
   def enumFormat[T <: Enum](names: Map[T,String]): Format[T] =
     Format(
-      enumReads[T](names.invert),
+      enumReads[T](invert(names)),
       enumWrites[T](names)
     )
 
