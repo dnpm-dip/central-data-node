@@ -4,22 +4,8 @@ package de.dnpm.ccdn.util
 import play.api.libs.json.{
   Json,
   Reads,
-  Writes,
-  Format
+  Writes
 }
-
-
-/*
-final case class Id[+T](value: String) extends AnyVal
-
-object Id:
-
-  given [T]: Reads[Id[T]] = 
-    Reads.of[String].map(Id[T](_))
-
-  given [T]: Writes[Id[T]] = 
-    Writes.of[String].contramap[Id[T]](_.value)
-*/
 
 
 opaque type Id[T] = String
@@ -28,8 +14,6 @@ object Id:
 
   def apply[T](id: String): Id[T] = id
 
-  given [T](using Reads[String]): Reads[Id[T]] = 
-    Reads.of[String]
+  given [T](using r: Reads[String]): Reads[Id[T]] = r
 
-  given [T](using Writes[String]): Writes[Id[T]] = 
-    Writes.of[String]
+  given [T](using w: Writes[String]): Writes[Id[T]] = w

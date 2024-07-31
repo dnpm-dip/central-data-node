@@ -19,39 +19,9 @@ object Code:
 
   def apply[T](code: String): Code[T] = code
 
-  given [T](using Reads[String]): Reads[Code[T]] =
-    Reads.of[String]//.map(Code[T](_))
+  given [T](using r: Reads[String]): Reads[Code[T]] = r
 
-  given [T](using Writes[String]): Writes[Code[T]] =
-    Writes.of[String]//.contramap[Code[T]](_.value)
-
-
-/*
-final case class Code[+T](value: String) extends AnyVal:
-  override def toString = value
-
-object Code:
-
-  given [T]: Reads[Code[T]] =
-    Reads.of[String].map(Code[T](_))
-
-  given [T]: Writes[Code[T]] =
-    Writes.of[String].contramap[Code[T]](_.value)
-*/
-
-
-/*
-opaque type System[T] = URI
-
-object System:
-
-  def apply[T](uri: URI): System[T] = uri
-
-  def apply[T](using sys: System[T]): System[T] = sys
-
-  extension[T](sys: System[T])
-    def uri: URI = sys
-*/
+  given [T](using w: Writes[String]): Writes[Code[T]] = w
 
 
 
