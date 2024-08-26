@@ -19,6 +19,26 @@ import play.api.libs.json.{
 
 object BfArM:
 
+  enum SequencingType:
+    case Panel
+    case WES
+    case WGS
+    case WGSLr
+    case None
+
+  object SequencingType:
+    given Writes[SequencingType] =
+      json.enumWrites[SequencingType](
+        Map(
+          Panel -> "panel",
+          WES   -> "wes",
+          WGS   -> "wgs",
+          WGSLr -> "wgs_lr",
+          None  -> "none"
+        )
+    )
+
+
   object SubmissionReport:
 
     enum DataCategory:
@@ -56,8 +76,8 @@ object BfArM:
     localCaseId: Id[TTAN],
     submitterId: Id[Site],
     dataNodeId: Id[DataNode],
-    diseaseType: SubmissionReport.DiseaseType,
     dataCategory: SubmissionReport.DataCategory,
+    diseaseType: SubmissionReport.DiseaseType,
     libraryType: SequencingType,
     dataQualityCheckedPassed: Boolean
   )
@@ -66,9 +86,10 @@ object BfArM:
 
   trait ConnectorOps[F[_],Env,Err]:
 
-    type Executable[T] = Env ?=> F[Either[Err,T]]
+    type Executable[T] = Env ?=> F[T | Err]
 
     def upload(report: SubmissionReport): Executable[SubmissionReport]
+
 
 
 

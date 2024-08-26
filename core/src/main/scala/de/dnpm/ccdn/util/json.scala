@@ -18,7 +18,6 @@ import play.api.libs.json.{
 
 object json:
 
-
   private def invert[T <: Enum](m: Map[T,String]) =
     m.map { (k,v) => (v,k) }
 
@@ -64,3 +63,35 @@ object json:
 
   inline def enumFormat[T <: Enum: Mirror.SumOf]: Format[T] =
     enumFormat[T](defaultNames[T])
+
+end json
+
+
+
+/*
+trait OpaqueTypeFormat[Pub,Op]:
+
+  given(
+    using r: Reads[Op]
+  ): Reads[Pub] =
+    r.asInstanceOf[Reads[Pub]]
+
+  given(
+    using w: Writes[Op]
+  ): Writes[Pub] =
+    w.asInstanceOf[Writes[Pub]]
+
+trait OpaqueTypeFormatF[Pub[_],Op]:
+
+  given[T](
+    using r: Reads[Op]
+  ): Reads[Pub[T]] =
+    r.asInstanceOf[Reads[Pub[T]]]
+
+  given[T](
+    using w: Writes[Op]
+  ): Writes[Pub[T]] =
+    w.asInstanceOf[Writes[Pub[T]]]
+*/
+
+

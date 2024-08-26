@@ -17,3 +17,4 @@ object Id:
   given [T](using r: Reads[String]): Reads[Id[T]] = r
 
   given [T](using w: Writes[String]): Writes[Id[T]] = w
+

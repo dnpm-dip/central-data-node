@@ -72,15 +72,13 @@ with Logging:
 
   def upload(
     report: SubmissionReport
-  ): ExecutionContext ?=> Future[Either[String,SubmissionReport]] =
+  ): ExecutionContext ?=> Future[SubmissionReport | String] =
     wsclient
       .url(s"$baseURL/api/upload")
       .withRequestTimeout(timeout.getOrElse(10) seconds)
       .post(Json.toJson(report))
       .map(
         response => response.status match
-          case 200 => report.asRight[String]
-          case _   => response.body[JsValue].as[Error].message.asLeft[SubmissionReport]
+          case 200 => report
+          case _   => response.body[JsValue].as[Error].message
       )
-
-

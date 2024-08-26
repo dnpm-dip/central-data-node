@@ -189,12 +189,11 @@ with Logging:
       .withVirtualHost(sitesConfig.get()(site)._1)
 
 
-  override def sites: ExecutionContext ?=> Future[Either[String,List[Coding[Site]]]] =
+  override def sites: ExecutionContext ?=> Future[List[Coding[Site]] | String] =
     Future.successful(
       sitesConfig.get
         .keys
         .toList
-        .asRight[String]
     )
 
 
@@ -202,7 +201,7 @@ with Logging:
   override def dataSubmissionReports(
     site: Coding[Site],
     period: Option[Period[LocalDateTime]] = None
-  ): ExecutionContext ?=> Future[Either[String,Seq[SubmissionReport]]] =
+  ): ExecutionContext ?=> Future[Seq[SubmissionReport] | String] =
     val useCases =
       sitesConfig.get()(site)._2
 
@@ -244,8 +243,7 @@ with Logging:
     )(
       _ ++ _
     )
-    .map(_.asRight[String])
     .recover {
-      case t => t.getMessage.asLeft[Seq[SubmissionReport]]
+      case t => t.getMessage
     }
 

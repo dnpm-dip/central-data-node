@@ -42,6 +42,7 @@ object SubmissionType:
       )
     )
 
+/*
 enum SequencingType:
   case Panel
   case WES
@@ -60,4 +61,4 @@ object SequencingType:
         None  -> "none"
       )
   )
-
+*/

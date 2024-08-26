@@ -10,10 +10,8 @@ import scala.concurrent.{
 }
 import de.dnpm.ccdn.util.Id
 import SubmissionType.Initial
-import SequencingType.WGS
 import DNPM.UseCase._
-//import DNPM.SubmissionReport.Domain
-//import Domain._
+import DNPM.SequencingType._
 
 
 
@@ -35,10 +33,10 @@ object FakeDNPMConnector extends DNPM.Connector:
 
 
   private val useCases =
-    Set(
-      MTB,
-      RD
-    )
+    Set(MTB,RD)
+
+  private val seqTypes =
+    Set(Panel,Exome,Genome,GenomeLr)
 
   private def rndReport(
     site: Coding[Site],
@@ -49,7 +47,7 @@ object FakeDNPMConnector extends DNPM.Connector:
       oneOf(useCases),
       Id[TTAN](randomUUID.toString),
       Initial,
-      WGS,
+      Some(oneOf(seqTypes)),
       rnd.nextBoolean
     )
 
@@ -66,20 +64,17 @@ object FakeDNPMConnector extends DNPM.Connector:
 
 
 
-  override def sites: ExecutionContext ?=> Future[Either[String,List[Coding[Site]]]] =
+  override def sites: ExecutionContext ?=> Future[List[Coding[Site]] | String] =
     Future.successful(
-      Right(
-        siteUseCases.keys.toList
-      )
+      siteUseCases.keys.toList
     )
 
 
   override def dataSubmissionReports(
     site: Coding[Site],
     period: Option[Period[LocalDateTime]] = None
-  ): ExecutionContext ?=> Future[Either[String,Seq[DNPM.SubmissionReport]]] =
+  ): ExecutionContext ?=> Future[Seq[DNPM.SubmissionReport] | String] =
     Future.successful(
-      Right(
-        Seq.fill(4)(rndReport(site))
-      )
+      Seq.fill(4)(rndReport(site))
     )
+

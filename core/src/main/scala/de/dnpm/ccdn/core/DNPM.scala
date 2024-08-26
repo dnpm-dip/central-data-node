@@ -34,6 +34,24 @@ object DNPM:
         )
       )
 
+  enum SequencingType:
+    case Panel
+    case Exome
+    case Genome
+    case GenomeLr
+
+  object SequencingType:
+    given Format[SequencingType] =
+      json.enumFormat[SequencingType](
+        Map(
+          Panel    -> "panel",
+          Exome    -> "exome",
+          Genome   -> "genome-short-read",
+          GenomeLr -> "genome-long-read"
+        )
+      )
+
+
 
   object SubmissionReport:
 
@@ -48,7 +66,7 @@ object DNPM:
     useCase: UseCase,
     transferTAN: Id[TTAN],
     submissionType: SubmissionType,
-    sequencingType: SequencingType,
+    sequencingType: Option[SequencingType],
     qcPassed: Boolean
   )
 
@@ -56,12 +74,12 @@ object DNPM:
 
   trait ConnectorOps[F[_],Env,Err]:
 
-    def sites: Env ?=> F[Either[Err,List[Coding[Site]]]]
+    def sites: Env ?=> F[List[Coding[Site]] | Err]
 
     def dataSubmissionReports(
       site: Coding[Site],
       period: Option[Period[LocalDateTime]] = None
-    ): Env ?=> F[Either[Err,Seq[SubmissionReport]]]
+    ): Env ?=> F[Seq[SubmissionReport] | Err]
 
 
 

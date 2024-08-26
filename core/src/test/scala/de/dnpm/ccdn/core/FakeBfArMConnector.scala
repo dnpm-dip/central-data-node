@@ -16,8 +16,6 @@ object FakeBfArMConnector extends BfArM.Connector:
 
   def upload(report: BfArM.SubmissionReport): Executable[BfArM.SubmissionReport] =
     Future.successful(
-      Right(report)
+      report
     )
-
-
 

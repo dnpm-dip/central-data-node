@@ -68,10 +68,10 @@ extends Logging:
       Some(
         executor.scheduleAtFixedRate(
           () => {
-            for {
+            for 
               _ <- pollReports
               _ <- uploadReports
-            } yield ()
+            yield ()
           },
           0,
           config.polling.period,
@@ -85,15 +85,7 @@ extends Logging:
     scheduledTask.foreach(_.cancel(false))
 
 
-  extension(uc: DNPM.UseCase)
-    def toDiseaseType: BfArM.SubmissionReport.DiseaseType =
-      uc match
-        case MTB => Oncological
-        case RD  => Rare
-
-
   private val toBfArMReport: DNPM.SubmissionReport => BfArM.SubmissionReport =
-
     case DNPM.SubmissionReport(created,site,useCase,ttan,submType,seqType,qcPassed) =>
       BfArM.SubmissionReport(
         created.toLocalDate,
@@ -101,48 +93,50 @@ extends Logging:
         ttan,
         config.submitterIds(site.code),
         config.dataNodeId,
-        useCase.toDiseaseType,
         BfArM.SubmissionReport.DataCategory.Clinical,
-        seqType,
+        useCase match
+          case MTB => Oncological
+          case RD  => Rare,
+        seqType.map {
+          case DNPM.SequencingType.Panel    => BfArM.SequencingType.Panel
+          case DNPM.SequencingType.Exome    => BfArM.SequencingType.WES
+          case DNPM.SequencingType.Genome   => BfArM.SequencingType.WGS
+          case DNPM.SequencingType.GenomeLr => BfArM.SequencingType.WGSLr
+        } getOrElse(BfArM.SequencingType.None),
         qcPassed        
       )
    
 
   private[core] def pollReports: Future[Unit] =
     log.info("Polling DNPM-SubmissionReports...")
-    dnpm.sites
-      .flatMap {
-        case Right(sites) =>
-          Future.sequence(
-            sites.map {
-              site =>
-            
-                log.info(s"Polling SubmissionReports of site '${site.display.getOrElse(site.code)}'")
-            
-                val period =
-                  queue.lastPollingTime(site)
-                    .map(Period(_))
-            
-                dnpm.dataSubmissionReports(
-                  site,
-                  period
-                )
-                .andThen {
-                  case Success(Right(reports)) =>
-                    log.debug(s"Enqueueing ${reports.size} reports")
-                    queue
-                      .addAll(reports)
-                      .setLastPollingTime(site,now)
+    dnpm.sites.flatMap {
+      case sites: List[Coding[Site]] =>
+        Future.sequence(
+          sites.map {
+            site =>
+          
+              log.info(s"Polling SubmissionReports of site '${site.display.getOrElse(site.code)}'")
+          
+              dnpm.dataSubmissionReports(
+                site,
+                queue.lastPollingTime(site).map(Period(_))
+              )
+              .andThen {
+                case Success(reports: Seq[DNPM.SubmissionReport]) =>
+                  log.debug(s"Enqueueing ${reports.size} reports")
+                  queue
+                    .addAll(reports)
+                    .setLastPollingTime(site,now)
 
-                  case _ =>
-                    log.error(s"Error(s) occurred polling SubmissionReports of site '${site.display.getOrElse(site.code)}")
+                case _ =>
+                  log.error(s"Error(s) occurred polling SubmissionReports of site '${site.display.getOrElse(site.code)}")
 
-                }   
-            }
-          )
-          .map(_ => ())
+              }   
+          }
+        )
+        .map(_ => ())
 
-        case Left(err) =>
+      case err: String =>
           s"Problem getting site info list: $err"
             .tap(log.error)
             .pipe(new Exception(_))
@@ -156,15 +150,14 @@ extends Logging:
       queue.entries
         .map(
           report =>
-          bfarm
-            .upload(toBfArMReport(report))
-            .andThen{ 
-              case Success(Right(_)) =>
-                log.debug("Upload successful")
-                queue.remove(report)
-            }
+            bfarm
+              .upload(toBfArMReport(report))
+              .andThen{ 
+                case Success(_: BfArM.SubmissionReport) =>
+                  log.debug("Upload successful")
+                  queue.remove(report)
+              }
         )
     )
     .map(_ => ())
-
 
