@@ -1,7 +1,6 @@
 package de.dnpm.ccdn.core
 
 
-import java.time.Duration
 import java.time.temporal.Temporal
 
 

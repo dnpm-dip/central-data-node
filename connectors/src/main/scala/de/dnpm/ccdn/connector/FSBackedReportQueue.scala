@@ -23,25 +23,25 @@ import play.api.libs.json.{
   Json,
   Writes
 }
-import de.dnpm.ccdn.util.Logging
+import de.dnpm.dip.util.Logging
+import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.model.Site
 import de.dnpm.ccdn.core.{
-  Code,
-  Coding,
   DNPM,
   ReportQueue,
-  ReportQueueProvider,
-  Site
+  ReportQueueProvider
 }
 
 
-final class ReportQueueProviderImpl extends ReportQueueProvider: 
-
+final class ReportQueueProviderImpl extends ReportQueueProvider
+{
   override def getInstance: ReportQueue =
     FSBackedReportQueue.instance
+}
 
 
-
-object FSBackedReportQueue extends Logging:
+object FSBackedReportQueue extends Logging
+{
 
   private val prop =
     "dnpm.ccdn.queue.dir"
@@ -55,16 +55,16 @@ object FSBackedReportQueue extends Logging:
           Failure(t)
       }
       .get
-    
+}   
 
 
 final class FSBackedReportQueue(
   val dir: File
 )
-extends ReportQueue with Logging:
+extends ReportQueue with Logging
+{
 
   dir.mkdirs
-
 
   private val pollingTimesFile: File =
     new File(dir,"PollingTimes.json")
@@ -97,25 +97,30 @@ extends ReportQueue with Logging:
   private def save[T: Writes](
     t: T,
     file: File
-  ): Unit =
+  ): Unit = {
+
     Using(new FileWriter(file)){
       w =>
         Json.toJson(t)
           .pipe(Json.prettyPrint)
           .tap(w.write)
     }
+    ()
+  }
     
 
   override def setLastPollingTime(
     site: Coding[Site],
     dt: LocalDateTime
-  ): this.type =
+  ): this.type = {
     Try(pollingTimes += site.code.toString -> dt)
       .map(save(_,pollingTimesFile))
       .recover { 
         case t => log.warn("Problem updating polling times",t)
       }
+
     this
+  }
 
 
   override def lastPollingTime(
@@ -126,17 +131,19 @@ extends ReportQueue with Logging:
 
   override def add(
     report: DNPM.SubmissionReport
-  ): this.type = 
+  ): this.type = {
     Try(queue += report)
       .map(_ => save(report,file(report)))
-    this
 
+    this
+  }
 
   override def addAll(
     reports: Seq[DNPM.SubmissionReport]
-  ): this.type =
+  ): this.type = {
     reports.foreach(add)
     this
+  }
 
 
   override def entries: Seq[DNPM.SubmissionReport] =
@@ -145,11 +152,16 @@ extends ReportQueue with Logging:
 
   override def remove(
     report: DNPM.SubmissionReport
-  ): this.type =
+  ): this.type = {
     Try(queue -= report)
       .map(_ => file(report).delete)
       .recover { 
-        case t => log.warn("Problem removing report",t)
+        case t =>
+          log.warn("Problem removing report", t)
+          false
       }
-    this
 
+    this
+  }
+
+}

@@ -11,7 +11,8 @@ import de.dnpm.ccdn.core.{
 }
 
 
-final class Tests extends AnyFlatSpec:
+final class Tests extends AnyFlatSpec
+{
 
   val queueDir =
     createTempDirectory("dnpm_ccdn_test_")
@@ -43,4 +44,4 @@ final class Tests extends AnyFlatSpec:
     assert(reportQueue.isSuccess)
   }
 
-
+}

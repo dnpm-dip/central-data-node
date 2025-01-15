@@ -7,20 +7,20 @@ import scala.collection.concurrent.{
   Map,
   TrieMap
 }
-//import scala.util.chaining._
-//import play.api.libs.json.Json.{toJson,prettyPrint}
+import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.model.Site
 
 
-
-final class FakeReportQueueProvider extends ReportQueueProvider:
+final class FakeReportQueueProvider extends ReportQueueProvider
+{
   override def getInstance: ReportQueue =
     FakeReportQueue
+}
 
+object FakeReportQueue extends ReportQueue
+{
 
-object FakeReportQueue extends ReportQueue:
-
-
-  val pollingTimes: Map[Code[Site],LocalDateTime] =
+  val pollingTimes: Map[Coding[Site],LocalDateTime] =
     TrieMap.empty
 
   
@@ -31,29 +31,30 @@ object FakeReportQueue extends ReportQueue:
   override def setLastPollingTime(
     site: Coding[Site],
     dt: LocalDateTime
-  ): this.type =
-    pollingTimes.update(site.code,dt)
+  ): this.type = {
+    pollingTimes.update(site,dt)
     this
-
+  }
 
   override def lastPollingTime(
     site: Coding[Site]
   ): Option[LocalDateTime] =
-    pollingTimes.get(site.code)
+    pollingTimes.get(site)
 
 
   override def add(
     t: DNPM.SubmissionReport
-  ): this.type =
+  ): this.type = {
     queue += t
     this
+  }
 
   override def addAll(
     ts: Seq[DNPM.SubmissionReport]
-  ): this.type =
-    queue ++= ts//.tapEach(toJson(_) pipe prettyPrint pipe println)
+  ): this.type = {
+    queue ++= ts
     this
-
+  }
 
   override def entries: Seq[DNPM.SubmissionReport] =
     queue.toList
@@ -61,7 +62,9 @@ object FakeReportQueue extends ReportQueue:
 
   override def remove(
     t: DNPM.SubmissionReport
-  ): this.type =
+  ): this.type = {
     queue -= t
     this
+  }
 
+}

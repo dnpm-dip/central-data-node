@@ -1,57 +1,43 @@
+/*
 package de.dnpm.ccdn.core
 
 
-import java.net.URI
 import play.api.libs.json.{
   Json,
   JsPath,
-  Format,
-  OFormat,
   OWrites,
-  Writes,
   Reads
 }
 
 
-opaque type Code[+T] = String
-
-object Code:
-
-  def apply[T](code: String): Code[T] = code
-
-  given [T](using r: Reads[String]): Reads[Code[T]] = r
-
-  given [T](using w: Writes[String]): Writes[Code[T]] = w
-
-
-
 final case class Coding[+T]
 (
-  code: Code[T],
+  code: String,
   display: Option[String],
-  system: URI,
+  system: String,
   version: Option[String]
 )
 
-object Coding:
+object Coding
+{
 
-  final class System[T] private (val uri: URI)
+  final class System[T] private (val uri: String)
 
-  object System:
-
+  object System
+  {
     def apply[T](uri: String): System[T] =
-      new System[T](URI.create(uri))
+      new System[T](uri)
     
-    def apply[T](using sys: System[T]) = sys
-  end System
+    def apply[T](implicit sys: System[T]) = sys
+  }
     
-    
+  
   def apply[T: System](
     code: String,
     display: Option[String] = None
   ): Coding[T] =
     Coding[T](
-      Code[T](code),
+      code,
       display,
       System[T].uri,
       None
@@ -60,9 +46,9 @@ object Coding:
 
   import play.api.libs.functional.syntax._
 
-  given [T: System]: Reads[Coding[T]] =
+  implicit def reads[T: System]: Reads[Coding[T]] =
     (
-      (JsPath \ "code").read[Code[T]] and
+      (JsPath \ "code").read[String] and
       (JsPath \ "display").readNullable[String] and
       (JsPath \ "version").readNullable[String]
     )(
@@ -75,9 +61,11 @@ object Coding:
         )
     )
 
+  implicit val readsAnyCoding: Reads[Coding[Any]] =
+    Json.reads[Coding[Any]]
 
-  given [T]: OWrites[Coding[T]] =
+  implicit def writes[T]: OWrites[Coding[T]] =
     Json.writes[Coding[T]]
 
-  given readsAnyCoding: Reads[Coding[Any]] =
-    Json.reads[Coding[Any]]
+}
+*/

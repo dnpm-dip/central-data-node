@@ -6,40 +6,50 @@ import java.util.concurrent.{
   Executors,
   ScheduledExecutorService
 }
-import java.util.concurrent.Future as JavaFuture
+import java.util.concurrent.{Future => JavaFuture}
 import scala.concurrent.{
   Future,
   ExecutionContext
 }
 import scala.util.{
   Success,
-  Failure
+  Left,
+  Right
 }
 import scala.util.chaining._
-import de.dnpm.ccdn.util.Logging
+//import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.util.Logging
 
 
-@main def exec: Unit =
+object MVHReportingService
+{
 
   import scala.concurrent.ExecutionContext.Implicits.global
 
-  val service =
+  private lazy val service =
     new MVHReportingService(
       Config.instance,
       ReportQueue.getInstance.get,
       DNPM.Connector.getInstance.get,
       BfArM.Connector.getInstance.get
     )
+    
+    
+  def main(args: Array[String]): Unit = {
+    
+    Runtime.getRuntime.addShutdownHook(
+      new Thread { 
+        override def run =
+          println("Shutting down MVH Reporting service...")
+          service.stop()
+      }
+    )
+    
+    service.start()
 
-  Runtime.getRuntime.addShutdownHook(
-    new Thread: 
-      override def run =
-        println("Shutting down MVH Reporting service...")
-        service.stop
-  )
+  }
 
-  service.start
-
+}
 
 
 class MVHReportingService
@@ -49,9 +59,10 @@ class MVHReportingService
   dnpm: DNPM.Connector,
   bfarm: BfArM.Connector
 )(
-  using ec: ExecutionContext
+  implicit ec: ExecutionContext
 )
-extends Logging:
+extends Logging
+{
 
   import DNPM.UseCase._
   import BfArM.SubmissionReport.DiseaseType._
@@ -60,32 +71,39 @@ extends Logging:
   private val executor: ScheduledExecutorService =
     Executors.newSingleThreadScheduledExecutor
 
-  private var scheduledTask: Option[JavaFuture[?]] = None
+  private var scheduledTask: Option[JavaFuture[_]] = None
 
-  def start: Unit =
+  def start(): Unit =
     log.info("Starting MVH Reporting service")
     scheduledTask =
       Some(
         executor.scheduleAtFixedRate(
           () => {
-            for 
-              _ <- pollReports
-              _ <- uploadReports
-            yield ()
+            pollReports.flatMap(u => uploadReports)
+            ()
           },
+/*          
+          () => {
+            for {
+              rs <- pollReports
+              _ <- uploadReports
+            } yield ()
+          },
+*/
           0,
-          config.polling.period,
+          config.polling.period.toLong,
           config.polling.timeUnit
         )
       )
    
    
-  def stop: Unit =
+  def stop(): Unit = {
     log.info("Stopping MVH Reporting service")
     scheduledTask.foreach(_.cancel(false))
+  }
 
 
-  private val toBfArMReport: DNPM.SubmissionReport => BfArM.SubmissionReport =
+  private val toBfArMReport: DNPM.SubmissionReport => BfArM.SubmissionReport = {
     case DNPM.SubmissionReport(created,site,useCase,ttan,submType,seqType,qcPassed) =>
       BfArM.SubmissionReport(
         created.toLocalDate,
@@ -94,23 +112,28 @@ extends Logging:
         config.submitterIds(site.code),
         config.dataNodeId,
         BfArM.SubmissionReport.DataCategory.Clinical,
-        useCase match
+        useCase match {
           case MTB => Oncological
-          case RD  => Rare,
+          case RD  => Rare
+        },
         seqType.map {
           case DNPM.SequencingType.Panel    => BfArM.SequencingType.Panel
           case DNPM.SequencingType.Exome    => BfArM.SequencingType.WES
           case DNPM.SequencingType.Genome   => BfArM.SequencingType.WGS
           case DNPM.SequencingType.GenomeLr => BfArM.SequencingType.WGSLr
-        } getOrElse(BfArM.SequencingType.None),
+        }
+        .getOrElse(BfArM.SequencingType.None),
         qcPassed        
       )
-   
+  }
 
-  private[core] def pollReports: Future[Unit] =
+
+  private[core] def pollReports: Future[Unit] = {
+
     log.info("Polling DNPM-SubmissionReports...")
+
     dnpm.sites.flatMap {
-      case sites: List[Coding[Site]] =>
+      case Right(sites) =>
         Future.sequence(
           sites.map {
             site =>
@@ -122,7 +145,8 @@ extends Logging:
                 queue.lastPollingTime(site).map(Period(_))
               )
               .andThen {
-                case Success(reports: Seq[DNPM.SubmissionReport]) =>
+//                case Success(Right(reports: Seq[DNPM.SubmissionReport])) =>
+                case Success(Right(reports)) =>
                   log.debug(s"Enqueueing ${reports.size} reports")
                   queue
                     .addAll(reports)
@@ -136,16 +160,18 @@ extends Logging:
         )
         .map(_ => ())
 
-      case err: String =>
-          s"Problem getting site info list: $err"
-            .tap(log.error)
-            .pipe(new Exception(_))
-            .pipe(Future.failed)
+      case Left(err) =>
+        s"Problem getting site info list: $err"
+          .tap(log.error)
+          .pipe(new Exception(_))
+          .pipe(Future.failed)
       }
-
+  }
     
-  private[core] def uploadReports: Future[Unit] =
+  private[core] def uploadReports: Future[Unit] = {
+
     log.info("Uploading SubmissionReports...")
+
     Future.sequence(
       queue.entries
         .map(
@@ -153,11 +179,13 @@ extends Logging:
             bfarm
               .upload(toBfArMReport(report))
               .andThen{ 
-                case Success(_: BfArM.SubmissionReport) =>
+                case Success(Right(_: BfArM.SubmissionReport)) =>
                   log.debug("Upload successful")
                   queue.remove(report)
               }
         )
     )
     .map(_ => ())
+  }
 
+}

@@ -1,13 +1,13 @@
 package de.dnpm.ccdn.core
 
 
-import java.time.Duration
 import java.time.temporal.ChronoUnit.SECONDS
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.must.Matchers._
 
 
-final class Tests extends AsyncFlatSpec:
+final class Tests extends AsyncFlatSpec
+{
 
   val rate = 3
   val timeUnit = SECONDS
@@ -16,7 +16,6 @@ final class Tests extends AsyncFlatSpec:
   System.setProperty("dnpm.ccdn.polling.timeunit",timeUnit.toString)
 
 
-//  val repo  = FakeRepository
   val reportQueue  = FakeReportQueue
   val dnpm  = DNPM.Connector.getInstance.get
   val bfarm = BfArM.Connector.getInstance.get
@@ -34,15 +33,15 @@ final class Tests extends AsyncFlatSpec:
 
     for {
       
-      pollingResult <- service.pollReports
+      _ <- service.pollReports
       
       _ = reportQueue.queue must not be (empty)
 
-      uploadResult <- service.uploadReports
+      _ <- service.uploadReports
       
     } yield reportQueue.queue must be (empty)
 
   }
 
 
-
+}

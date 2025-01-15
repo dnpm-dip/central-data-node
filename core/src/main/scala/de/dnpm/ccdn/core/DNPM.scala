@@ -6,81 +6,76 @@ import scala.concurrent.{
   Future,
   ExecutionContext
 }
-import de.dnpm.ccdn.util.{
-  Id,
-  json,
+import scala.util.Either
+import de.dnpm.dip.util.{
   SPI,
   SPILoader
 }
+import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.model.{
+  Id,
+  Site
+}
 import play.api.libs.json.{
   Json,
-  Format,
-  Reads,
-  Writes
+  Format
 }
 
 
-object DNPM:
+object DNPM
+{
 
-  enum UseCase:
-    case MTB, RD
+  object UseCase extends Enumeration
+  {
+    val MTB = Value("MTB")
+    val RD  = Value("RD")
 
-  object UseCase:
-    given Format[UseCase] =
-      json.enumFormat[UseCase](
-        Map(
-          MTB -> "MTB",
-          RD  -> "RD"
-        )
-      )
+    implicit val format: Format[Value] =
+      Json.formatEnum(this)
+  }
 
-  enum SequencingType:
-    case Panel
-    case Exome
-    case Genome
-    case GenomeLr
+  object SequencingType extends Enumeration
+  {
+    val Panel    = Value("panel")
+    val Exome    = Value("exome")
+    val Genome   = Value("genome-short-read")
+    val GenomeLr = Value("genome-long-read")
 
-  object SequencingType:
-    given Format[SequencingType] =
-      json.enumFormat[SequencingType](
-        Map(
-          Panel    -> "panel",
-          Exome    -> "exome",
-          Genome   -> "genome-short-read",
-          GenomeLr -> "genome-long-read"
-        )
-      )
-
-
-
-  object SubmissionReport:
-
-    inline given Format[SubmissionReport] =
-      Json.format[SubmissionReport]
+    implicit val format: Format[Value] =
+      Json.formatEnum(this)
+  }
 
 
   final case class SubmissionReport
   (
     createdOn: LocalDateTime,
     site: Coding[Site],
-    useCase: UseCase,
+    useCase: UseCase.Value,
     transferTAN: Id[TTAN],
-    submissionType: SubmissionType,
-    sequencingType: Option[SequencingType],
+    submissionType: SubmissionType.Value,
+    sequencingType: Option[SequencingType.Value],
     qcPassed: Boolean
   )
 
+  object SubmissionReport
+  {
+    implicit val format: Format[SubmissionReport] =
+      Json.format[SubmissionReport]
+  }
 
 
-  trait ConnectorOps[F[_],Env,Err]:
+  trait ConnectorOps[F[_],Env,Err]
+  {
 
-    def sites: Env ?=> F[List[Coding[Site]] | Err]
+    def sites(implicit env: Env): F[Either[Err,List[Coding[Site]]]]
 
     def dataSubmissionReports(
       site: Coding[Site],
       period: Option[Period[LocalDateTime]] = None
-    ): Env ?=> F[Seq[SubmissionReport] | Err]
-
+    )(
+      implicit env: Env
+    ): F[Either[Err,Seq[SubmissionReport]]]
+  }
 
 
   type Connector = ConnectorOps[Future,ExecutionContext,String]
@@ -89,4 +84,4 @@ object DNPM:
 
   object Connector extends SPILoader[ConnectorProvider]
 
-
+}

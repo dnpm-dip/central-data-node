@@ -2,14 +2,16 @@ package de.dnpm.ccdn.core
 
 
 import java.time.LocalDateTime
-import de.dnpm.ccdn.util.{
+import de.dnpm.dip.util.{
   SPI,
   SPILoader
 }
+import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.model.Site
 
 
-
-trait QueueOps[T]:
+trait QueueOps[T]
+{
 
   def setLastPollingTime(
     site: Coding[Site],
@@ -36,9 +38,9 @@ trait QueueOps[T]:
     t: T
   ): this.type
 
+}
 
-
-type ReportQueue = QueueOps[DNPM.SubmissionReport]
+trait ReportQueue extends QueueOps[DNPM.SubmissionReport]
 
 trait ReportQueueProvider extends SPI[ReportQueue]
 

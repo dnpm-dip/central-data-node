@@ -1,96 +1,92 @@
 package de.dnpm.ccdn.core
 
+
 import java.time.LocalDate
 import scala.concurrent.{
   Future,
   ExecutionContext
 }
-import de.dnpm.ccdn.util.{
-  Id,
-  json,
+import scala.util.Either
+import de.dnpm.dip.util.{
   SPI,
   SPILoader
 }
+import de.dnpm.dip.model.{
+  Id,
+  Site
+}
 import play.api.libs.json.{
   Json,
-  Writes
+  Format,
+  OWrites
 }
 
 
-object BfArM:
+object BfArM
+{
 
-  enum SequencingType:
-    case Panel
-    case WES
-    case WGS
-    case WGSLr
-    case None
+  object SequencingType extends Enumeration
+  {
+    val Panel = Value("panel")
+    val WES   = Value("wes")
+    val WGS   = Value("wgs")
+    val WGSLr = Value("wgs_lr")
+    val None  = Value("none")
 
-  object SequencingType:
-    given Writes[SequencingType] =
-      json.enumWrites[SequencingType](
-        Map(
-          Panel -> "panel",
-          WES   -> "wes",
-          WGS   -> "wgs",
-          WGSLr -> "wgs_lr",
-          None  -> "none"
-        )
-    )
-
-
-  object SubmissionReport:
-
-    enum DataCategory:
-      case Clinical
-
-
-    enum DiseaseType:
-      case Oncological
-      case Rare
-
-    object DataCategory:
-      given Writes[DataCategory] =
-        json.enumWrites[DataCategory](
-          Map(Clinical -> "clinical")
-        )
-
-    object DiseaseType:
-      given Writes[DiseaseType] =
-        json.enumWrites[DiseaseType](
-          Map(
-            Oncological -> "oncological",
-            Rare        -> "rare"
-          )
-        )
-
-
-    given Writes[SubmissionReport] =
-      Json.writes[SubmissionReport]
+    implicit val format: Format[SequencingType.Value] =
+      Json.formatEnum(this)
+  }  
 
 
   final case class SubmissionReport
   (
     submissionDate: LocalDate,
-    submissionType: SubmissionType,
+    submissionType: SubmissionType.Value,
     localCaseId: Id[TTAN],
     submitterId: Id[Site],
     dataNodeId: Id[DataNode],
-    dataCategory: SubmissionReport.DataCategory,
-    diseaseType: SubmissionReport.DiseaseType,
-    libraryType: SequencingType,
+    dataCategory: SubmissionReport.DataCategory.Value,
+    diseaseType: SubmissionReport.DiseaseType.Value,
+    libraryType: SequencingType.Value,
     dataQualityCheckedPassed: Boolean
   )
 
+  object SubmissionReport
+  {
+
+    object DataCategory extends Enumeration
+    {
+      val Clinical = Value("clinical")
+
+      implicit val format: Format[DataCategory.Value] =
+        Json.formatEnum(this)
+    }
 
 
-  trait ConnectorOps[F[_],Env,Err]:
+    object DiseaseType extends Enumeration
+    {
+      val Oncological = Value("oncological")
+      val Rare        = Value("rare")
 
-    type Executable[T] = Env ?=> F[T | Err]
+      implicit val format: Format[DiseaseType.Value] =
+        Json.formatEnum(this)
+    }
 
-    def upload(report: SubmissionReport): Executable[SubmissionReport]
+    implicit val warites: OWrites[SubmissionReport] =
+      Json.writes[SubmissionReport]
+        .transform(js => Json.obj("SubmittedCase" -> js))
+
+  }
 
 
+  trait ConnectorOps[F[_],Env,Err]
+  {
+    def upload(
+      report: SubmissionReport
+    )(
+      implicit env: Env
+    ): F[Either[Err,SubmissionReport]]
+  }
 
 
   type Connector = ConnectorOps[Future,ExecutionContext,String]
@@ -99,3 +95,4 @@ object BfArM:
 
   object Connector extends SPILoader[ConnectorProvider]
 
+}

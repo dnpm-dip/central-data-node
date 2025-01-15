@@ -9,6 +9,7 @@ import scala.concurrent.{
 }
 import scala.concurrent.duration._
 import scala.util.{
+  Either,
   Success,
   Failure
 }
@@ -20,35 +21,37 @@ import play.api.libs.json.{
   Reads
 }
 import play.api.libs.ws.{
-  StandaloneWSClient as WSClient,
-  StandaloneWSRequest as WSRequest,
-  StandaloneWSResponse as WSResponse
+  StandaloneWSClient => WSClient,
+  StandaloneWSRequest => WSRequest,
 }
 import play.api.libs.ws.JsonBodyReadables._
-import play.api.libs.ws.DefaultBodyReadables._
-import de.dnpm.ccdn.util.Logging
+import de.dnpm.dip.util.Logging
+import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.model.Site
 import de.dnpm.ccdn.core.{
-  Coding,
   DNPM,
   Period,
-  Site
 }
 
 
 final case class Collection[T](entries: List[T])
-object Collection:
-  given [T: Reads]: Reads[Collection[T]] =
+
+object Collection
+{
+  implicit def reads [T: Reads]: Reads[Collection[T]] =
     Json.reads[Collection[T]]
+}
 
 
-
-final class DNPMConnectorProviderImpl extends DNPM.ConnectorProvider:
+final class DNPMConnectorProviderImpl extends DNPM.ConnectorProvider
+{
   override def getInstance: DNPM.Connector =
     BrokerConnector.instance
+}
 
 
-
-object BrokerConnector:
+object BrokerConnector
+{
 
   final case class Config
   (
@@ -57,21 +60,22 @@ object BrokerConnector:
     updatePeriod: Option[Long]
   )
 
-  object Config:
+  object Config
+  {
     lazy val instance =
       Config(
         System.getProperty("dnpm.ccdn.broker.baseurl"),
         Option(System.getProperty("dnpm.ccdn.connector.timeout")).map(_.toInt),
         Option(System.getProperty("dnpm.ccdn.connector.update.period")).map(_.toLong)
       )
-
+  }
 
   final case class SiteEntry
   (
     id: String,
     name: String,
     virtualhost: String,
-    useCases: Set[DNPM.UseCase]
+    useCases: Set[DNPM.UseCase.Value]
   )
 
   final case class SiteConfig
@@ -79,14 +83,15 @@ object BrokerConnector:
     sites: Set[SiteEntry]
   )
 
-  object SiteConfig:
+  object SiteConfig
+  {
 
-    given Reads[SiteEntry] =
+    implicit val readsSiteEntry: Reads[SiteEntry] =
       Json.reads[SiteEntry]
 
-    given Reads[SiteConfig] =
+    implicit val reads: Reads[SiteConfig] =
       Json.reads[SiteConfig]
-
+  }
 
   lazy val instance =
     new BrokerConnector(
@@ -94,6 +99,7 @@ object BrokerConnector:
       Config.instance
     )
 
+}
 
 
 import BrokerConnector._
@@ -104,13 +110,13 @@ final class BrokerConnector
   private val config: Config
 )
 extends DNPM.Connector
-with Logging:
+with Logging
+{
 
   import DNPM.{
     SubmissionReport,
     UseCase
   }
-
 
   private val timeout =
     config.timeout.getOrElse(10) seconds
@@ -118,17 +124,16 @@ with Logging:
 
   // Set-up for periodic auto-update of config
 
-  import java.time.{Duration,LocalTime}
   import java.util.concurrent.Executors
   import java.util.concurrent.TimeUnit.MINUTES
   import java.util.concurrent.atomic.AtomicReference
 
 
-  private val sitesConfig: AtomicReference[Map[Coding[Site],(String,Set[UseCase])]] =
+  private val sitesConfig: AtomicReference[Map[Coding[Site],(String,Set[UseCase.Value])]] =
     new AtomicReference(Map.empty)
 
 
-  private def getSiteConfig: Unit = {
+  private def getSiteConfig(): Unit = {
 
     import ExecutionContext.Implicits.global
 
@@ -142,7 +147,7 @@ with Logging:
           sitesConfig.set(
             sites.map {
               case SiteEntry(id,name,vhost,useCases) =>
-                Coding[Site](id,Some(name)) -> (vhost,useCases)
+                Coding[Site](id,name) -> (vhost,useCases)
             }
             .toMap
           )
@@ -157,29 +162,30 @@ with Logging:
   private lazy val executor =
     Executors.newSingleThreadScheduledExecutor
 
-  config.updatePeriod match
+  config.updatePeriod match {
     case Some(period) =>
       executor.scheduleAtFixedRate(
-        () => getSiteConfig,
+        () => getSiteConfig(),
         0,
         period,
         MINUTES
       )
     case None =>
-      getSiteConfig
-  
+      getSiteConfig()
+  }
 
 
   private def request(
     rawUri: String
-  ): WSRequest =
+  ): WSRequest = {
     val uri =
       if (rawUri.startsWith("/")) rawUri.substring(1)
       else rawUri
 
     wsclient.url(s"${config.baseURL}/$uri")
       .withRequestTimeout(timeout)
-  
+  }
+
 
   private def request(
     site: Coding[Site],
@@ -189,19 +195,22 @@ with Logging:
       .withVirtualHost(sitesConfig.get()(site)._1)
 
 
-  override def sites: ExecutionContext ?=> Future[List[Coding[Site]] | String] =
+  override def sites(implicit ec: ExecutionContext): Future[Either[String,List[Coding[Site]]]] =
     Future.successful(
       sitesConfig.get
         .keys
         .toList
+        .asRight[String]
     )
-
 
 
   override def dataSubmissionReports(
     site: Coding[Site],
     period: Option[Period[LocalDateTime]] = None
-  ): ExecutionContext ?=> Future[Seq[SubmissionReport] | String] =
+  )(
+    implicit ec: ExecutionContext
+  ): Future[Either[String,Seq[SubmissionReport]]] = {
+
     val useCases =
       sitesConfig.get()(site)._2
 
@@ -210,11 +219,11 @@ with Logging:
         useCase =>
           request(
             site,
-            s"/api/${useCase.toString.toLowerCase}/peer2peer/submission-reports"
+            s"/api/${useCase.toString.toLowerCase}/peer2peer/mvh/submission-reports"
           )
           .pipe(
             req =>
-             period match
+             period match {
                case Some(Period(start,Some(end))) =>
                  req.withQueryStringParameters(
                    "created-after"  -> start.format(ISO_LOCAL_DATE_TIME),
@@ -227,23 +236,27 @@ with Logging:
                  )
 
                case None => req
+             }
           )
           .get()
           .map(
             _.body[JsValue]
              .as[Collection[SubmissionReport]]
              .entries
+             .asRight
           )
           .recover {
             case t =>
               log.error(s"Connection error: ${t.getMessage}")
-              Seq.empty[SubmissionReport]
+              Seq.empty[SubmissionReport].asRight
           }
       )
     )(
-      _ ++ _
+      _ combine _
     )
     .recover {
-      case t => t.getMessage
+      case t => t.getMessage.asLeft
     }
 
+  }
+}

@@ -3,16 +3,17 @@ package de.dnpm.ccdn.core
 
 import java.io.FileInputStream
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeUnit.HOURS
 import scala.util.chaining._
 import play.api.libs.json.{
   Json,
   Reads
 }
-import de.dnpm.ccdn.util.{
+import de.dnpm.dip.coding.Code
+import de.dnpm.dip.model.{
   Id,
-  Logging
+  Site
 }
+import de.dnpm.dip.util.Logging
 
 
 
@@ -24,7 +25,8 @@ final case class Config
 )
 
 
-object Config extends Logging:
+object Config extends Logging
+{
 
   final case class Polling
   (
@@ -32,14 +34,15 @@ object Config extends Logging:
     timeUnit: TimeUnit
   )
 
-  given Reads[TimeUnit] =
+  implicit val readsTimeUnit: Reads[TimeUnit] =
     Reads.of[String].map(t => TimeUnit.valueOf(t.toUpperCase))
 
-  given Reads[Polling] =
+  implicit val readsPolling: Reads[Polling] =
     Json.reads[Polling]
 
-  given Reads[Config] =
+  implicit val reads: Reads[Config] =
     Json.reads[Config]
+
 
   private lazy val prop =
     "dnpm.ccdn.config.file"
@@ -67,4 +70,4 @@ object Config extends Logging:
     )
     .get
 
-
+}
