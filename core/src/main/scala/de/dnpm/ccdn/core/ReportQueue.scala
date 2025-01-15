@@ -40,7 +40,7 @@ trait QueueOps[T]
 
 }
 
-trait ReportQueue extends QueueOps[DNPM.SubmissionReport]
+trait ReportQueue extends QueueOps[dip.SubmissionReport]
 
 trait ReportQueueProvider extends SPI[ReportQueue]
 

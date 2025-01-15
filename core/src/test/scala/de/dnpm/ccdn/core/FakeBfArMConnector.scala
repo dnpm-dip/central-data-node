@@ -7,22 +7,23 @@ import scala.concurrent.{
 }
 import scala.util.Either
 import cats.syntax.either._
+import de.dnpm.ccdn.core.bfarm
 
 
-final class FakeBfArMConnectorProvider extends BfArM.ConnectorProvider
+final class FakeBfArMConnectorProvider extends bfarm.ConnectorProvider
 {
-  override def getInstance: BfArM.Connector = 
+  override def getInstance: bfarm.Connector = 
     FakeBfArMConnector
 }
 
 
-object FakeBfArMConnector extends BfArM.Connector
+object FakeBfArMConnector extends bfarm.Connector
 {
   def upload(
-    report: BfArM.SubmissionReport
+    report: bfarm.SubmissionReport
   )(
     implicit ec: ExecutionContext
-  ): Future[Either[String,BfArM.SubmissionReport]] =
+  ): Future[Either[String,bfarm.SubmissionReport]] =
     Future.successful(
       report.asRight
     )

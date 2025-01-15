@@ -17,8 +17,9 @@ import scala.util.{
   Right
 }
 import scala.util.chaining._
-//import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.util.Logging
+import de.dnpm.ccdn.core.dip
+import de.dnpm.ccdn.core.bfarm
 
 
 object MVHReportingService
@@ -30,8 +31,8 @@ object MVHReportingService
     new MVHReportingService(
       Config.instance,
       ReportQueue.getInstance.get,
-      DNPM.Connector.getInstance.get,
-      BfArM.Connector.getInstance.get
+      dip.Connector.getInstance.get,
+      bfarm.Connector.getInstance.get
     )
     
     
@@ -56,16 +57,16 @@ class MVHReportingService
 (
   config: Config,
   queue: ReportQueue,
-  dnpm: DNPM.Connector,
-  bfarm: BfArM.Connector
+  dipConnector: dip.Connector,
+  bfarmConnector: bfarm.Connector
 )(
   implicit ec: ExecutionContext
 )
 extends Logging
 {
 
-  import DNPM.UseCase._
-  import BfArM.SubmissionReport.DiseaseType._
+  import dip.UseCase._
+  import bfarm.SubmissionReport.DiseaseType._
 
 
   private val executor: ScheduledExecutorService =
@@ -82,14 +83,6 @@ extends Logging
             pollReports.flatMap(u => uploadReports)
             ()
           },
-/*          
-          () => {
-            for {
-              rs <- pollReports
-              _ <- uploadReports
-            } yield ()
-          },
-*/
           0,
           config.polling.period.toLong,
           config.polling.timeUnit
@@ -103,26 +96,26 @@ extends Logging
   }
 
 
-  private val toBfArMReport: DNPM.SubmissionReport => BfArM.SubmissionReport = {
-    case DNPM.SubmissionReport(created,site,useCase,ttan,submType,seqType,qcPassed) =>
-      BfArM.SubmissionReport(
+  private val tobfarmReport: dip.SubmissionReport => bfarm.SubmissionReport = {
+    case dip.SubmissionReport(created,site,useCase,ttan,submType,seqType,qcPassed) =>
+      bfarm.SubmissionReport(
         created.toLocalDate,
         submType,
         ttan,
         config.submitterIds(site.code),
         config.dataNodeId,
-        BfArM.SubmissionReport.DataCategory.Clinical,
+        bfarm.SubmissionReport.DataCategory.Clinical,
         useCase match {
           case MTB => Oncological
           case RD  => Rare
         },
         seqType.map {
-          case DNPM.SequencingType.Panel    => BfArM.SequencingType.Panel
-          case DNPM.SequencingType.Exome    => BfArM.SequencingType.WES
-          case DNPM.SequencingType.Genome   => BfArM.SequencingType.WGS
-          case DNPM.SequencingType.GenomeLr => BfArM.SequencingType.WGSLr
+          case dip.SequencingType.Panel    => bfarm.SequencingType.Panel
+          case dip.SequencingType.Exome    => bfarm.SequencingType.WES
+          case dip.SequencingType.Genome   => bfarm.SequencingType.WGS
+          case dip.SequencingType.GenomeLr => bfarm.SequencingType.WGSLr
         }
-        .getOrElse(BfArM.SequencingType.None),
+        .getOrElse(bfarm.SequencingType.None),
         qcPassed        
       )
   }
@@ -130,9 +123,9 @@ extends Logging
 
   private[core] def pollReports: Future[Unit] = {
 
-    log.info("Polling DNPM-SubmissionReports...")
+    log.info("Polling dip-SubmissionReports...")
 
-    dnpm.sites.flatMap {
+    dipConnector.sites.flatMap {
       case Right(sites) =>
         Future.sequence(
           sites.map {
@@ -140,12 +133,11 @@ extends Logging
           
               log.info(s"Polling SubmissionReports of site '${site.display.getOrElse(site.code)}'")
           
-              dnpm.dataSubmissionReports(
+              dipConnector.dataSubmissionReports(
                 site,
                 queue.lastPollingTime(site).map(Period(_))
               )
               .andThen {
-//                case Success(Right(reports: Seq[DNPM.SubmissionReport])) =>
                 case Success(Right(reports)) =>
                   log.debug(s"Enqueueing ${reports.size} reports")
                   queue
@@ -176,10 +168,10 @@ extends Logging
       queue.entries
         .map(
           report =>
-            bfarm
-              .upload(toBfArMReport(report))
+            bfarmConnector
+              .upload(tobfarmReport(report))
               .andThen{ 
-                case Success(Right(_: BfArM.SubmissionReport)) =>
+                case Success(Right(_: bfarm.SubmissionReport)) =>
                   log.debug("Upload successful")
                   queue.remove(report)
               }

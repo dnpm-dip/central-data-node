@@ -9,6 +9,7 @@ import scala.collection.concurrent.{
 }
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.Site
+import de.dnpm.ccdn.core.dip
 
 
 final class FakeReportQueueProvider extends ReportQueueProvider
@@ -24,7 +25,7 @@ object FakeReportQueue extends ReportQueue
     TrieMap.empty
 
   
-  val queue: Queue[DNPM.SubmissionReport] =
+  val queue: Queue[dip.SubmissionReport] =
     Queue.empty
 
 
@@ -43,25 +44,25 @@ object FakeReportQueue extends ReportQueue
 
 
   override def add(
-    t: DNPM.SubmissionReport
+    t: dip.SubmissionReport
   ): this.type = {
     queue += t
     this
   }
 
   override def addAll(
-    ts: Seq[DNPM.SubmissionReport]
+    ts: Seq[dip.SubmissionReport]
   ): this.type = {
     queue ++= ts
     this
   }
 
-  override def entries: Seq[DNPM.SubmissionReport] =
+  override def entries: Seq[dip.SubmissionReport] =
     queue.toList
 
 
   override def remove(
-    t: DNPM.SubmissionReport
+    t: dip.SubmissionReport
   ): this.type = {
     queue -= t
     this

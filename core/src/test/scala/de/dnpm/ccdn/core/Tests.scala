@@ -4,6 +4,8 @@ package de.dnpm.ccdn.core
 import java.time.temporal.ChronoUnit.SECONDS
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.must.Matchers._
+import de.dnpm.ccdn.core.dip
+import de.dnpm.ccdn.core.bfarm
 
 
 final class Tests extends AsyncFlatSpec
@@ -16,16 +18,16 @@ final class Tests extends AsyncFlatSpec
   System.setProperty("dnpm.ccdn.polling.timeunit",timeUnit.toString)
 
 
-  val reportQueue  = FakeReportQueue
-  val dnpm  = DNPM.Connector.getInstance.get
-  val bfarm = BfArM.Connector.getInstance.get
+  val reportQueue    = FakeReportQueue
+  val dipConnector   = dip.Connector.getInstance.get
+  val bfarmConnector = bfarm.Connector.getInstance.get
 
   val service =
     new MVHReportingService(
       Config.instance,
       reportQueue,
-      dnpm, 
-      bfarm
+      dipConnector, 
+      bfarmConnector
     )
 
 

@@ -29,7 +29,7 @@ import de.dnpm.dip.util.Logging
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.Site
 import de.dnpm.ccdn.core.{
-  DNPM,
+  dip,
   Period,
 }
 
@@ -43,9 +43,9 @@ object Collection
 }
 
 
-final class DNPMConnectorProviderImpl extends DNPM.ConnectorProvider
+final class DIPConnectorProviderImpl extends dip.ConnectorProvider
 {
-  override def getInstance: DNPM.Connector =
+  override def getInstance: dip.Connector =
     BrokerConnector.instance
 }
 
@@ -75,7 +75,7 @@ object BrokerConnector
     id: String,
     name: String,
     virtualhost: String,
-    useCases: Set[DNPM.UseCase.Value]
+    useCases: Set[dip.UseCase.Value]
   )
 
   final case class SiteConfig
@@ -109,11 +109,11 @@ final class BrokerConnector
   private val wsclient: WSClient,
   private val config: Config
 )
-extends DNPM.Connector
+extends dip.Connector
 with Logging
 {
 
-  import DNPM.{
+  import dip.{
     SubmissionReport,
     UseCase
   }

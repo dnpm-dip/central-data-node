@@ -27,10 +27,10 @@ import de.dnpm.dip.util.Logging
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.Site
 import de.dnpm.ccdn.core.{
-  DNPM,
   ReportQueue,
   ReportQueueProvider
 }
+import de.dnpm.ccdn.core.dip
 
 
 final class ReportQueueProviderImpl extends ReportQueueProvider
@@ -77,20 +77,20 @@ extends ReportQueue with Logging
       .map(TrieMap.from)
       .getOrElse(TrieMap.empty)
 
-  private val queue: Queue[DNPM.SubmissionReport] =
+  private val queue: Queue[dip.SubmissionReport] =
     dir.listFiles(
       (_,name) => name.startsWith("Report_") && name.endsWith(".json")
     )
     .to(LazyList)
     .map(new FileInputStream(_))
     .map(Json.parse)
-    .map(Json.fromJson[DNPM.SubmissionReport](_))
+    .map(Json.fromJson[dip.SubmissionReport](_))
     .map(_.get)
     .to(Queue)
 
 
   private def file(
-    report: DNPM.SubmissionReport
+    report: dip.SubmissionReport
   ): File =
     new File(dir,s"Report_${report.site.code}_${report.transferTAN}.json")
     
@@ -130,7 +130,7 @@ extends ReportQueue with Logging
 
 
   override def add(
-    report: DNPM.SubmissionReport
+    report: dip.SubmissionReport
   ): this.type = {
     Try(queue += report)
       .map(_ => save(report,file(report)))
@@ -139,19 +139,19 @@ extends ReportQueue with Logging
   }
 
   override def addAll(
-    reports: Seq[DNPM.SubmissionReport]
+    reports: Seq[dip.SubmissionReport]
   ): this.type = {
     reports.foreach(add)
     this
   }
 
 
-  override def entries: Seq[DNPM.SubmissionReport] =
+  override def entries: Seq[dip.SubmissionReport] =
     queue.toList
 
 
   override def remove(
-    report: DNPM.SubmissionReport
+    report: dip.SubmissionReport
   ): this.type = {
     Try(queue -= report)
       .map(_ => file(report).delete)

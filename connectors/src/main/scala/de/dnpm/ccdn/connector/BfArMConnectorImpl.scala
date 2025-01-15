@@ -19,14 +19,14 @@ import play.api.libs.ws.{
 import play.api.libs.ws.JsonBodyReadables._
 import play.api.libs.ws.JsonBodyWritables._
 import de.dnpm.dip.util.Logging
-import de.dnpm.ccdn.core.BfArM
-import BfArM.SubmissionReport
+import de.dnpm.ccdn.core.bfarm
+import bfarm.SubmissionReport
 
 
 
-final class BfArMConnectorProviderImpl extends BfArM.ConnectorProvider
+final class BfArMConnectorProviderImpl extends bfarm.ConnectorProvider
 {
-  override def getInstance: BfArM.Connector =
+  override def getInstance: bfarm.Connector =
     BfArMConnectorImpl.instance
 }
 
@@ -59,7 +59,7 @@ final class BfArMConnectorImpl
   private val baseURL: String,
   private val timeout: Option[Int]
 )
-extends BfArM.Connector
+extends bfarm.Connector
 with Logging
 {
 

@@ -18,19 +18,20 @@ import de.dnpm.dip.model.{
   Site
 }
 import SubmissionType.Initial
-import DNPM.UseCase._
-import DNPM.SequencingType._
+import de.dnpm.ccdn.core.dip
+import dip.UseCase._
+import dip.SequencingType._
 
 
 
-final class FakeDNPMConnectorProvider extends DNPM.ConnectorProvider
+final class FakeDIPConnectorProvider extends dip.ConnectorProvider
 {
-  override def getInstance: DNPM.Connector =
-    FakeDNPMConnector
+  override def getInstance: dip.Connector =
+    FakeDIPConnector
 }
 
 
-object FakeDNPMConnector extends DNPM.Connector
+object FakeDIPConnector extends dip.Connector
 {
 
   private val rnd = new Random
@@ -47,8 +48,8 @@ object FakeDNPMConnector extends DNPM.Connector
 
   private def rndReport(
     site: Coding[Site],
-  ): DNPM.SubmissionReport =
-    DNPM.SubmissionReport(
+  ): dip.SubmissionReport =
+    dip.SubmissionReport(
       LocalDateTime.now,
       site,
       oneOf(useCases),
@@ -59,7 +60,7 @@ object FakeDNPMConnector extends DNPM.Connector
     )
 
 
-  private val siteUseCases: Map[Coding[Site],Set[DNPM.UseCase.Value]] =
+  private val siteUseCases: Map[Coding[Site],Set[dip.UseCase.Value]] =
     Config.instance
       .submitterIds
       .keys
@@ -82,7 +83,7 @@ object FakeDNPMConnector extends DNPM.Connector
     period: Option[Period[LocalDateTime]] = None
   )(
     implicit ec: ExecutionContext
-  ): Future[Either[String,Seq[DNPM.SubmissionReport]]] =
+  ): Future[Either[String,Seq[dip.SubmissionReport]]] =
     Future.successful(
       Seq.fill(4)(rndReport(site)).asRight
     )

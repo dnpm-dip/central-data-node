@@ -4,11 +4,9 @@ package de.dnpm.ccdn.connector
 import java.nio.file.Files.createTempDirectory
 import scala.util.Failure
 import org.scalatest.flatspec.AnyFlatSpec
-import de.dnpm.ccdn.core.{
-  DNPM,
-  BfArM,
-  ReportQueue
-}
+import de.dnpm.ccdn.core.ReportQueue
+import de.dnpm.ccdn.core.bfarm
+import de.dnpm.ccdn.core.dip
 
 
 final class Tests extends AnyFlatSpec
@@ -23,11 +21,11 @@ final class Tests extends AnyFlatSpec
   System.setProperty("dnpm.ccdn.queue.dir",queueDir.getAbsolutePath)
 
 
-  val dnpmConnector =
-    DNPM.Connector.getInstance
+  val dipConnector =
+    dip.Connector.getInstance
 
   val bfarmConnector =
-    BfArM.Connector.getInstance
+    bfarm.Connector.getInstance
 
   val reportQueue =
     ReportQueue.getInstance
@@ -39,7 +37,7 @@ final class Tests extends AnyFlatSpec
 
 
   "SPI Loaders" must "have worked" in {
-    assert(dnpmConnector.isSuccess)
+    assert(dipConnector.isSuccess)
     assert(bfarmConnector.isSuccess)
     assert(reportQueue.isSuccess)
   }
