@@ -18,7 +18,7 @@ object SubmissionType extends Enumeration
   val Initial    = Value("initial")
   val Addition   = Value("addition")
   val Correction = Value("correction")
-  val Other      = Value("other")
+  val FollowUp   = Value("followup")
 
   implicit val format: Format[Value] =
     Json.formatEnum(this)

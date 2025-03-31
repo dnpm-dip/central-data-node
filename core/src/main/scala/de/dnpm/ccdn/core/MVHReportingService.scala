@@ -65,8 +65,7 @@ class MVHReportingService
 extends Logging
 {
 
-  import dip.UseCase._
-  import bfarm.SubmissionReport.DiseaseType._
+//  import dip.UseCase._
 
 
   private val executor: ScheduledExecutorService =
@@ -95,7 +94,7 @@ extends Logging
     scheduledTask.foreach(_.cancel(false))
   }
 
-
+/*
   private val tobfarmReport: dip.SubmissionReport => bfarm.SubmissionReport = {
     case dip.SubmissionReport(created,site,useCase,ttan,submType,seqType,qcPassed) =>
       bfarm.SubmissionReport(
@@ -119,6 +118,7 @@ extends Logging
         qcPassed        
       )
   }
+*/
 
 
   private[core] def pollReports: Future[Unit] = {
@@ -164,6 +164,8 @@ extends Logging
 
     log.info("Uploading SubmissionReports...")
 
+    Future.failed(new RuntimeException("TODO!"))
+/*   
     Future.sequence(
       queue.entries
         .map(
@@ -178,6 +180,7 @@ extends Logging
         )
     )
     .map(_ => ())
+*/    
   }
 
 }

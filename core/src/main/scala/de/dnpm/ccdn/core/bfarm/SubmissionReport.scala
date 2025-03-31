@@ -1,61 +1,32 @@
 package de.dnpm.ccdn.core.bfarm
 
 
-import java.time.LocalDate
+
 import play.api.libs.json.{
   Json,
-  Format,
-  OWrites
-}
-import de.dnpm.dip.model.{
-  Id,
-  Site
-}
-import de.dnpm.ccdn.core.{
-  DataNode,
-  SubmissionType,
-  TTAN
+  Writes
 }
 
 
-final case class SubmissionReport
+final case class SubmissionReport[Case,MolSeq,Plan,FU]
 (
-  submissionDate: LocalDate,
-  submissionType: SubmissionType.Value,
-  localCaseId: Id[TTAN],
-  submitterId: Id[Site],
-  dataNodeId: Id[DataNode],
-  dataCategory: SubmissionReport.DataCategory.Value,
-  diseaseType: SubmissionReport.DiseaseType.Value,
-  libraryType: SequencingType.Value,
-  dataQualityCheckedPassed: Boolean
+  metadata: Metadata,
+  `case`: Case,
+  molecular: MolSeq,
+  plan: Option[Plan],
+  followUp: Option[FU]
 )
+
 
 object SubmissionReport
 {
 
-  object DataCategory extends Enumeration
-  {
-    val Clinical = Value("clinical")
-
-    implicit val format: Format[DataCategory.Value] =
-      Json.formatEnum(this)
-  }
-
-
-  object DiseaseType extends Enumeration
-  {
-    val Oncological = Value("oncological")
-    val Rare        = Value("rare")
-
-    implicit val format: Format[DiseaseType.Value] =
-      Json.formatEnum(this)
-  }
-
-
-  implicit val writes: OWrites[SubmissionReport] =
-    Json.writes[SubmissionReport]
-//      .transform(js => Json.obj("SubmittedCase" -> js))
+  implicit def writes[
+    Case: Writes,
+    MolSeq: Writes,
+    Plan: Writes,
+    FU: Writes
+  ]: Writes[SubmissionReport[Case,MolSeq,Plan,FU]] =
+    Json.writes[SubmissionReport[Case,MolSeq,Plan,FU]]
 
 }
-
