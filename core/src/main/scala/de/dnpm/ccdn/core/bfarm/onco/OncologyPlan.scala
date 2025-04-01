@@ -24,6 +24,18 @@ import play.api.libs.json.{
   OFormat,
 }
 
+/*
+ * DISCLAIMER:
+ *
+ * These DTOs are implemented to match the JSON specifications for the MVGenomSeq Submission API.
+ *
+ * This author hereby wishes to make it clear that many of the anti-patterns
+ * and design flaws noticeable in the DTO structure are NOT of his design,
+ * but originate from the specification these DTO must conform to.
+ *
+ */
+
+
 
 final case class OncologyPlan
 (

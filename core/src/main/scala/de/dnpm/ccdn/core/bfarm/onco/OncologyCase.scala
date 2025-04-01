@@ -30,44 +30,16 @@ import play.api.libs.json.{
 }
 
 
-final case class CodingWithDate[T]
-(
-  coding: Coding[T],
-  date: LocalDate
-)
-
-object CodingWithDate
-{
-
-  implicit def reads[T: Coding.System]: Reads[CodingWithDate[T]] =
-    Reads {
-      js => 
-        for {
-          coding <- js.validate[Coding[T]]
-          date <- (js \ "date").validate[LocalDate]
-        } yield CodingWithDate(
-          coding,
-          date
-        )
-    }
-
-  implicit def writes[T]: OWrites[CodingWithDate[T]] =
-    OWrites {
-      cwd => Json.toJsObject(cwd.coding) + ("date" -> Json.toJson(cwd.date))
-    }
-}
-
-
-//object Therapy
-//{
-  object TerminationReason extends Enumeration
-  {
-    val E, R, W, A, P, S, V, T, U = Value
-
-    implicit val format: Format[Value] =
-      Json.formatEnum(this)
-  }
-//}
+/*
+ * DISCLAIMER:
+ *
+ * These DTOs are implemented to match the JSON specifications for the MVGenomSeq Submission API.
+ *
+ * This author hereby wishes to make it clear that many of the anti-patterns
+ * and design flaws noticeable in the DTO structure are NOT of his design,
+ * but originate from the specification these DTO must conform to.
+ *
+ */
 
 
 final case class OncologyCase
@@ -91,8 +63,6 @@ object OncologyCase
     histology: Coding[ICDO3.M],
     topography: Coding[ICDO3.T],
     grading: Code[Any],
-//    tnmClassifications: Option[Set[Coding[Any]]],  
-//    additionalClassification: Option[Coding[Any]]
     tnmClassifications: Option[Set[Coding[TumorStaging.TNM.Systems]]],
     additionalClassification: Option[Coding[TumorStaging.OtherSystems]]
   )
