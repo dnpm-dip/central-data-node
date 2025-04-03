@@ -40,6 +40,7 @@ lazy val core = project
       dependencies.logback,
       dependencies.play_json,
       dependencies.mtb_dtos,
+      dependencies.service_base
     ),
     assembly / assemblyJarName := "dnpm-ccdn-core.jar",
     assembly / mainClass       := Some("de.dnpm.ccdn.core.exec")
@@ -67,14 +68,15 @@ lazy val connectors = project
 
 lazy val dependencies =
   new {
-    val scalatest   = "org.scalatest"     %% "scalatest"               % "3.2.18" % Test
-    val slf4j       = "org.slf4j"         %  "slf4j-api"               % "2.0.13"
-    val logback     = "ch.qos.logback"    %  "logback-classic"         % "1.5.6"
-    val cats_core   = "org.typelevel"     %% "cats-core"               % "2.12.0"
-    val play_json   = "org.playframework" %% "play-json"               % "3.0.3"
-    val play_ahc    = "org.playframework" %% "play-ahc-ws-standalone"  % "3.0.5"
-    val play_ahc_js = "org.playframework" %% "play-ws-standalone-json" % "3.0.5"
-    val mtb_dtos    = "de.dnpm.dip"       %% "mtb-dto-model"           % "1.0-SNAPSHOT"
+    val scalatest    = "org.scalatest"     %% "scalatest"               % "3.2.18" % Test
+    val slf4j        = "org.slf4j"         %  "slf4j-api"               % "2.0.13"
+    val logback      = "ch.qos.logback"    %  "logback-classic"         % "1.5.6"
+    val cats_core    = "org.typelevel"     %% "cats-core"               % "2.12.0"
+    val play_json    = "org.playframework" %% "play-json"               % "3.0.3"
+    val play_ahc     = "org.playframework" %% "play-ahc-ws-standalone"  % "3.0.5"
+    val play_ahc_js  = "org.playframework" %% "play-ws-standalone-json" % "3.0.5"
+    val mtb_dtos     = "de.dnpm.dip"       %% "mtb-dto-model"           % "1.0-SNAPSHOT"
+    val service_base = "de.dnpm.dip"       %% "service-base"            % "1.0-SNAPSHOT"
   }
 
 

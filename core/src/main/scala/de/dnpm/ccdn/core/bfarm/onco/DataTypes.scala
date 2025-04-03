@@ -3,11 +3,11 @@ package de.dnpm.ccdn.core.bfarm.onco
 
 import java.time.LocalDate
 import de.dnpm.dip.coding.Coding
-import de.dnpm.dip.coding.atc.ATC
+//import de.dnpm.dip.coding.atc.ATC
 import play.api.libs.json.{
   Json,
   Format,
-  OFormat,
+//  OFormat,
   OWrites,
   Reads
 }
@@ -33,6 +33,20 @@ object CodingWithDate
           date
         )
     }
+
+/*
+  implicit def readsAny: Reads[CodingWithDate[Any]] =
+    Reads {
+      js =>
+        for {
+          coding <- js.validate[Coding[Any]]
+          date <- (js \ "date").validate[LocalDate]
+        } yield CodingWithDate(
+          coding,
+          date
+        )
+    }
+*/
 
   implicit def writes[T]: OWrites[CodingWithDate[T]] =
     OWrites {

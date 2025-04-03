@@ -11,16 +11,18 @@ import play.api.libs.json.{
   Format,
   OFormat
 }
+import de.dnpm.dip.coding.Code
 import de.dnpm.dip.model.{
   Gender,
   HealthInsurance,
   Id,
   Site
 }
-import de.dnpm.ccdn.core.{
+import de.dnpm.dip.service.mvh.{
   SubmissionType,
-  TTAN
+  TransferTAN
 }
+
 
 /*
  * DISCLAIMER:
@@ -34,13 +36,18 @@ import de.dnpm.ccdn.core.{
  */
 
 
+//sealed trait GDC  // Genomic Data Center
+sealed trait CDN  // Clinical Data Node
+
+
 final case class Metadata
 (
   submission: Metadata.Submission,
-  coverageType: HealthInsurance.Type.Value,
+  coverageType: Code[HealthInsurance.Type.Value],
+//  coverageType: HealthInsurance.Type.Value,
   mvConsent: Metadata.MVConsent,
-  researchConsents: Option[List[JsObject]],
-  tanC: Id[TTAN],
+  researchConsents: Option[List[Metadata.ResearchConsent]],
+  tanC: Id[TransferTAN],
   gender: Gender.Value,
   birthDate: YearMonth,
   addressAGS: String,
@@ -54,9 +61,9 @@ object Metadata
 
   object DiseaseType extends Enumeration
   {
-    val Onco = Value("oncological")
-    val RD   = Value("rare")
-    val HT   = Value("hereditary")
+    val Oncological = Value("oncological")
+    val Rare        = Value("rare")
+//    val HT            = Value("hereditary")
  
     implicit val format: Format[Value] =
       Json.formatEnum(this)
@@ -76,16 +83,12 @@ object Metadata
   }
 
 
-  sealed trait GDC  // Genomic Data Center
-  sealed trait CDN  // Clinical Data Node
-
-
   final case class Submission
   (
     date: LocalDate,
     `type`: SubmissionType.Value,
     submitterId: Id[Site],
-    genomicDataCenterId: Id[GDC],
+//    genomicDataCenterId: Id[GDC],
     clinicalDataNodeId: Id[CDN],
     diseaseType: DiseaseType.Value, 
   )
@@ -142,9 +145,24 @@ object Metadata
       Json.format[MVConsent]
   }
 
+  final case class ResearchConsent
+  (
+    schemaVersion: String,
+    presentationDate: Option[LocalDate],
+    scope: JsObject
+  )
+
+  object ResearchConsent
+  {
+    implicit val format: OFormat[ResearchConsent] =
+      Json.format[ResearchConsent]
+  }
 
 
-  import de.dnpm.dip.util.json._ // For YearMonth Format
+  import de.dnpm.dip.util.json.{
+    readsYearMonth,
+    writesYearMonth
+  }
 
 
   implicit val formatGender: Format[Gender.Value] =

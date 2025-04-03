@@ -25,8 +25,8 @@ import play.api.libs.json.{
   Json,
   Format,
   OFormat,
-  OWrites,
-  Reads
+//  OWrites,
+//  Reads
 }
 
 
@@ -56,13 +56,13 @@ object OncologyCase
   final case class Diagnosis
   (
     mainDiagnosis: CodingWithDate[ICD10GM],
-    additionalDiagnoses: Option[Set[CodingWithDate[Any]]],
+    additionalDiagnoses: Option[Set[CodingWithDate[ICD10GM]]],
     ecogPerformanceStatusScore: Code[ECOG.Value],
     germlineDiagnosisConfirmed: Boolean,
     germlineDiagnoses: Option[Coding[ICD10GM]],
     histology: Coding[ICDO3.M],
     topography: Coding[ICDO3.T],
-    grading: Code[Any],
+    grading: Option[Code[OBDSGrading.Value]],
     tnmClassifications: Option[Set[Coding[TumorStaging.TNM.Systems]]],
     additionalClassification: Option[Coding[TumorStaging.OtherSystems]]
   )
@@ -124,7 +124,7 @@ object OncologyCase
   final case class PriorTherapy
   (
     treatmentType: Code[MTBSystemicTherapy.Category.Value],
-    intention: Option[Code[MTBTherapy.Intention.Value]],
+    intention: Option[Code[MTBTherapy.Intent.Value]],
     therapyStartDate: Option[LocalDate],
     therapyEndDate: Option[LocalDate],
     substances: Option[Set[Coding[Any]]],

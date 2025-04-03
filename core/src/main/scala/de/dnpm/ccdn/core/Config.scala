@@ -14,13 +14,15 @@ import de.dnpm.dip.model.{
   Site
 }
 import de.dnpm.dip.util.Logging
-
+import de.dnpm.ccdn.core.dip.UseCase
+import de.dnpm.ccdn.core.bfarm.CDN
 
 
 final case class Config
 (
   polling: Config.Polling,
-  dataNodeId: Id[DataNode],
+//  dataNodeId: Id[DataNode],
+  dataNodeIds: Map[UseCase.Value,Id[CDN]],
   submitterIds: Map[Code[Site],Id[Site]]
 )
 

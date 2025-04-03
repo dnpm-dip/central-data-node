@@ -2,21 +2,25 @@ package de.dnpm.ccdn.core.dip
 
 
 import java.time.LocalDateTime
+/*
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.{
   Id,
   Site
 }
+*/
 import play.api.libs.json.{
   Json,
   Format
 }
-import de.dnpm.ccdn.core.{
-  SubmissionType,
-  TTAN
-}
+
+final case class SubmissionReport
+(
+  createdOn: LocalDateTime
+)
 
 
+/*
 final case class SubmissionReport
 (
   createdOn: LocalDateTime,
@@ -27,6 +31,7 @@ final case class SubmissionReport
   sequencingType: Option[SequencingType.Value],
   qcPassed: Boolean
 )
+*/
 
 object SubmissionReport
 {

@@ -3,7 +3,10 @@
     "period": 10,
     "timeUnit": "SECONDS"
   },
-  "dataNodeId":"KDK__DNPM",
+  "dataNodeIds": {
+    "MTB": "KDKTUE005",
+    "RD": "KDKTUE002"
+  },
   "submitterIds": { 
     "UKFR":"260832299",
     "UKHD":"260820466",
