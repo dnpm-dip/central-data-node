@@ -13,6 +13,7 @@ import de.dnpm.dip.coding.icd.{
   ICD10GM,
   ICDO3
 }
+import de.dnpm.dip.model.Medications
 import de.dnpm.dip.mtb.model.{
   ECOG,
   OBDSGrading,
@@ -24,9 +25,7 @@ import de.dnpm.dip.mtb.model.{
 import play.api.libs.json.{
   Json,
   Format,
-  OFormat,
-//  OWrites,
-//  Reads
+  OFormat
 }
 
 
@@ -59,7 +58,7 @@ object OncologyCase
     additionalDiagnoses: Option[Set[CodingWithDate[ICD10GM]]],
     ecogPerformanceStatusScore: Code[ECOG.Value],
     germlineDiagnosisConfirmed: Boolean,
-    germlineDiagnoses: Option[Coding[ICD10GM]],
+    germlineDiagnoses: Option[Set[Coding[ICD10GM]]],
     histology: Coding[ICDO3.M],
     topography: Coding[ICDO3.T],
     grading: Option[Code[OBDSGrading.Value]],
@@ -96,7 +95,7 @@ object OncologyCase
       val GenomeShortRead = Value("genomeShortRead")
       val GenomeLongRead  = Value("genomeLongRead")
       val Other           = Value("other")
-      val None            = Value("none")
+      val NonePerformed   = Value("none")
  
       implicit val format: Format[Value] =
         Json.formatEnum(this)
@@ -127,7 +126,7 @@ object OncologyCase
     intention: Option[Code[MTBTherapy.Intent.Value]],
     therapyStartDate: Option[LocalDate],
     therapyEndDate: Option[LocalDate],
-    substances: Option[Set[Coding[Any]]],
+    substances: Option[Set[Coding[Medications]]],
     terminationReasonOBDS: Option[TerminationReason.Value],
     therapyResponse: Option[Code[RECIST.Value]]
   )

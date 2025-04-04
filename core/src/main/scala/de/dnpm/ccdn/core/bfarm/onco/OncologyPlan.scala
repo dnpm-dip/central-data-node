@@ -41,9 +41,8 @@ final case class OncologyPlan
 (
   carePlanOd: Option[OncologyPlan.CarePlan],
   recommendedSystemicTherapies: Option[List[OncologyPlan.SystemicTherapyRecommendation]],
-  recommendedtudies: Option[List[OncologyPlan.StudyRecommendation]]
+  recommendedStudies: Option[List[OncologyPlan.StudyRecommendation]]
 )
-
 
 object OncologyPlan
 {

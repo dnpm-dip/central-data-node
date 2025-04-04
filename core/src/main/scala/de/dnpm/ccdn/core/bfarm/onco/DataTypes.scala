@@ -34,20 +34,6 @@ object CodingWithDate
         )
     }
 
-/*
-  implicit def readsAny: Reads[CodingWithDate[Any]] =
-    Reads {
-      js =>
-        for {
-          coding <- js.validate[Coding[Any]]
-          date <- (js \ "date").validate[LocalDate]
-        } yield CodingWithDate(
-          coding,
-          date
-        )
-    }
-*/
-
   implicit def writes[T]: OWrites[CodingWithDate[T]] =
     OWrites {
       cwd => Json.toJsObject(cwd.coding) + ("date" -> Json.toJson(cwd.date))
