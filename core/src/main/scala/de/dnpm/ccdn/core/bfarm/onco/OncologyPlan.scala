@@ -9,6 +9,7 @@ import de.dnpm.dip.coding.{
 import de.dnpm.dip.coding.ops.OPS
 import de.dnpm.dip.model.{
   Id,
+  Medications,
   Recommendation,
   Study
 }
@@ -84,7 +85,7 @@ object OncologyPlan
     register: String,
     name: String,
     id: Id[Study],
-    substances: Option[Set[Coding[Any]]],
+    substances: Option[Set[Coding[Medications]]],
     evidenceLevel: Code[LevelOfEvidence.Grading.Value],
     evidenceLevelDetails: Set[Code[LevelOfEvidence.Addendum.Value]],
     priority: Code[Recommendation.Priority.Value],
@@ -102,7 +103,7 @@ object OncologyPlan
   (
     identifier: Id[SystemicTherapyRecommendation],
     `type`: SystemicTherapyRecommendation.Type.Value,
-    substances: Set[Coding[Any]],
+    substances: Set[Coding[Medications]],
     evidenceLevel: Code[LevelOfEvidence.Grading.Value],
     evidenceLevelDetails: Set[Code[LevelOfEvidence.Addendum.Value]],
     priority: Code[Recommendation.Priority.Value],

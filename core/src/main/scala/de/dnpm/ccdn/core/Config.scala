@@ -15,14 +15,17 @@ import de.dnpm.dip.model.{
 }
 import de.dnpm.dip.util.Logging
 import de.dnpm.ccdn.core.dip.UseCase
-import de.dnpm.ccdn.core.bfarm.CDN
+import de.dnpm.ccdn.core.bfarm.{
+  CDN,
+  GDC
+}
 
 
 final case class Config
 (
   polling: Config.Polling,
-//  dataNodeId: Id[DataNode],
   dataNodeIds: Map[UseCase.Value,Id[CDN]],
+  genomicDataCenterIds: Map[Code[Site],Id[GDC]],
   submitterIds: Map[Code[Site],Id[Site]]
 )
 

@@ -14,6 +14,7 @@ import de.dnpm.dip.model.{
   Patient
 }
 import de.dnpm.dip.service.mvh
+import de.dnpm.dip.service.mvh.Submission
 import de.dnpm.dip.util.mapping.syntax._
 import shapeless.Witness
 
@@ -26,15 +27,15 @@ trait Mappings
   val useCase: UseCase.Value
 
 
-  implicit val useCaseMapping: UseCase.Value => Metadata.DiseaseType.Value =
+  protected implicit val useCaseMapping: UseCase.Value => Metadata.DiseaseType.Value =
     Map(
       UseCase.MTB -> bfarm.Metadata.DiseaseType.Oncological,
       UseCase.RD  -> bfarm.Metadata.DiseaseType.Rare
     )
 
-  implicit def metadataMapping[CP <: CarePlan](
+  protected implicit def metadataMapping[CP <: CarePlan](
     implicit w: Witness.Aux[CP#StatusReason]
-  ): (Patient,LocalDate,CP,mvh.Metadata) => Metadata = {
+  ): ((Patient,LocalDate,CP,Submission.Metadata)) => Metadata = {
 
     case (patient,date,carePlan,metadata) =>
     
@@ -66,11 +67,14 @@ trait Mappings
           mvh.ModelProjectConsent.Purpose.CaseIdentification -> MVConsent.Scope.Domain.CaseIdentification
         )
 
+    val Gender(gender) = patient.gender
+
     Metadata(
-      Submission(
+      Metadata.Submission(
         date,
         metadata.submissionType,
         config.submitterIds(patient.managingSite.get.code),
+        config.genomicDataCenterIds(patient.managingSite.get.code),
         config.dataNodeIds(useCase),
         useCase.mapTo[DiseaseType.Value]
       ),
@@ -96,7 +100,7 @@ trait Mappings
         )
       ),
       metadata.transferTAN,
-      Gender.unapply(patient.gender).get,  //TODO: improve, because unsafe 
+      gender,
       YearMonth.from(patient.birthDate),
       patient.address.municipalityCode,
       carePlan.statusReason.isEmpty,

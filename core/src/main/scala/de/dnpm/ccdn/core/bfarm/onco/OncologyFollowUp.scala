@@ -14,6 +14,7 @@ import de.dnpm.dip.util.json.{
 }
 import de.dnpm.dip.model.{
   Id,
+  Medications,
   VitalStatus
 }
 import de.dnpm.dip.mtb.model.{
@@ -48,8 +49,8 @@ object FollowUp
     therapyStartDate: LocalDate,
     therapyEndDate: Option[LocalDate],
     terminationReasonOBDS: Option[TerminationReason.Value],
-    substances: Option[Set[Coding[Any]]],
-    therapyResponseDate: LocalDate,
+    substances: Option[Set[Coding[Medications]]],
+    therapyResponseDate: Option[LocalDate],
     therapyResponse: Option[Code[RECIST.Value]]
   )
 

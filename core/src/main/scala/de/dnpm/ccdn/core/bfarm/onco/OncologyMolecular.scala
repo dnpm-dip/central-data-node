@@ -20,21 +20,14 @@ import play.api.libs.json.{
   Format,
   OFormat
 }
+import OncologyMolecular._
+
 
 
 /*
- * DISCLAIMER:
- *
- * These DTOs are implemented to match the JSON specifications for the MVGenomSeq Submission API.
- *
- * This author hereby wishes to make it clear that many of the anti-patterns
- * and design flaws noticeable in the DTO structure are NOT of his design,
- * but originate from the specification these DTO must conform to.
- *
+ * NOTE:
+ * StructuralVariant, ExpressionVariant, SbsSignature not represented/relevant in MTB Core Data Set
  */
-
-import OncologyMolecular._
-
 
 final case class OncologyMolecular
 (
@@ -69,7 +62,6 @@ object OncologyMolecular
   {
     val identifier: Id[Variant]
     val genomicSource: GenomicSource.Value
-//    val gene: Coding[HGNC]
     val localization: Localization.Value
   }
 
@@ -103,8 +95,8 @@ object OncologyMolecular
     localization: Localization.Value,
     cnvType: CopyNumberVariant.Type.Value,
     chromosome: Option[Code[Chromosome.Value]],
-    startPosition: Option[Int],
-    endPosition: Option[Int],
+    startPosition: Option[Long],
+    endPosition: Option[Long],
   )
   extends Variant
 
@@ -128,12 +120,6 @@ object OncologyMolecular
       Json.format[CopyNumberVariant]
   }
 
-
-  /*
-   * NOTE:
-   * StructuralVariant, ExpressionVariant, SbsSignature not represented/relevant in MTB Core Data Set
-   *
-   */
 
 
   final case class ComplexBiomarker

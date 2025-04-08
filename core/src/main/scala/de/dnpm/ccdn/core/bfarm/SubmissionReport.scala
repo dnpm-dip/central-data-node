@@ -12,7 +12,7 @@ final case class SubmissionReport[Case,MolSeq,Plan,FU]
 (
   metadata: Metadata,
   `case`: Case,
-  molecular: MolSeq,
+  molecular: Option[MolSeq],
   plan: Option[Plan],
   followUp: Option[FU]
 )

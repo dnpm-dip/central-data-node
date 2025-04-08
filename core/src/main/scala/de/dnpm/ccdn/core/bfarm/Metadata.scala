@@ -18,10 +18,9 @@ import de.dnpm.dip.model.{
   Id,
   Site
 }
-import de.dnpm.dip.service.mvh.{
-  SubmissionType,
-  TransferTAN
-}
+import de.dnpm.dip.service.mvh
+import de.dnpm.dip.service.mvh.TransferTAN
+
 
 
 /*
@@ -36,7 +35,7 @@ import de.dnpm.dip.service.mvh.{
  */
 
 
-//sealed trait GDC  // Genomic Data Center
+sealed trait GDC  // Genomic Data Center
 sealed trait CDN  // Clinical Data Node
 
 
@@ -44,7 +43,6 @@ final case class Metadata
 (
   submission: Metadata.Submission,
   coverageType: Code[HealthInsurance.Type.Value],
-//  coverageType: HealthInsurance.Type.Value,
   mvConsent: Metadata.MVConsent,
   researchConsents: Option[List[Metadata.ResearchConsent]],
   tanC: Id[TransferTAN],
@@ -86,9 +84,9 @@ object Metadata
   final case class Submission
   (
     date: LocalDate,
-    `type`: SubmissionType.Value,
+    `type`: mvh.Submission.Type.Value,
     submitterId: Id[Site],
-//    genomicDataCenterId: Id[GDC],
+    genomicDataCenterId: Id[GDC],
     clinicalDataNodeId: Id[CDN],
     diseaseType: DiseaseType.Value, 
   )
