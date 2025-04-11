@@ -40,6 +40,7 @@ lazy val core = project
       dependencies.logback,
       dependencies.play_json,
       dependencies.mtb_dtos,
+      dependencies.rd_dtos,
       dependencies.service_base
     ),
     assembly / assemblyJarName := "dnpm-ccdn-core.jar",
@@ -76,6 +77,7 @@ lazy val dependencies =
     val play_ahc     = "org.playframework" %% "play-ahc-ws-standalone"  % "3.0.5"
     val play_ahc_js  = "org.playframework" %% "play-ws-standalone-json" % "3.0.5"
     val mtb_dtos     = "de.dnpm.dip"       %% "mtb-dto-model"           % "1.0-SNAPSHOT"
+    val rd_dtos      = "de.dnpm.dip"       %% "rd-dto-model"            % "1.0-SNAPSHOT"
     val service_base = "de.dnpm.dip"       %% "service-base"            % "1.0-SNAPSHOT"
   }
 

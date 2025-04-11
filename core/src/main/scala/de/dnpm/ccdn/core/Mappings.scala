@@ -1,6 +1,7 @@
 package de.dnpm.ccdn.core
 
 
+import scala.util.chaining._
 import java.time.{
   LocalDate,
   YearMonth
@@ -9,6 +10,7 @@ import de.dnpm.ccdn.core.bfarm._
 import de.dnpm.ccdn.core.dip.UseCase
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.{
+  Chromosome,
   CarePlan,
   Gender,
   Patient
@@ -32,6 +34,12 @@ trait Mappings
       UseCase.MTB -> bfarm.Metadata.DiseaseType.Oncological,
       UseCase.RD  -> bfarm.Metadata.DiseaseType.Rare
     )
+
+
+  protected implicit def chromosomeMapping[Chr <: Chromosome with Enumeration]: Chr#Value => bfarm.Chromosome.Value =
+    _.toString.replace("chr","")
+     .pipe(bfarm.Chromosome.withName)
+
 
   protected implicit def metadataMapping[CP <: CarePlan](
     implicit w: Witness.Aux[CP#StatusReason]

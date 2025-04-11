@@ -9,12 +9,12 @@ import de.dnpm.dip.coding.{
 import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.hgvs.HGVS
 import de.dnpm.dip.mtb.model.{
-  Chromosome,
   Transcript
 }
 import de.dnpm.dip.model.{
   Id
 }
+import de.dnpm.ccdn.core.bfarm.Chromosome
 import play.api.libs.json.{
   Json,
   Format,
@@ -73,8 +73,8 @@ object OncologyMolecular
     gene: Coding[HGNC],
     localization: Localization.Value,
     transcriptId: Id[Transcript],
-    dnaChange: Coding[HGVS],
-    proteinChange: Option[Coding[HGVS]],
+    dnaChange: Code[HGVS],
+    proteinChange: Option[Code[HGVS]],
     variantTypes: Option[List[Coding[SequenceOntology]]],
     loh: Option[Boolean]
   )
@@ -94,7 +94,7 @@ object OncologyMolecular
     gene: Option[Coding[HGNC]],
     localization: Localization.Value,
     cnvType: CopyNumberVariant.Type.Value,
-    chromosome: Option[Code[Chromosome.Value]],
+    chromosome: Option[Chromosome.Value],
     startPosition: Option[Long],
     endPosition: Option[Long],
   )

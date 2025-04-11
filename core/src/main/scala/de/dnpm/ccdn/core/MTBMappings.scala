@@ -5,9 +5,11 @@ import java.net.URI
 import scala.util.chaining._
 import cats.data.NonEmptyList
 import de.dnpm.ccdn.core.bfarm.{
+  DiagnosticType,
   Metadata,
   SubmissionReport
 }
+import de.dnpm.ccdn.core.bfarm.Chromosome
 import de.dnpm.ccdn.core.bfarm.onco._
 import de.dnpm.ccdn.core.dip.UseCase
 import de.dnpm.dip.coding.{
@@ -102,9 +104,9 @@ trait MTBMappings extends Mappings
 
   protected implicit val priorDiagnostics: List[MolecularDiagnosticReport] => Option[OncologyCase.PriorDiagnostics] = {
 
-    import OncologyCase.PriorDiagnostics.Type._           
-      
-    implicit val diagnosticType: Coding[MolecularDiagnosticReport.Type.Value] => OncologyCase.PriorDiagnostics.Type.Value =
+    import DiagnosticType._           
+
+    implicit val diagnosticType: Coding[MolecularDiagnosticReport.Type.Value] => DiagnosticType.Value =
       Map(
         Coding(MolecularDiagnosticReport.Type.Array)           -> Array,
         Coding(MolecularDiagnosticReport.Type.Single)          -> Single,
@@ -124,7 +126,7 @@ trait MTBMappings extends Mappings
         .maxByOption(_.issuedOn)
         .map(
           report => OncologyCase.PriorDiagnostics(
-            report.`type`.mapTo[OncologyCase.PriorDiagnostics.Type.Value],
+            report.`type`.mapTo[DiagnosticType.Value],
             Some(report.issuedOn), // Simple and Copy Number Variants not represented in MTB-KDS PRIOR molecular diagnostics
             None,
             None
@@ -247,9 +249,6 @@ trait MTBMappings extends Mappings
             case _                       => CopyNumberVariant.Type.Loss // Last case: Loss
           }
     
-        val chr =
-          Code[Chromosome.Value](cnv.chromosome.toString.replace("chr",""))
-    
         val start = cnv.startRange.map(_.start)
         val end   = cnv.endRange.map(_.start)
     
@@ -261,7 +260,7 @@ trait MTBMappings extends Mappings
               Some(gene),
               cnv.localization.getOrElse(Set.empty).mapTo[Localization.Value],
               typ,
-              Some(chr),
+              Some(cnv.chromosome.mapTo[Chromosome.Value]),
               start,
               end 
             )

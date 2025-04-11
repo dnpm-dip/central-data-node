@@ -22,9 +22,9 @@ import de.dnpm.dip.mtb.model.{
   RECIST,
   TumorStaging
 }
+import de.dnpm.ccdn.core.bfarm.DiagnosticType
 import play.api.libs.json.{
   Json,
-  Format,
   OFormat
 }
 
@@ -75,7 +75,7 @@ object OncologyCase
 
   final case class PriorDiagnostics
   (
-    `type`: PriorDiagnostics.Type.Value,
+    `type`: DiagnosticType.Value,
     date: Option[LocalDate],
     simpleVariants: Option[List[PriorDiagnostics.SimpleVariant]],
     complexVariants: Option[List[String]]
@@ -83,7 +83,7 @@ object OncologyCase
 
   object PriorDiagnostics
   {
-
+/*
     object Type extends Enumeration
     {
  
@@ -101,7 +101,7 @@ object OncologyCase
         Json.formatEnum(this)
   
     }
-
+*/
     final case class SimpleVariant
     (
       gene: Coding[HGNC],
