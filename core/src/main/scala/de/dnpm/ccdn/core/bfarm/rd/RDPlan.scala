@@ -92,7 +92,7 @@ object RDPlan
   final case class TherapyRecommendation
   (
     identifier: Id[TherapyRecommendation],
-    `type`: Code[RDTherapy.Type.Value],
+    `type`: Code[RDTherapy.Category.Value],
     strategy: TherapyRecommendation.Strategy.Value,
     strategyOther: Option[String],
     variantReferences: Option[List[Id[Variant]]]

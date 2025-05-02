@@ -14,7 +14,8 @@ import de.dnpm.dip.model.{
 }
 import de.dnpm.dip.rd.model.{
   ACMG,
-  CopyNumberVariant => CNV
+  CopyNumberVariant => CNV,
+  ISCN
 }
 import de.dnpm.dip.rd.model.Variant.Significance
 import de.dnpm.ccdn.core.bfarm.Chromosome
@@ -90,10 +91,10 @@ object RDMolecular
 
     object Localization extends Enumeration
     {
-      val codingRegion       = Value("codingRegion")
-      val splicingRegion     = Value("splicingRegion")
-      val regulatoryRegion   = Value("regulatoryRegion")
-      val intronicIntergenic = Value("intronicIntergenic")
+      val CodingRegion       = Value("codingRegion")
+      val SplicingRegion     = Value("splicingRegion")
+      val RegulatoryRegion   = Value("regulatoryRegion")
+      val IntronicIntergenic = Value("intronicIntergenic")
 
       implicit val format: Format[Value] =
         Json.formatEnum(this)
@@ -170,7 +171,7 @@ object RDMolecular
     cdnaChange: Option[Code[HGVS.DNA]],
     gdnaChange: Option[Code[HGVS.DNA]],
     proteinChange: Option[Code[HGVS.Protein]],
-    description: Option[String],
+    description: Option[Code[ISCN]],
     acmgClass: ACMG.Class.Value,
     acmgCriteria: Option[Set[ACMGCriterion]],
     zygosity: Variant.Zygosity.Value,

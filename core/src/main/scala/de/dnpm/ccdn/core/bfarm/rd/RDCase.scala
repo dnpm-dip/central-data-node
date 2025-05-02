@@ -53,7 +53,7 @@ object RDCase
 
   final case class Diagnosis
   (
-    phenotypes: List[NonEmptyList[Coding[HPO]]],
+    phenotypes: NonEmptyList[Coding[HPO]],
     hpoVersion: String,
     symptomOnsetDate: YearMonth,
     molecularBoardDecisionDate: LocalDate,
@@ -98,7 +98,7 @@ object RDCase
   final case class PriorRD
   (
     genomicTestType: DiagnosticType.Value,
-    diagnosticDate: LocalDate,
+    diagnosticDate: Option[LocalDate],
     diagnosticResult: PriorRD.DiagnosticAssessment.Value,
     hospitalizationPeriods: PriorRD.Hospitalizations.Value,
     hospitalizationDuration: PriorRD.HospitalizationDays.Value,

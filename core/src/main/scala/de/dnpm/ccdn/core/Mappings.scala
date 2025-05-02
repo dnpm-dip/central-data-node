@@ -8,11 +8,17 @@ import java.time.{
 }
 import de.dnpm.ccdn.core.bfarm._
 import de.dnpm.ccdn.core.dip.UseCase
-import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.coding.{
+  CodedEnum,
+  Coding
+}
+import de.dnpm.dip.model
 import de.dnpm.dip.model.{
   Chromosome,
   CarePlan,
+  ExternalId,
   Gender,
+  Id,
   Patient
 }
 import de.dnpm.dip.service.mvh
@@ -28,12 +34,35 @@ trait Mappings
 
   val useCase: UseCase.Value
 
+  protected implicit def stringToId[T](id: String): Id[T] =
+    Id(id)
+
+  protected implicit def extIdToId[T,U](id: ExternalId[T,U]): Id[T] =
+    id.value
+
+  protected implicit def idToOther[T,U](id: Id[T]): Id[U] =
+    id.asInstanceOf[Id[U]]
+
 
   protected implicit val useCaseMapping: UseCase.Value => Metadata.DiseaseType.Value =
     Map(
       UseCase.MTB -> bfarm.Metadata.DiseaseType.Oncological,
       UseCase.RD  -> bfarm.Metadata.DiseaseType.Rare
     )
+
+  protected implicit def enumCodingToValue[E <: CodedEnum](
+    implicit w: Witness.Aux[E]
+  ): Coding[E#Value] => E#Value =
+    coding =>
+      w.value.unapply(coding.code.value).get
+
+  protected implicit def enumCodingToTargetValue[E <: CodedEnum,T](
+    implicit
+    w: Witness.Aux[E],
+    f: E#Value => T
+  ): Coding[E#Value] => T =
+    coding =>
+      f(w.value.unapply(coding.code.value).get)
 
 
   protected implicit def chromosomeMapping[Chr <: Chromosome with Enumeration]: Chr#Value => bfarm.Chromosome.Value =
@@ -80,7 +109,7 @@ trait Mappings
     Metadata(
       Metadata.Submission(
         date,
-        metadata.submissionType,
+        metadata.`type`,
         config.submitterIds(patient.managingSite.get.code),
         config.genomicDataCenterIds(patient.managingSite.get.code),
         config.dataNodeIds(useCase),
@@ -116,5 +145,12 @@ trait Mappings
       carePlan.statusReason.map(_.mapTo[RejectionJustification.Value]),
     )
   }
+
+
+  implicit val vitalStatus: model.VitalStatus.Value => VitalStatus.Value =
+    Map(
+      model.VitalStatus.Alive    -> VitalStatus.Living,
+      model.VitalStatus.Deceased -> VitalStatus.Deceased
+    )
 
 }

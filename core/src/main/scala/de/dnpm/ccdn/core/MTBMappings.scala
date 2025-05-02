@@ -20,7 +20,6 @@ import de.dnpm.dip.util.mapping.syntax._
 import de.dnpm.dip.service.mvh.Submission
 import de.dnpm.dip.model.{
   BaseVariant,
-  ExternalId,
   Id
 }
 import de.dnpm.dip.model.FollowUp.PatientStatus
@@ -202,19 +201,9 @@ trait MTBMappings extends Mappings
 
   import OncologyMolecular._
 
-  protected implicit def stringToId[T](id: String): Id[T] = 
-    Id(id)
-
-  protected implicit def extIdToId[T,U](id: ExternalId[T,U]): Id[T] = 
-    id.value
-
-  protected implicit def idToOther[T,U](id: Id[T]): Id[U] = 
-    id.asInstanceOf[Id[U]]
-
-
   protected implicit val oncologyMolecular: List[SomaticNGSReport] => OncologyMolecular = {
 
-    implicit val localizationMapping: Set[Coding[BaseVariant.Localization.Value]] => Localization.Value = {
+    implicit val localizationMapping: Set[Coding[BaseVariant.Localization.Value]] => Localization.Value =
       _.collect { case BaseVariant.Localization(l) => l} match {
   
         case locs if locs contains BaseVariant.Localization.CodingRegion     => Localization.Coding
@@ -222,7 +211,6 @@ trait MTBMappings extends Mappings
         case _                                                               => Localization.Neither
       }
   
-    }
 
     implicit val snvMapping: SNV => SmallVariant = 
       snv => SmallVariant(
@@ -295,8 +283,8 @@ trait MTBMappings extends Mappings
 
     reports =>
       OncologyMolecular(
-        Option(reports.flatMap(_.results.simpleVariants).mapAllTo[SmallVariant]).filter(_.nonEmpty),
-        Option(reports.flatMap(_.results.copyNumberVariants.flatMap(_.mapTo[Set[CopyNumberVariant]]))).filter(_.nonEmpty),
+        Option(reports.flatMap(_.results.simpleVariants.getOrElse(List.empty)).mapAllTo[SmallVariant]).filter(_.nonEmpty),
+        Option(reports.flatMap(_.results.copyNumberVariants.getOrElse(List.empty).flatMap(_.mapTo[Set[CopyNumberVariant]]))).filter(_.nonEmpty),
         Option(reports.mapAllTo[ComplexBiomarker]).filter(_.nonEmpty)
       )
 
@@ -363,7 +351,9 @@ trait MTBMappings extends Mappings
  
       recommendation =>
  
-        val studyRef = recommendation.study.head
+        val studyRef = 
+          recommendation.study.find(_.system == Coding.System[NCT].uri)
+            .getOrElse(recommendation.study.head)
  
         StudyRecommendation(
           recommendation.id,

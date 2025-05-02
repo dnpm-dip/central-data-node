@@ -11,7 +11,8 @@ import de.dnpm.dip.coding.{
   Code,
   Coding
 }
-import de.dnpm.dip.model.VitalStatus
+//import de.dnpm.dip.model.VitalStatus
+import de.dnpm.ccdn.core.bfarm.VitalStatus
 import de.dnpm.dip.rd.model.{
   GMFCS,
   HPO
@@ -42,7 +43,7 @@ final case class RDFollowUp
   gmfcs: Option[Code[GMFCS.Value]],
   diagnosisEstablished: Boolean,
   diseaseProgression: Option[String],
-  vitalStatus: Code[VitalStatus.Value],
+  vitalStatus: VitalStatus.Value,
   deathDate: Option[LocalDate]
 )
 
