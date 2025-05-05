@@ -12,10 +12,10 @@ import de.dnpm.dip.util.json.{
   readsNel, 
   writesNel
 }
+import de.dnpm.ccdn.core.bfarm.VitalStatus
 import de.dnpm.dip.model.{
   Id,
   Medications,
-  VitalStatus
 }
 import de.dnpm.dip.mtb.model.{
   ECOG,
@@ -33,7 +33,7 @@ final case class FollowUp
   metachroneDiagnoses: Boolean,
   additionalDiagnoses: Option[NonEmptyList[CodingWithDate[ICD10GM]]],
   ecogPerformanceStatusScore: Code[ECOG.Value],
-  vitalStatus: Code[VitalStatus.Value],
+  vitalStatus: VitalStatus.Value,
   lastContactDate: Option[LocalDate],
   deathDate: Option[LocalDate],
   therapies: Option[List[FollowUp.Therapy]]

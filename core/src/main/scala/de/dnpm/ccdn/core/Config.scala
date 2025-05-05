@@ -14,7 +14,7 @@ import de.dnpm.dip.model.{
   Site
 }
 import de.dnpm.dip.util.Logging
-import de.dnpm.ccdn.core.dip.UseCase
+import de.dnpm.dip.service.mvh.UseCase
 import de.dnpm.ccdn.core.bfarm.{
   CDN,
   GDC

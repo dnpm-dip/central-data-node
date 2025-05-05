@@ -20,6 +20,8 @@ import scala.util.chaining._
 import de.dnpm.dip.util.Logging
 import de.dnpm.ccdn.core.dip
 import de.dnpm.ccdn.core.bfarm
+import de.dnpm.dip.model.HealthInsurance
+import de.dnpm.dip.service.mvh.Submission
 
 
 object MVHReportingService
@@ -94,6 +96,7 @@ extends Logging
     scheduledTask.foreach(_.cancel(false))
   }
 
+
 /*
   private val tobfarmReport: dip.SubmissionReport => bfarm.SubmissionReport = {
     case dip.SubmissionReport(created,site,useCase,ttan,submType,seqType,qcPassed) =>
@@ -120,6 +123,30 @@ extends Logging
   }
 */
 
+  private val toBfarmReport: Submission.Report => bfarm.SubmissionReport = {
+
+    import de.dnpm.dip.service.mvh.UseCase._
+    import bfarm.SubmissionReport.DiseaseType._
+
+    report =>
+      bfarm.SubmissionReport.Case(
+        report.submittedAt.toLocalDate,
+        report.`type`,
+        report.transferTAN,
+        config.submitterIds(report.site.code),
+        config.dataNodeIds(report.useCase),
+        report.useCase match { 
+          case MTB => Oncological
+          case RD  => Rare
+        },
+        report.healthInsuranceType match {
+          case HealthInsurance.Type(value) => value
+          case _                           => HealthInsurance.Type.UNK
+        },
+        true
+      )
+      .pipe(bfarm.SubmissionReport(_))
+  }
 
   private[core] def pollReports: Future[Unit] = {
 
@@ -164,14 +191,14 @@ extends Logging
 
     log.info("Uploading SubmissionReports...")
 
-    Future.failed(new RuntimeException("TODO!"))
-/*   
+//    Future.failed(new RuntimeException("TODO!"))
+   
     Future.sequence(
       queue.entries
         .map(
           report =>
             bfarmConnector
-              .upload(tobfarmReport(report))
+              .upload(toBfarmReport(report))
               .andThen{ 
                 case Success(Right(_: bfarm.SubmissionReport)) =>
                   log.debug("Upload successful")
@@ -180,7 +207,7 @@ extends Logging
         )
     )
     .map(_ => ())
-*/    
+    
   }
 
 }

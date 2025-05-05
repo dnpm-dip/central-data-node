@@ -7,17 +7,17 @@ import cats.data.NonEmptyList
 import de.dnpm.ccdn.core.bfarm.{
   DiagnosticType,
   Metadata,
-  SubmissionReport
+  Submission,
+  VitalStatus
 }
 import de.dnpm.ccdn.core.bfarm.Chromosome
 import de.dnpm.ccdn.core.bfarm.onco._
-import de.dnpm.ccdn.core.dip.UseCase
 import de.dnpm.dip.coding.{
   Code,
   Coding
 }
 import de.dnpm.dip.util.mapping.syntax._
-import de.dnpm.dip.service.mvh.Submission
+import de.dnpm.dip.service.mvh
 import de.dnpm.dip.model.{
   BaseVariant,
   Id
@@ -31,7 +31,7 @@ import de.dnpm.dip.mtb.model._
 trait MTBMappings extends Mappings
 {
 
-  override val useCase: UseCase.Value = UseCase.MTB
+  override val useCase: mvh.UseCase.Value = mvh.UseCase.MTB
 
 
   protected implicit def oncoDiagnosis(
@@ -180,9 +180,9 @@ trait MTBMappings extends Mappings
   }
 
 
-  protected implicit val oncologyCase: Submission[MTBPatientRecord] => OncologyCase = {
+  protected implicit val oncologyCase: mvh.Submission[MTBPatientRecord] => OncologyCase = {
 
-    case Submission(record,metadata,_) =>
+    case mvh.Submission(record,metadata,_) =>
 
       implicit val specimens = record.getSpecimens
       implicit val histologyReports = record.getHistologyReports
@@ -490,7 +490,7 @@ trait MTBMappings extends Mappings
                record.getPerformanceStatus.maxByOption(_.effectiveDate)
                  .map(_.value.code)
                  .getOrElse(Code[ECOG.Value]("unknown")),
-               record.patient.vitalStatus.code,
+               record.patient.vitalStatus.mapTo[VitalStatus.Value],
                record.followUps
                  .getOrElse(List.empty)
                  .filter(
@@ -512,14 +512,14 @@ trait MTBMappings extends Mappings
   }
 
 
-  def apply(submission: Submission[MTBPatientRecord]): SubmissionReport[OncologyCase,OncologyMolecular,OncologyPlan,OncologyFollowUps] = {
+  def apply(submission: mvh.Submission[MTBPatientRecord]): Submission[OncologyCase,OncologyMolecular,OncologyPlan,OncologyFollowUps] = {
 
-    val Submission(record,metadata,dateTime) = submission   
+    val mvh.Submission(record,metadata,dateTime) = submission   
 
     val patient = record.patient
     val mvhCarePlan = record.getCarePlans.minByOption(_.issuedOn).get
 
-    SubmissionReport(
+    Submission(
       (patient,dateTime.toLocalDate,mvhCarePlan,metadata).mapTo[Metadata],
       submission.mapTo[OncologyCase],
       record.getNgsReports

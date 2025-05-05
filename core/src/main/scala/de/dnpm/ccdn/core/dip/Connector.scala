@@ -13,6 +13,7 @@ import de.dnpm.dip.util.{
 }
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.Site
+import de.dnpm.dip.service.mvh.Submission
 import de.dnpm.ccdn.core.Period
 
 
@@ -26,7 +27,7 @@ trait ConnectorOps[F[_],Env,Err]
     period: Option[Period[LocalDateTime]] = None
   )(
     implicit env: Env
-  ): F[Either[Err,Seq[SubmissionReport]]]
+  ): F[Either[Err,Seq[Submission.Report]]]
 }
 
 

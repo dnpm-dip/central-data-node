@@ -7,7 +7,7 @@ import java.time.{
   YearMonth
 }
 import de.dnpm.ccdn.core.bfarm._
-import de.dnpm.ccdn.core.dip.UseCase
+//import de.dnpm.ccdn.core.dip.UseCase
 import de.dnpm.dip.coding.{
   CodedEnum,
   Coding
@@ -22,7 +22,10 @@ import de.dnpm.dip.model.{
   Patient
 }
 import de.dnpm.dip.service.mvh
-import de.dnpm.dip.service.mvh.Submission
+import de.dnpm.dip.service.mvh.{
+  Submission,
+  UseCase
+}
 import de.dnpm.dip.util.mapping.syntax._
 import shapeless.Witness
 
@@ -33,6 +36,7 @@ trait Mappings
   val config: Config
 
   val useCase: UseCase.Value
+
 
   protected implicit def stringToId[T](id: String): Id[T] =
     Id(id)

@@ -8,6 +8,7 @@ import de.dnpm.dip.util.{
 }
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.Site
+import de.dnpm.dip.service.mvh.Submission
 
 
 trait QueueOps[T]
@@ -40,7 +41,7 @@ trait QueueOps[T]
 
 }
 
-trait ReportQueue extends QueueOps[dip.SubmissionReport]
+trait ReportQueue extends QueueOps[Submission.Report]
 
 trait ReportQueueProvider extends SPI[ReportQueue]
 

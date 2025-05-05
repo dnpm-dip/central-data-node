@@ -6,12 +6,14 @@ import java.time.YearMonth
 import cats.data.NonEmptyList
 import de.dnpm.ccdn.core.bfarm.{
   DiagnosticType,
+  Metadata,
+  Submission,
   VitalStatus
 }
 import de.dnpm.ccdn.core.bfarm.rd._
-import de.dnpm.ccdn.core.dip.UseCase
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.util.mapping.syntax._
+import de.dnpm.dip.service.mvh
 import de.dnpm.dip.model.{
   BaseVariant,
   NGSReport
@@ -26,7 +28,7 @@ import RDCase.{
 trait RDMappings extends Mappings
 {
 
-  override val useCase: UseCase.Value = UseCase.RD
+  override val useCase: mvh.UseCase.Value = mvh.UseCase.RD
 
 
   protected implicit val diagnosisExtent: RDDiagnosis.FamilyControlLevel.Value => RDCase.Diagnosis.Extent.Value =
@@ -337,31 +339,31 @@ trait RDMappings extends Mappings
   }
 
 
-  implicit val clinicalManagementType: ClinicalManagementRecommendation.Type.Value => RDPlan.CarePlan.ClinicalManagementDescription.Value =
-    Map(
-      ClinicalManagementRecommendation.Type.DiseaseSpecificAmbulatoryCare -> RDPlan.CarePlan.ClinicalManagementDescription.DiseaseSpecificAmbulatoryCare,
-      ClinicalManagementRecommendation.Type.UniversityAmbulatoryCare      -> RDPlan.CarePlan.ClinicalManagementDescription.UniversityAmbulatoryCare,
-      ClinicalManagementRecommendation.Type.OtherAmbulatoryCare           -> RDPlan.CarePlan.ClinicalManagementDescription.OtherAmbulatoryCare,
-      ClinicalManagementRecommendation.Type.LocalCRD                      -> RDPlan.CarePlan.ClinicalManagementDescription.LocalCrd, 
-      ClinicalManagementRecommendation.Type.OtherCRD                      -> RDPlan.CarePlan.ClinicalManagementDescription.OtherCrd, 
-      ClinicalManagementRecommendation.Type.GP                            -> RDPlan.CarePlan.ClinicalManagementDescription.GP,
-      ClinicalManagementRecommendation.Type.Specialist                    -> RDPlan.CarePlan.ClinicalManagementDescription.Specialist
-    )
 
+  protected implicit val carePlan: Option[RDCarePlan] => Option[RDPlan] = {
 
-  protected implicit val carePlan: RDCarePlan => RDPlan = {
+    import de.dnpm.dip.model.Study.Registries._
 
-     import de.dnpm.dip.model.Study.Registries._
+    implicit val clinicalManagementType: ClinicalManagementRecommendation.Type.Value => RDPlan.CarePlan.ClinicalManagementDescription.Value =
+      Map(
+        ClinicalManagementRecommendation.Type.DiseaseSpecificAmbulatoryCare -> RDPlan.CarePlan.ClinicalManagementDescription.DiseaseSpecificAmbulatoryCare,
+        ClinicalManagementRecommendation.Type.UniversityAmbulatoryCare      -> RDPlan.CarePlan.ClinicalManagementDescription.UniversityAmbulatoryCare,
+        ClinicalManagementRecommendation.Type.OtherAmbulatoryCare           -> RDPlan.CarePlan.ClinicalManagementDescription.OtherAmbulatoryCare,
+        ClinicalManagementRecommendation.Type.LocalCRD                      -> RDPlan.CarePlan.ClinicalManagementDescription.LocalCrd, 
+        ClinicalManagementRecommendation.Type.OtherCRD                      -> RDPlan.CarePlan.ClinicalManagementDescription.OtherCrd, 
+        ClinicalManagementRecommendation.Type.GP                            -> RDPlan.CarePlan.ClinicalManagementDescription.GP,
+        ClinicalManagementRecommendation.Type.Specialist                    -> RDPlan.CarePlan.ClinicalManagementDescription.Specialist
+      )
 
-     val studyRegisters: URI => String =
-        Map(
-          Coding.System[NCT].uri     -> "NCT",
-          Coding.System[DRKS].uri    -> "DRKS",
-          Coding.System[EudraCT].uri -> "EudraCT",
-        )
-        .orElse {
-          case _ => "other"
-        }
+    val studyRegisters: URI => String =
+       Map(
+         Coding.System[NCT].uri     -> "NCT",
+         Coding.System[DRKS].uri    -> "DRKS",
+         Coding.System[EudraCT].uri -> "EudraCT",
+       )
+       .orElse {
+         case _ => "other"
+       }
 
     implicit val studyRecommendation: RDStudyEnrollmentRecommendation => RDPlan.StudyRecommendation = {
       rec => 
@@ -405,28 +407,30 @@ trait RDMappings extends Mappings
       )
     }
 
-    carePlan => RDPlan(
-      Some(
-        RDPlan.CarePlan(
-          carePlan.issuedOn,
-          carePlan.studyEnrollmentRecommendations.exists(_.nonEmpty),
-          carePlan.geneticCounselingRecommended.exists(_ == true),
-          carePlan.reevaluationRecommended.exists(_ == true),
-          carePlan.therapyRecommendations.exists(_.nonEmpty),
-          carePlan.clinicalManagementRecommendation.isDefined,
-          carePlan.clinicalManagementRecommendation
-            .map(_.`type`.mapTo[RDPlan.CarePlan.ClinicalManagementDescription.Value])
-            .map(Set(_))
-        )
-      ),
-      carePlan.studyEnrollmentRecommendations.map(_.mapAllTo[RDPlan.StudyRecommendation]),
-      carePlan.therapyRecommendations.map(_.mapAllTo[RDPlan.TherapyRecommendation])
+    _.map(
+      carePlan => RDPlan(
+        Some(
+          RDPlan.CarePlan(
+            carePlan.issuedOn,
+            carePlan.studyEnrollmentRecommendations.exists(_.nonEmpty),
+            carePlan.geneticCounselingRecommended.exists(_ == true),
+            carePlan.reevaluationRecommended.exists(_ == true),
+            carePlan.therapyRecommendations.exists(_.nonEmpty),
+            carePlan.clinicalManagementRecommendation.isDefined,
+            carePlan.clinicalManagementRecommendation
+              .map(_.`type`.mapTo[RDPlan.CarePlan.ClinicalManagementDescription.Value])
+              .map(Set(_))
+          )
+        ),
+        carePlan.studyEnrollmentRecommendations.map(_.mapAllTo[RDPlan.StudyRecommendation]),
+        carePlan.therapyRecommendations.map(_.mapAllTo[RDPlan.TherapyRecommendation])
+      )
     )
 
   }
 
 
-  protected implicit val rdFollowUp: RDPatientRecord => Option[RDFollowUp] = {
+  protected implicit val rdFollowUp: RDPatientRecord => Option[RDFollowUps] = {
 
     import RDDiagnosis.VerificationStatus.{
       Confirmed,
@@ -442,68 +446,70 @@ trait RDMappings extends Mappings
       )
 
     record =>
+
       for {
         
         fu <- record.followUps.flatMap(_.maxByOption(_.date))
         
         gmfcs = record.gmfcsStatus.flatMap(_.find(_.effectiveDate isBefore fu.date))
 
-      } yield RDFollowUp(
-        fu.date,
-        Option(
-          record.hpoTerms.map(
-            hpo => hpo.status.map(_.latestBy(_.date)) match {
-              case Some(st) =>
-                RDFollowUp.PhenotypeChange(
-                  hpo.value,
-                  st.status.mapTo[RDFollowUp.PhenotypeChange.Value]
-                )
-              case None =>
-                RDFollowUp.PhenotypeChange(
-                  hpo.value,
-                  hpo.recordedOn match {
-                    case Some(d) if d.isEqual(fu.date) || d.isAfter(fu.date) =>
-                      RDFollowUp.PhenotypeChange.NewlyAdded
+        rdFu = RDFollowUp(
+          fu.date,
+          Option(
+            record.hpoTerms.map(
+              hpo => hpo.status.map(_.latestBy(_.date)) match {
+                case Some(st) =>
+                  RDFollowUp.PhenotypeChange(
+                    hpo.value,
+                    st.status.mapTo[RDFollowUp.PhenotypeChange.Value]
+                  )
+                case None =>
+                  RDFollowUp.PhenotypeChange(
+                    hpo.value,
+                    hpo.recordedOn match {
+                      case Some(d) if d.isEqual(fu.date) || d.isAfter(fu.date) =>
+                        RDFollowUp.PhenotypeChange.NewlyAdded
+       
+                      case _ =>
+                        RDFollowUp.PhenotypeChange.Unchanged
+                    }
+                  )
+              }
+            )
+            .toList
+          ),
+          gmfcs.map(_.value.code),
+          record.diagnoses
+            .map(_.verificationStatus.mapTo[RDDiagnosis.VerificationStatus.Value])
+            .exists(s => s == Confirmed || s == Partial),
+          record.diagnoses.head.notes.flatMap(_.lastOption),
+          record.patient.vitalStatus.mapTo[VitalStatus.Value],
+          record.patient.dateOfDeath
+        )
 
-                    case _ =>
-                      RDFollowUp.PhenotypeChange.Unchanged
-                  }
-                )
-            }
-          )
-          .toList
-        ),
-        gmfcs.map(_.value.code),
-        record.diagnoses
-          .map(_.verificationStatus.mapTo[RDDiagnosis.VerificationStatus.Value])
-          .exists(s => s == Confirmed || s == Partial),
-        record.diagnoses.head.notes.flatMap(_.lastOption),
-        record.patient.vitalStatus.mapTo[VitalStatus.Value],
-        record.patient.dateOfDeath
+      } yield RDFollowUps(
+        NonEmptyList.one(rdFu)
       )
+
   }
 
 
-/*
-  def apply(submission: Submission[RDPatientRecord]): SubmissionReport[RDCase,RDMolecular,RDPlan,RDFollowUps] = {
+  def apply(submission: mvh.Submission[RDPatientRecord]): Submission[RDCase,RDMolecular,RDPlan,RDFollowUps] = {
 
-    val Submission(record,metadata,dateTime) = submission   
+    val mvh.Submission(record,metadata,dateTime) = submission   
 
     val patient = record.patient
-    val mvhCarePlan = record.getCarePlans.minByOption(_.issuedOn).get
+    val mvhCarePlan = record.carePlans.getOrElse(List.empty).minBy(_.issuedOn)
 
-    SubmissionReport(
+    Submission(
       (patient,dateTime.toLocalDate,mvhCarePlan,metadata).mapTo[Metadata],
-      submission.mapTo[RDCase],
-      record.getNgsReports
-        .pipe(
-          reports =>
-            Option.when(reports.nonEmpty)(reports.mapTo[RDMolecular])
-        ),
-      record.getCarePlans.mapTo[Option[RDPlan]],
+      record.mapTo[RDCase],
+      record.ngsReports.map(_.mapTo[RDMolecular]),
+      record.carePlans.flatMap(_.maxByOption(_.issuedOn)).mapTo[Option[RDPlan]],
       record.mapTo[Option[RDFollowUps]]
     )
 
   }
-*/  
+ 
+
 }
