@@ -3,11 +3,9 @@ package de.dnpm.ccdn.core.bfarm.onco
 
 import java.time.LocalDate
 import de.dnpm.dip.coding.Coding
-//import de.dnpm.dip.coding.atc.ATC
 import play.api.libs.json.{
   Json,
   Format,
-//  OFormat,
   OWrites,
   Reads
 }

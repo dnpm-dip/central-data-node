@@ -7,7 +7,6 @@ import cats.data.NonEmptyList
 import de.dnpm.ccdn.core.bfarm.{
   DiagnosticType,
   Metadata,
-  Submission,
   VitalStatus
 }
 import de.dnpm.ccdn.core.bfarm.rd._
@@ -494,14 +493,14 @@ trait RDMappings extends Mappings
   }
 
 
-  def apply(submission: mvh.Submission[RDPatientRecord]): Submission[RDCase,RDMolecular,RDPlan,RDFollowUps] = {
+  def apply(submission: mvh.Submission[RDPatientRecord]): RDSubmission = {
 
     val mvh.Submission(record,metadata,dateTime) = submission   
 
     val patient = record.patient
     val mvhCarePlan = record.carePlans.getOrElse(List.empty).minBy(_.issuedOn)
 
-    Submission(
+    RDSubmission(
       (patient,dateTime.toLocalDate,mvhCarePlan,metadata).mapTo[Metadata],
       record.mapTo[RDCase],
       record.ngsReports.map(_.mapTo[RDMolecular]),

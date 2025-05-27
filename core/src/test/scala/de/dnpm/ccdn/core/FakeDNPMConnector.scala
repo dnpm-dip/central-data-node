@@ -12,16 +12,22 @@ import scala.concurrent.{
   ExecutionContext
 }
 import cats.syntax.either._
-import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.coding.{
+  Code,
+  Coding
+}
 import de.dnpm.dip.model.{
   Id,
+  Patient,
+  HealthInsurance,
   Site
 }
-import SubmissionType.Initial
+import de.dnpm.dip.service.mvh.{
+  Submission,
+  TransferTAN,
+  UseCase
+}
 import de.dnpm.ccdn.core.dip
-import dip.UseCase._
-import dip.SequencingType._
-
 
 
 final class FakeDIPConnectorProvider extends dip.ConnectorProvider
@@ -40,52 +46,38 @@ object FakeDIPConnector extends dip.Connector
     ts.toSeq(rnd.nextInt(ts.size))
 
 
-  private val useCases =
-    Set(MTB,RD)
-
-  private val seqTypes =
-    Set(Panel,Exome,Genome,GenomeLr)
-
   private def rndReport(
-    site: Coding[Site],
-  ): dip.SubmissionReport =
-    dip.SubmissionReport(
+    site: Code[Site],
+    useCases: Set[UseCase.Value]
+  ): Submission.Report =
+    Submission.Report(
+      Id[TransferTAN](randomUUID.toString),
       LocalDateTime.now,
-      site,
+      Id[Patient](randomUUID.toString),
+      Submission.Report.Status.Unsubmitted,
+      Coding[Site](site.value),
       oneOf(useCases),
-      Id[TTAN](randomUUID.toString),
-      Initial,
-      Some(oneOf(seqTypes)),
-      rnd.nextBoolean()
+      Submission.Type.Initial,
+      Coding(HealthInsurance.Type.UNK)
     )
 
 
-  private val siteUseCases: Map[Coding[Site],Set[dip.UseCase.Value]] =
-    Config.instance
-      .submitterIds
-      .keys
-      .map(
-        code =>
-          Coding[Site](code.toString) -> useCases
-      )
-      .toMap
-
-
-
-  override def sites(implicit ec: ExecutionContext): Future[Either[String,List[Coding[Site]]]] =
-    Future.successful(
-      siteUseCases.keys.toList.asRight
-    )
-
-
-  override def dataSubmissionReports(
-    site: Coding[Site],
-    period: Option[Period[LocalDateTime]] = None
+  override def submissionReports(
+    site: Code[Site],
+    useCases: Set[UseCase.Value],
+    filter: Submission.Report.Filter
   )(
     implicit ec: ExecutionContext
-  ): Future[Either[String,Seq[dip.SubmissionReport]]] =
+  ): Future[Either[String,Seq[Submission.Report]]] =
     Future.successful(
-      Seq.fill(4)(rndReport(site)).asRight
+      Seq.fill(4)(rndReport(site,useCases)).asRight
     )
+
+  override def confirmSubmitted(
+    report: Submission.Report
+  )(
+    implicit ec: ExecutionContext
+  ): Future[Either[String,Unit]] =
+    Future.successful(().asRight)
 
 }

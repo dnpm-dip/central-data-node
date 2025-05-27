@@ -25,13 +25,30 @@ final case class Config
 (
   polling: Config.Polling,
   dataNodeIds: Map[UseCase.Value,Id[CDN]],
-  genomicDataCenterIds: Map[Code[Site],Id[GDC]],
-  submitterIds: Map[Code[Site],Id[Site]]
+  sites: Map[Code[Site],Config.SiteInfo]
 )
+{
+  def activeUseCases =
+    dataNodeIds.keySet
+
+  def submitterId(site: Code[Site]): Id[Site] =
+    sites(site).submitterId
+
+  def gdcId(site: Code[Site]): Id[GDC] =
+    sites(site).gdcId
+}
 
 
 object Config extends Logging
 {
+
+  final case class SiteInfo
+  (
+    submitterId: Id[Site],
+    gdcId: Id[GDC],
+    useCases: Set[UseCase.Value]
+  )
+
 
   final case class Polling
   (
@@ -42,6 +59,9 @@ object Config extends Logging
   implicit val readsTimeUnit: Reads[TimeUnit] =
     Reads.of[String].map(t => TimeUnit.valueOf(t.toUpperCase))
 
+  implicit val readsSiteInfo: Reads[SiteInfo] =
+    Json.reads[SiteInfo]
+
   implicit val readsPolling: Reads[Polling] =
     Json.reads[Polling]
 
@@ -49,17 +69,20 @@ object Config extends Logging
     Json.reads[Config]
 
 
-  private lazy val prop =
-    "dnpm.ccdn.config.file"
+  private lazy val ENV  = "CCDN_CONFIG_FILE"
+  private lazy val PROP = "dnpm.ccdn.config.file"
 
   lazy val instance: Config =
     Option( 
       getClass.getClassLoader.getResourceAsStream("config.json")
     )
     .orElse {
-      log.warn("Couldn't load config file from class-path, attempting to load it from configured file path")
-      Option(System.getProperty(prop))
-        .map(new FileInputStream(_))
+      log.warn(s"Couldn't load config file, attempting to load it from file configured via ENV variable $ENV")
+      Option(System.getenv(ENV)).map(new FileInputStream(_))
+    }
+    .orElse {
+      log.warn(s"Couldn't load config file, attempting to load it from file configured via system property $PROP")
+      Option(System.getProperty(PROP)).map(new FileInputStream(_))
     }
     .map(
       Json.parse(_) pipe (

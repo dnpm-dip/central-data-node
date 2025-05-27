@@ -12,7 +12,6 @@ import de.dnpm.dip.service.mvh.TransferTAN
 import play.api.libs.json.{
   Json,
   Format,
-  Writes
 }
 
 
@@ -31,7 +30,7 @@ import play.api.libs.json.{
 
 final case class SubmissionReport
 (
-  SubmittedCase: SubmissionReport.Case  // Not my idea to name the field CapitalizedCase "SubmittedCase" (see disclaimer above)
+  SubmittedCase: SubmissionReport.Case  // Not my idea to name the field CapitalizedCase as "SubmittedCase" (see disclaimer above)
 )
 
 
@@ -69,6 +68,30 @@ object SubmissionReport
     dataQualityCheckPassed: Boolean
   )
 
+
+  def apply(
+    submissionDate: LocalDate,
+    submissionType: Type.Value,
+    tan: Id[TransferTAN],
+    submitterId: Id[Site],
+    dataNodeId: Id[CDN],
+    diseaseType: DiseaseType.Value,
+    coverageType: HealthInsurance.Type.Value,
+    dataQualityCheckPassed: Boolean
+  ): SubmissionReport =
+    SubmissionReport(
+      Case(
+        submissionDate,
+        submissionType,
+        tan,
+        submitterId,
+        dataNodeId,
+        diseaseType,
+        coverageType,
+        dataQualityCheckPassed
+      )
+    )
+
   implicit val formatHealthInsuranceType: Format[HealthInsurance.Type.Value] =
     Json.formatEnum(HealthInsurance.Type)
 
@@ -82,26 +105,12 @@ object SubmissionReport
 
 
 
-
-final case class Submission[Case,MolSeq,Plan,FU]
-(
-  metadata: Metadata,
-  `case`: Case,
-  molecular: Option[MolSeq],
-  plan: Option[Plan],
-  followUp: Option[FU]
-)
-
-
-object Submission
+trait Submission[Case,MolSeq,Plan,FU]
 {
-
-  implicit def writes[
-    Case: Writes,
-    MolSeq: Writes,
-    Plan: Writes,
-    FU: Writes
-  ]: Writes[Submission[Case,MolSeq,Plan,FU]] =
-    Json.writes[Submission[Case,MolSeq,Plan,FU]]
-
+  val metadata: Metadata
+  val `case`: Case
+  val molecular: Option[MolSeq]
+  val plan: Option[Plan]
+  val followUp: Option[FU]
 }
+

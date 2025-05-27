@@ -1,3 +1,4 @@
+/*
 package de.dnpm.ccdn.core.dip
 
 
@@ -15,4 +16,4 @@ object UseCase extends Enumeration
   implicit val format: Format[Value] =
     Json.formatEnum(this)
 }
-
+*/

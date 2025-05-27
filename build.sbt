@@ -25,7 +25,8 @@ lazy val global = project
   )
   .aggregate(
     core,
-    connectors
+    connectors,
+    test_uploader
   )
 
 
@@ -35,16 +36,13 @@ lazy val core = project
     settings,
     libraryDependencies ++= Seq(
       dependencies.scalatest,
-      dependencies.cats_core,
-      dependencies.slf4j,
       dependencies.logback,
-      dependencies.play_json,
       dependencies.mtb_dtos,
       dependencies.rd_dtos,
       dependencies.service_base
     ),
     assembly / assemblyJarName := "dnpm-ccdn-core.jar",
-    assembly / mainClass       := Some("de.dnpm.ccdn.core.exec")
+    assembly / mainClass       := Some("de.dnpm.ccdn.core.MVHReportingService")
   )
 
 lazy val connectors = project
@@ -62,6 +60,17 @@ lazy val connectors = project
     core
   )
 
+lazy val test_uploader = project
+  .settings(
+    name := "ccdn-test-uploader",
+    settings,
+    assembly / assemblyJarName := "dnpm-ccdn-test-uploader.jar",
+    assembly / mainClass       := Some("de.dnpm.ccdn.test.uploader.Uploader")
+  )
+  .dependsOn(
+    connectors
+  )
+
 
 //-----------------------------------------------------------------------------
 // DEPENDENCIES
@@ -70,15 +79,12 @@ lazy val connectors = project
 lazy val dependencies =
   new {
     val scalatest    = "org.scalatest"     %% "scalatest"               % "3.2.18" % Test
-    val slf4j        = "org.slf4j"         %  "slf4j-api"               % "2.0.13"
-    val logback      = "ch.qos.logback"    %  "logback-classic"         % "1.5.6"
-    val cats_core    = "org.typelevel"     %% "cats-core"               % "2.12.0"
-    val play_json    = "org.playframework" %% "play-json"               % "3.0.3"
-    val play_ahc     = "org.playframework" %% "play-ahc-ws-standalone"  % "3.0.5"
-    val play_ahc_js  = "org.playframework" %% "play-ws-standalone-json" % "3.0.5"
+    val logback      = "ch.qos.logback"    %  "logback-classic"         % "1.5.18"
+    val play_ahc     = "org.playframework" %% "play-ahc-ws-standalone"  % "3.0.7"
+    val play_ahc_js  = "org.playframework" %% "play-ws-standalone-json" % "3.0.7"
+    val service_base = "de.dnpm.dip"       %% "service-base"            % "1.0-SNAPSHOT"
     val mtb_dtos     = "de.dnpm.dip"       %% "mtb-dto-model"           % "1.0-SNAPSHOT"
     val rd_dtos      = "de.dnpm.dip"       %% "rd-dto-model"            % "1.0-SNAPSHOT"
-    val service_base = "de.dnpm.dip"       %% "service-base"            % "1.0-SNAPSHOT"
   }
 
 

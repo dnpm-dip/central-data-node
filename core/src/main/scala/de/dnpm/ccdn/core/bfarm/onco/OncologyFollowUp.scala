@@ -17,13 +17,11 @@ import de.dnpm.dip.model.{
   Id,
   Medications,
 }
-import de.dnpm.dip.mtb.model.{
-  ECOG,
-  RECIST
-}
+import de.dnpm.dip.mtb.model.ECOG
 import play.api.libs.json.{
   Json,
-  OFormat,
+  Format,
+  OFormat
 }
 
 
@@ -43,6 +41,14 @@ final case class FollowUp
 object FollowUp
 {
 
+  object RECIST extends Enumeration
+  { 
+    val CR, PR, SD, PD = Value
+
+    implicit val format: Format[Value] =
+      Json.formatEnum(this)
+  }
+
   final case class Therapy
   (
     identifier: Id[Therapy],
@@ -51,7 +57,7 @@ object FollowUp
     terminationReasonOBDS: Option[TerminationReason.Value],
     substances: Option[Set[Coding[Medications]]],
     therapyResponseDate: Option[LocalDate],
-    therapyResponse: Option[Code[RECIST.Value]]
+    therapyResponse: Option[RECIST.Value]
   )
 
   object Therapy

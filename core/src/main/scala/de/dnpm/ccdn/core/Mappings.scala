@@ -7,7 +7,6 @@ import java.time.{
   YearMonth
 }
 import de.dnpm.ccdn.core.bfarm._
-//import de.dnpm.ccdn.core.dip.UseCase
 import de.dnpm.dip.coding.{
   CodedEnum,
   Coding
@@ -74,26 +73,23 @@ trait Mappings
      .pipe(bfarm.Chromosome.withName)
 
 
-  protected implicit def metadataMapping[CP <: CarePlan](
-    implicit w: Witness.Aux[CP#StatusReason]
-  ): ((Patient,LocalDate,CP,Submission.Metadata)) => Metadata = {
+  protected implicit val nonInclusionReasonMapping: CarePlan.NoSequencingPerformedReason.Value => Metadata.RejectionJustification.Value = {
+    import CarePlan.NoSequencingPerformedReason._
+
+    Map(
+      TargetedDiagnosticsRecommended -> Metadata.RejectionJustification.TargetDiagnosisRecommended,
+      Pyschosomatic                  -> Metadata.RejectionJustification.ProbablyPsychosomaticIllness,
+      NotRareDisease                 -> Metadata.RejectionJustification.ProbablyCommonDisease,
+      NonGeneticCause                -> Metadata.RejectionJustification.ProbablyNotGeneticCause,
+      Other                          -> Metadata.RejectionJustification.OtherReason
+    )
+  }
+
+  protected implicit def metadataMapping[CP <: CarePlan]: ((Patient,LocalDate,CP,Submission.Metadata)) => Metadata = {
 
     case (patient,date,carePlan,metadata) =>
     
       import Metadata._
-
-      implicit val nonInclusionReasonMapping: Coding[CP#StatusReason#Value] => RejectionJustification.Value = {
-      
-        val reason = w.value
-
-        Map(
-          Coding(reason.TargetedDiagnosticsRecommended)(reason.codeSystem) -> RejectionJustification.TargetDiagnosisRecommended,
-          Coding(reason.Pyschosomatic)(reason.codeSystem)                  -> RejectionJustification.ProbablyPsychosomaticIllness,
-          Coding(reason.NotRareDisease)(reason.codeSystem)                 -> RejectionJustification.ProbablyCommonDisease,
-          Coding(reason.NonGeneticCause)(reason.codeSystem)                -> RejectionJustification.ProbablyNotGeneticCause,
-          Coding(reason.Other)(reason.codeSystem)                          -> RejectionJustification.OtherReason
-        )
-      }
 
       implicit val consentProvisionType: mvh.Consent.Provision.Type.Value => MVConsent.Scope.Type.Value =
         Map(
@@ -114,8 +110,8 @@ trait Mappings
       Metadata.Submission(
         date,
         metadata.`type`,
-        config.submitterIds(patient.managingSite.get.code),
-        config.genomicDataCenterIds(patient.managingSite.get.code),
+        config.submitterId(patient.managingSite.get.code),
+        config.gdcId(patient.managingSite.get.code),
         config.dataNodeIds(useCase),
         useCase.mapTo[DiseaseType.Value]
       ),
@@ -144,9 +140,9 @@ trait Mappings
       gender,
       YearMonth.from(patient.birthDate),
       patient.address.municipalityCode,
-      carePlan.statusReason.isEmpty,
+      carePlan.noSequencingPerformedReason.isEmpty,
       carePlan.issuedOn,
-      carePlan.statusReason.map(_.mapTo[RejectionJustification.Value]),
+      carePlan.noSequencingPerformedReason.map(_.mapTo[RejectionJustification.Value]),
     )
   }
 

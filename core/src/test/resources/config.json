@@ -7,30 +7,70 @@
     "MTB": "KDKTUE005",
     "RD": "KDKTUE002"
   },
-  "submitterIds": { 
-    "UKFR":"260832299",
-    "UKHD":"260820466",
-    "UKT":"260840108",
-    "UKU":"260840200",
-    "Charité":"261101015",
-    "KUM":"260914050",
-    "MRI":"260913195",
-    "MHH":"260320597",
-    "UKDD":"261401030",
-    "UKA":"260530012",
-    "UKB":"260530103",
-    "UKD":"260510018",
-    "UKK":"260530283",
-    "UME":"260510381",
-    "UKM":"260550131",
-    "UMG":"260310378",
-    "UKW":"260960079",
-    "UKJ":"261600736",
-    "UKR":"260930608",
-    "UKSH":"260102343",
-    "UKF":"-",
-    "UM":"-",
-    "UKMR":"-"
+  "sites": {
+    "UKFR": {
+      "submitterId": "260832299", "gdcId": "GRZTUE002", "useCases": ["MTB","RD"]
+    },
+    "UKHD": {
+      "submitterId": "260820466", "gdcId": "GRZHD0003", "useCases": ["MTB","RD"]
+    },
+    "UKT": {
+      "submitterId": "260840108", "gdcId": "GRZTUE002", "useCases": ["MTB","RD"]
+    },
+    "UKU": {
+      "submitterId": "260840200", "gdcId": "GRZHD0003", "useCases": ["MTB","RD"]
+    },
+    "Charité": {
+      "submitterId": "261101015", "gdcId": "GRZB00007", "useCases": ["MTB","RD"]
+    },
+    "KUM": {
+      "submitterId": "260914050", "gdcId": "GRZM00006", "useCases": ["MTB","RD"]
+    },
+    "MRI": {
+      "submitterId": "260913195", "gdcId": "GRZM00006", "useCases": ["MTB","RD"]
+    },
+    "MHH": {
+      "submitterId": "260320597", "gdcId": "GRZDD0004", "useCases": ["MTB","RD"]
+    },
+    "UKDD": {
+      "submitterId": "261401030", "gdcId": "GRZDD0004", "useCases": ["MTB","RD"]
+    },
+    "UKA": {
+      "submitterId": "260530012", "gdcId": "GRZK00001", "useCases": ["MTB","RD"]
+    },
+    "UKB": {
+      "submitterId": "260530103", "gdcId": "GRZK00001", "useCases": ["MTB","RD"]
+    },
+    "UKD": {
+      "submitterId": "260510018", "gdcId": "GRZK00001", "useCases": ["MTB","RD"]
+    },
+    "UKE": {
+      "submitterId": "260200013", "gdcId": "GRZTUE002", "useCases": ["MTB","RD"]
+    },
+    "UKK": {
+      "submitterId": "260530283", "gdcId": "GRZK00001", "useCases": ["MTB","RD"]
+    },
+    "UME": {
+      "submitterId": "260510381", "gdcId": "GRZK00001", "useCases": ["RD"]
+    },
+    "UKM": {
+      "submitterId": "260550131", "gdcId": "GRZK00001", "useCases": ["MTB","RD"]
+    },
+    "UMG": {
+      "submitterId": "260310378", "gdcId": "GRZTUE002", "useCases": ["MTB","RD"]
+    },
+    "UKW": {
+      "submitterId": "260960079", "gdcId": "GRZM00006", "useCases": ["MTB","RD"]
+    },
+    "UKSH": {
+      "submitterId": "260102343", "gdcId": "GRZB00007", "useCases": ["MTB","RD"]
+    },
+    "UM": {
+      "submitterId": "260730161", "gdcId": "GRZHD0003", "useCases": ["MTB"]
+    },
+    "UKMR": {
+      "submitterId": "260610279", "gdcId": "GRZK00001", "useCases": ["MTB"]
+    }
   }
 
 }

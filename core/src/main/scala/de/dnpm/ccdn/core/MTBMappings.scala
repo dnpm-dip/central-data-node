@@ -7,7 +7,6 @@ import cats.data.NonEmptyList
 import de.dnpm.ccdn.core.bfarm.{
   DiagnosticType,
   Metadata,
-  Submission,
   VitalStatus
 }
 import de.dnpm.ccdn.core.bfarm.Chromosome
@@ -375,7 +374,7 @@ trait MTBMappings extends Mappings
     }
  
     implicit val oncoCarePlan: List[MTBCarePlan] => Option[OncologyPlan.CarePlan] =
-      _.filter(_.statusReason.isEmpty)
+      _.filter(_.recommendationsMissingReason.isEmpty)
        .pipe {
          carePlans =>
            carePlans
@@ -425,6 +424,16 @@ trait MTBMappings extends Mappings
   
     import RECIST._
 
+    implicit val standardRecist: PartialFunction[RECIST.Value,FollowUp.RECIST.Value] =
+      Map(
+        CR -> FollowUp.RECIST.CR,
+        PR -> FollowUp.RECIST.PR,
+        MR -> FollowUp.RECIST.PR,  // ???
+        SD -> FollowUp.RECIST.SD,
+        PD -> FollowUp.RECIST.PD,
+      )
+
+
     implicit def therapiesMapping(
       implicit responses: List[Response]
     ): List[MTBSystemicTherapy] => List[FollowUp.Therapy] = 
@@ -445,10 +454,8 @@ trait MTBMappings extends Mappings
             therapy.medication,
             response.map(_.effectiveDate),
             response
-              .map(_.value)
-              .collect { 
-                case coding @ RECIST(code) if Set(PD,SD,PR,CR) contains code => coding.code
-              }
+              .map(_.value.mapTo[RECIST.Value])
+              .collect(standardRecist)
           )
     
       }
@@ -512,14 +519,14 @@ trait MTBMappings extends Mappings
   }
 
 
-  def apply(submission: mvh.Submission[MTBPatientRecord]): Submission[OncologyCase,OncologyMolecular,OncologyPlan,OncologyFollowUps] = {
+  def apply(submission: mvh.Submission[MTBPatientRecord]): OncologySubmission = {
 
     val mvh.Submission(record,metadata,dateTime) = submission   
 
     val patient = record.patient
     val mvhCarePlan = record.getCarePlans.minByOption(_.issuedOn).get
 
-    Submission(
+    OncologySubmission(
       (patient,dateTime.toLocalDate,mvhCarePlan,metadata).mapTo[Metadata],
       submission.mapTo[OncologyCase],
       record.getNgsReports

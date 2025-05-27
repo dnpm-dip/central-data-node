@@ -24,13 +24,13 @@ import play.api.libs.json.{
   Writes
 }
 import de.dnpm.dip.util.Logging
-import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.coding.Code
 import de.dnpm.dip.model.Site
+import de.dnpm.dip.service.mvh.Submission
 import de.dnpm.ccdn.core.{
   ReportQueue,
   ReportQueueProvider
 }
-import de.dnpm.ccdn.core.dip
 
 
 final class ReportQueueProviderImpl extends ReportQueueProvider
@@ -43,15 +43,17 @@ final class ReportQueueProviderImpl extends ReportQueueProvider
 object FSBackedReportQueue extends Logging
 {
 
-  private val prop =
-    "dnpm.ccdn.queue.dir"
+  private val PROP = "dnpm.ccdn.queue.dir"
+
+  private val ENV = "CCDN_QUEUE_DIR"
 
   lazy val instance =
-    Try(new File(System.getProperty(prop)))
+    Try(new File(System getenv ENV))
+      .orElse(Try(new File(System getProperty PROP)))
       .map(new FSBackedReportQueue(_))
       .recoverWith { 
         case t =>
-          log.error(s"Couldn't set up Report Queue, most likely due to undefined property '$prop'",t)
+          log.error(s"Couldn't set up Report Queue, most likely due to undefined property '$ENV'",t)
           Failure(t)
       }
       .get
@@ -61,7 +63,8 @@ object FSBackedReportQueue extends Logging
 final class FSBackedReportQueue(
   val dir: File
 )
-extends ReportQueue with Logging
+extends ReportQueue
+with Logging
 {
 
   dir.mkdirs
@@ -77,22 +80,22 @@ extends ReportQueue with Logging
       .map(TrieMap.from)
       .getOrElse(TrieMap.empty)
 
-  private val queue: Queue[dip.SubmissionReport] =
+  private val queue: Queue[Submission.Report] =
     dir.listFiles(
       (_,name) => name.startsWith("Report_") && name.endsWith(".json")
     )
     .to(LazyList)
     .map(new FileInputStream(_))
     .map(Json.parse)
-    .map(Json.fromJson[dip.SubmissionReport](_))
+    .map(Json.fromJson[Submission.Report](_))
     .map(_.get)
     .to(Queue)
 
 
   private def file(
-    report: dip.SubmissionReport
+    report: Submission.Report
   ): File =
-    new File(dir,s"Report_${report.site.code}_${report.transferTAN}.json")
+    new File(dir,s"Report_${report.site.code}_${report.id}.json")
     
   private def save[T: Writes](
     t: T,
@@ -110,10 +113,10 @@ extends ReportQueue with Logging
     
 
   override def setLastPollingTime(
-    site: Coding[Site],
+    site: Code[Site],
     dt: LocalDateTime
   ): this.type = {
-    Try(pollingTimes += site.code.toString -> dt)
+    Try(pollingTimes += site.toString -> dt)
       .map(save(_,pollingTimesFile))
       .recover { 
         case t => log.warn("Problem updating polling times",t)
@@ -124,13 +127,13 @@ extends ReportQueue with Logging
 
 
   override def lastPollingTime(
-    site: Coding[Site]
+    site: Code[Site]
   ): Option[LocalDateTime] =
-    pollingTimes.get(site.code.toString)
+    pollingTimes.get(site.toString)
 
 
   override def add(
-    report: dip.SubmissionReport
+    report: Submission.Report
   ): this.type = {
     Try(queue += report)
       .map(_ => save(report,file(report)))
@@ -139,19 +142,19 @@ extends ReportQueue with Logging
   }
 
   override def addAll(
-    reports: Seq[dip.SubmissionReport]
+    reports: Seq[Submission.Report]
   ): this.type = {
     reports.foreach(add)
     this
   }
 
 
-  override def entries: Seq[dip.SubmissionReport] =
+  override def entries: Seq[Submission.Report] =
     queue.toList
 
 
   override def remove(
-    report: dip.SubmissionReport
+    report: Submission.Report
   ): this.type = {
     Try(queue -= report)
       .map(_ => file(report).delete)

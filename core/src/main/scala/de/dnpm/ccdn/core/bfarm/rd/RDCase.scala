@@ -153,4 +153,8 @@ object RDCase
       Json.format[PriorRD]
   }
 
+
+  implicit val format: OFormat[RDCase] =
+    Json.format[RDCase]
+
 }

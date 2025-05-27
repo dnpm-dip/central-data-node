@@ -6,7 +6,8 @@ import de.dnpm.dip.util.{
   SPI,
   SPILoader
 }
-import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.coding.Code
+//import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.Site
 import de.dnpm.dip.service.mvh.Submission
 
@@ -15,13 +16,13 @@ trait QueueOps[T]
 {
 
   def setLastPollingTime(
-    site: Coding[Site],
+    site: Code[Site],
     dt: LocalDateTime
   ): this.type
 
 
   def lastPollingTime(
-    site: Coding[Site]
+    site: Code[Site]
   ): Option[LocalDateTime]
 
 

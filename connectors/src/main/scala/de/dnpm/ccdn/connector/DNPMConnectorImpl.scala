@@ -1,7 +1,6 @@
 package de.dnpm.ccdn.connector
 
 
-import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME
 import scala.concurrent.{
   Future,
@@ -26,11 +25,15 @@ import play.api.libs.ws.{
 }
 import play.api.libs.ws.JsonBodyReadables._
 import de.dnpm.dip.util.Logging
-import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.coding.Code
 import de.dnpm.dip.model.Site
-import de.dnpm.ccdn.core.{
-  dip,
-  Period,
+import de.dnpm.dip.service.mvh.{
+  Submission,
+  UseCase
+}
+import de.dnpm.ccdn.core.dip.{
+  Connector,
+  ConnectorProvider
 }
 
 
@@ -43,9 +46,9 @@ object Collection
 }
 
 
-final class DIPConnectorProviderImpl extends dip.ConnectorProvider
+final class DIPConnectorProviderImpl extends ConnectorProvider
 {
-  override def getInstance: dip.Connector =
+  override def getInstance: Connector =
     BrokerConnector.instance
 }
 
@@ -64,9 +67,9 @@ object BrokerConnector
   {
     lazy val instance =
       Config(
-        System.getProperty("dnpm.ccdn.broker.baseurl"),
-        Option(System.getProperty("dnpm.ccdn.connector.timeout")).map(_.toInt),
-        Option(System.getProperty("dnpm.ccdn.connector.update.period")).map(_.toLong)
+        System.getenv("CCDN_BROKER_BASEURL"),
+        Option(System.getProperty("CCDN_BROKER_CONNECTOR_TIMEOUT")).map(_.toInt),
+        Option(System.getProperty("CCDN_BROKER_CONNECTOR_UPDATE_PERIOD")).map(_.toLong)
       )
   }
 
@@ -74,8 +77,7 @@ object BrokerConnector
   (
     id: String,
     name: String,
-    virtualhost: String,
-    useCases: Set[dip.UseCase.Value]
+    virtualhost: String
   )
 
   final case class SiteConfig
@@ -109,14 +111,9 @@ final class BrokerConnector
   private val wsclient: WSClient,
   private val config: Config
 )
-extends dip.Connector
+extends Connector
 with Logging
 {
-
-  import dip.{
-    SubmissionReport,
-    UseCase
-  }
 
   private val timeout =
     config.timeout.getOrElse(10) seconds
@@ -129,7 +126,7 @@ with Logging
   import java.util.concurrent.atomic.AtomicReference
 
 
-  private val sitesConfig: AtomicReference[Map[Coding[Site],(String,Set[UseCase.Value])]] =
+  private val sitesConfig: AtomicReference[Map[Code[Site],String]] =
     new AtomicReference(Map.empty)
 
 
@@ -146,8 +143,7 @@ with Logging
         case Success(SiteConfig(sites)) =>
           sitesConfig.set(
             sites.map {
-              case SiteEntry(id,name,vhost,useCases) =>
-                Coding[Site](id,name) -> (vhost,useCases)
+              case SiteEntry(id,_,vhost) => Code[Site](id) -> vhost
             }
             .toMap
           )
@@ -161,6 +157,7 @@ with Logging
 
   private lazy val executor =
     Executors.newSingleThreadScheduledExecutor
+
 
   config.updatePeriod match {
     case Some(period) =>
@@ -188,32 +185,20 @@ with Logging
 
 
   private def request(
-    site: Coding[Site],
+    site: Code[Site],
     rawUri: String
   ): WSRequest =
     request(rawUri)
-      .withVirtualHost(sitesConfig.get()(site)._1)
+      .withVirtualHost(sitesConfig.get()(site))
 
 
-  override def sites(implicit ec: ExecutionContext): Future[Either[String,List[Coding[Site]]]] =
-    Future.successful(
-      sitesConfig.get
-        .keys
-        .toList
-        .asRight[String]
-    )
-
-
-  override def dataSubmissionReports(
-    site: Coding[Site],
-    period: Option[Period[LocalDateTime]] = None
+  override def submissionReports(
+    site: Code[Site],
+    useCases: Set[UseCase.Value],
+    filter: Submission.Report.Filter
   )(
     implicit ec: ExecutionContext
-  ): Future[Either[String,Seq[SubmissionReport]]] = {
-
-    val useCases =
-      sitesConfig.get()(site)._2
-
+  ): Future[Either[String,Seq[Submission.Report]]] =
     Future.reduceLeft(
       useCases.map( 
         useCase =>
@@ -223,32 +208,35 @@ with Logging
           )
           .pipe(
             req =>
-             period match {
-               case Some(Period(start,Some(end))) =>
-                 req.withQueryStringParameters(
-                   "created-after"  -> start.format(ISO_LOCAL_DATE_TIME),
-                   "created-before" -> end.format(ISO_LOCAL_DATE_TIME),
-                 )
-
-               case Some(Period(start,None)) =>
-                 req.withQueryStringParameters(
-                   "created-after"  -> start.format(ISO_LOCAL_DATE_TIME)
-                 )
-
+             filter.period match {
+               case Some(period) =>
+                 req.withQueryStringParameters("created-after" -> period.start.format(ISO_LOCAL_DATE_TIME))
+                   .pipe(
+                     r => period.endOption match {
+                       case Some(end) => r.withQueryStringParameters("created-before" -> end.format(ISO_LOCAL_DATE_TIME))
+                       case None      => r
+                     }
+                   )
                case None => req
              }
+          )
+          .pipe(
+            req => filter.status match {
+              case Some(set) => req.withQueryStringParameters("status" -> set.mkString(","))
+              case None => req
+            }
           )
           .get()
           .map(
             _.body[JsValue]
-             .as[Collection[SubmissionReport]]
+             .as[Collection[Submission.Report]]
              .entries
              .asRight
           )
           .recover {
             case t =>
               log.error(s"Connection error: ${t.getMessage}")
-              Seq.empty[SubmissionReport].asRight
+              Seq.empty[Submission.Report].asRight
           }
       )
     )(
@@ -258,5 +246,22 @@ with Logging
       case t => t.getMessage.asLeft
     }
 
-  }
+
+  override def confirmSubmitted(
+    report: Submission.Report
+  )(
+    implicit env: ExecutionContext
+  ): Future[Either[String,Unit]] =
+    request(
+      report.site.code,
+      s"/api/${report.useCase.toString.toLowerCase}/peer2peer/mvh/submission-reports/${report.id.value}:submitted"
+    )
+    .execute("POST")
+    .map(
+      r => r.status match {
+        case 200 => ().asRight
+        case _   => s"Error confirming submission of report ${report.id.value}: Status ${r.status}".asLeft
+      } 
+    )
+
 }

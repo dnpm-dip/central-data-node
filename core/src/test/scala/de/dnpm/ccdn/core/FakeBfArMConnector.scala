@@ -23,8 +23,8 @@ object FakeBfArMConnector extends bfarm.Connector
     report: bfarm.SubmissionReport
   )(
     implicit ec: ExecutionContext
-  ): Future[Either[String,bfarm.SubmissionReport]] =
+  ): Future[Either[String,Unit]] =
     Future.successful(
-      report.asRight
+      ().asRight
     )
 }

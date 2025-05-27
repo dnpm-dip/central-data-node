@@ -7,9 +7,9 @@ import scala.collection.concurrent.{
   Map,
   TrieMap
 }
-import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.coding.Code
 import de.dnpm.dip.model.Site
-import de.dnpm.ccdn.core.dip
+import de.dnpm.dip.service.mvh.Submission
 
 
 final class FakeReportQueueProvider extends ReportQueueProvider
@@ -21,16 +21,16 @@ final class FakeReportQueueProvider extends ReportQueueProvider
 object FakeReportQueue extends ReportQueue
 {
 
-  val pollingTimes: Map[Coding[Site],LocalDateTime] =
+  val pollingTimes: Map[Code[Site],LocalDateTime] =
     TrieMap.empty
 
   
-  val queue: Queue[dip.SubmissionReport] =
+  val queue: Queue[Submission.Report] =
     Queue.empty
 
 
   override def setLastPollingTime(
-    site: Coding[Site],
+    site: Code[Site],
     dt: LocalDateTime
   ): this.type = {
     pollingTimes.update(site,dt)
@@ -38,31 +38,31 @@ object FakeReportQueue extends ReportQueue
   }
 
   override def lastPollingTime(
-    site: Coding[Site]
+    site: Code[Site]
   ): Option[LocalDateTime] =
     pollingTimes.get(site)
 
 
   override def add(
-    t: dip.SubmissionReport
+    t: Submission.Report
   ): this.type = {
     queue += t
     this
   }
 
   override def addAll(
-    ts: Seq[dip.SubmissionReport]
+    ts: Seq[Submission.Report]
   ): this.type = {
     queue ++= ts
     this
   }
 
-  override def entries: Seq[dip.SubmissionReport] =
+  override def entries: Seq[Submission.Report] =
     queue.toList
 
 
   override def remove(
-    t: dip.SubmissionReport
+    t: Submission.Report
   ): this.type = {
     queue -= t
     this

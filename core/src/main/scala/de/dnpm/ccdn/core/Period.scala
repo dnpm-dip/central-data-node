@@ -1,3 +1,4 @@
+/*
 package de.dnpm.ccdn.core
 
 
@@ -9,4 +10,4 @@ final case class Period[T <: Temporal]
   start: T,
   end: Option[T] = None
 )
-
+*/
