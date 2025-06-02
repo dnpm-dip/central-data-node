@@ -56,6 +56,19 @@ object SubmissionReport
   }
 
 
+  object LibraryType extends Enumeration
+  {
+    val Panel     = Value("panel")
+    val WES       = Value("wes")
+    val WGS       = Value("wgs")
+    val WGSLr     = Value("wgs_lr")
+    val Undefined = Value("none")
+    
+    implicit val format: Format[LibraryType.Value] =
+      Json.formatEnum(this)
+  }
+
+
   final case class Case
   (
     submissionDate: LocalDate,
@@ -64,6 +77,7 @@ object SubmissionReport
     submitterId: Id[Site],
     dataNodeId: Id[CDN],
     diseaseType: DiseaseType.Value,
+    libraryType: LibraryType.Value,
     coverageType: HealthInsurance.Type.Value,
     dataQualityCheckPassed: Boolean
   )
@@ -76,6 +90,7 @@ object SubmissionReport
     submitterId: Id[Site],
     dataNodeId: Id[CDN],
     diseaseType: DiseaseType.Value,
+    libraryType: LibraryType.Value,
     coverageType: HealthInsurance.Type.Value,
     dataQualityCheckPassed: Boolean
   ): SubmissionReport =
@@ -87,6 +102,7 @@ object SubmissionReport
         submitterId,
         dataNodeId,
         diseaseType,
+        libraryType,
         coverageType,
         dataQualityCheckPassed
       )

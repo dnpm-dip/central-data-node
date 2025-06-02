@@ -16,7 +16,7 @@ import de.dnpm.dip.util.Logging
 import de.dnpm.ccdn.core.dip
 import de.dnpm.ccdn.core.bfarm
 import de.dnpm.dip.model.{
-  HealthInsurance,
+  NGSReport,
   Period
 }
 import de.dnpm.dip.service.mvh.Submission
@@ -95,7 +95,9 @@ extends Logging
   private val toBfarmReport: Submission.Report => bfarm.SubmissionReport = {
 
     import de.dnpm.dip.service.mvh.UseCase._
+    import bfarm.SubmissionReport.LibraryType
     import bfarm.SubmissionReport.DiseaseType._
+    import NGSReport.Type._
 
     report =>
       bfarm.SubmissionReport(
@@ -109,10 +111,14 @@ extends Logging
             case MTB => Oncological
             case RD  => Rare
           },
-          report.healthInsuranceType match {
-            case HealthInsurance.Type(value) => value
-            case _                           => HealthInsurance.Type.UNK
-          },
+          report.sequencingType.collect { 
+            case GenomeLongRead  => LibraryType.WGSLr
+            case GenomeShortRead => LibraryType.WGS
+            case Exome           => LibraryType.WES
+            case Panel           => LibraryType.Panel
+          }
+          .getOrElse(bfarm.SubmissionReport.LibraryType.Undefined),
+          report.healthInsuranceType,
           true // QC passed by definition, because otherwise no report would have been created in the DIP MVH module
         )
       )

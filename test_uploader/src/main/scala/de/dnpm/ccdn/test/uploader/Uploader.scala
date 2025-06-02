@@ -34,6 +34,7 @@ object Uploader extends Logging
         Id[Site]("260840108"),
         Id[CDN]("KDKTUE005"),
         SubmissionReport.DiseaseType.Oncological,
+        SubmissionReport.LibraryType.WGSLr,
         HealthInsurance.Type.UNK,
         true
       )
