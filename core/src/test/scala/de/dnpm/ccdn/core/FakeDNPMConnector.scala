@@ -18,6 +18,7 @@ import de.dnpm.dip.coding.{
 }
 import de.dnpm.dip.model.{
   Id,
+  NGSReport,
   Patient,
   HealthInsurance,
   Site
@@ -58,7 +59,8 @@ object FakeDIPConnector extends dip.Connector
       Coding[Site](site.value),
       oneOf(useCases),
       Submission.Type.Initial,
-      Coding(HealthInsurance.Type.UNK)
+      Some(NGSReport.Type.GenomeLongRead),
+      HealthInsurance.Type.UNK
     )
 
 

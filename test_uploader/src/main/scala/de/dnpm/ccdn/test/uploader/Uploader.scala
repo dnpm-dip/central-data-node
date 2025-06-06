@@ -4,6 +4,10 @@ package de.dnpm.ccdn.test.uploader
 import java.io.FileInputStream
 import java.time.LocalDate
 import java.util.UUID.randomUUID
+import scala.util.{
+  Success,
+  Failure
+}
 import de.dnpm.dip.util.Logging
 import de.dnpm.dip.model.{
   HealthInsurance,
@@ -27,17 +31,14 @@ object Uploader extends Logging
 
   private def submissionReport =
     SubmissionReport(
-      SubmissionReport.Case(
-        LocalDate.now,
-        Submission.Type.Initial,
-        Id[TransferTAN](randomUUID.toString),
-        Id[Site]("260840108"),
-        Id[CDN]("KDKTUE005"),
-        SubmissionReport.DiseaseType.Oncological,
-        SubmissionReport.LibraryType.WGSLr,
-        HealthInsurance.Type.UNK,
-        true
-      )
+      LocalDate.now,
+      Submission.Type.Initial,
+      Id[TransferTAN](randomUUID.toString),
+      Id[Site]("260840108"),
+      Id[CDN]("KDKTUE005"),
+      SubmissionReport.DiseaseType.Oncological,
+      SubmissionReport.LibraryType.WGSLr,
+      HealthInsurance.Type.UNK,
     )
 
   private val connector =
@@ -57,6 +58,20 @@ object Uploader extends Logging
     log.info(s"Uploading report: ${Json.prettyPrint(Json.toJson(report))}")    
 
     connector.upload(report)
+      .onComplete {
+        case Success(Right(_)) =>
+          log.info("BfArM Report successfully uploaded")
+          System.exit(0)
+
+        case Success(Left(err)) =>
+          log.error(err)
+          System.exit(1)
+
+        case Failure(t) =>
+          log.error("An exception occurred",t)
+          System.exit(1)
+      }
+/*    
       .foreach { 
         case Right(_)  =>
           log.info("BfArM Report successfully uploaded")
@@ -66,7 +81,7 @@ object Uploader extends Logging
           log.error(err)
           System.exit(1)
       }
-    
+*/    
   }
 
 }

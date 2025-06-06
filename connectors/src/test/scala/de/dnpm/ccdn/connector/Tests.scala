@@ -16,9 +16,11 @@ final class Tests extends AnyFlatSpec
     createTempDirectory("dnpm_ccdn_test_")
       .toFile
 
-  System.setProperty("dnpm.ccdn.broker.baseurl","http://localhost")
-  System.setProperty("dnpm.ccdn.bfarm.baseurl","http://localhost/bfarm")
-  System.setProperty("dnpm.ccdn.queue.dir",queueDir.getAbsolutePath)
+  System.setProperty("ccdn.dnpm.broker.baseurl","http://localhost")
+  System.setProperty("ccdn.bfarm.api.baseurl","http://localhost/bfarm")
+  System.setProperty("ccdn.bfarm.api.client.id","dummy")
+  System.setProperty("ccdn.bfarm.api.client.secret","dummy")
+  System.setProperty("ccdn.queue.dir",queueDir.getAbsolutePath)
 
 
   val dipConnector =

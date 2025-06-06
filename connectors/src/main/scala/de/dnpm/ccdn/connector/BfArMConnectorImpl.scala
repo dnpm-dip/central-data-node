@@ -57,7 +57,9 @@ object BfArMConnectorImpl
 
   final case class Error
   (
-    code: Int,
+    statusCode: Int,
+    error: String,
+    code: String,
     message: String
   )
 
@@ -79,15 +81,20 @@ object BfArMConnectorImpl
 
     lazy val instance = {
 
-      val baseURL = System.getenv("CCDN_BFARM_API_BASEURL")
+      val baseURL =
+        Option(System.getenv("CCDN_BFARM_API_BASEURL")).getOrElse(System.getProperty("ccdn.bfarm.api.baseurl"))
 
       Config(
         baseURL,
         Option(System.getenv("CCDN_BFARM_AUTH_URL"))
           .getOrElse(s"$baseURL/realms/mvgenomseq/protocol/openid-connect/token"),
-        System.getenv("CCDN_BFARM_AUTH_CLIENT_ID"),
-        System.getenv("CCDN_BFARM_AUTH_CLIENT_SECRET"),
-        Option(System.getenv("CCDN_BFARM_API_TIMEOUT")).map(_.toInt).getOrElse(10)
+        Option(System.getenv("CCDN_BFARM_AUTH_CLIENT_ID"))
+          .getOrElse(System.getProperty("ccdn.bfarm.api.client.id")),
+        Option(System.getenv("CCDN_BFARM_AUTH_CLIENT_SECRET"))
+          .getOrElse(System.getProperty("ccdn.bfarm.api.client.secret")),
+        Option(System.getenv("CCDN_BFARM_API_TIMEOUT"))
+          .map(_.toInt)
+          .getOrElse(10)
       )
     }
   }
@@ -125,6 +132,8 @@ with Logging
   private def getToken: Future[Token] = {
 
     import scala.concurrent.ExecutionContext.Implicits.global
+
+    log.info("Getting API token")
 
     wsclient
       .url(config.authURL)
@@ -182,11 +191,15 @@ with Logging
     implicit ec: ExecutionContext
   ): Future[Either[String,Unit]] =
     for {
-      req      <- request("api/upload")
-      response <- req.post(Json.toJson(report))
-    } yield response.status match {
+      req <- request("api/upload")
+
+      _ = log.info(s"Uploading SubmissionReport ${report.SubmittedCase.tan}")
+
+      resp <- req.post(Json.toJson(report))
+
+    } yield resp.status match {
       case 200 => ().asRight
-      case _   => response.body[JsValue].as[Error].message.asLeft
+      case _   => resp.body[JsValue].as[Error].message.asLeft
     }
 
 }

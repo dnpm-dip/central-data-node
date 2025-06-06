@@ -101,26 +101,23 @@ extends Logging
 
     report =>
       bfarm.SubmissionReport(
-        bfarm.SubmissionReport.Case(
-          report.createdAt.toLocalDate,
-          report.`type`,
-          report.id,
-          config.submitterId(report.site.code),
-          config.dataNodeIds(report.useCase),
-          report.useCase match { 
-            case MTB => Oncological
-            case RD  => Rare
-          },
-          report.sequencingType.collect { 
-            case GenomeLongRead  => LibraryType.WGSLr
-            case GenomeShortRead => LibraryType.WGS
-            case Exome           => LibraryType.WES
-            case Panel           => LibraryType.Panel
-          }
-          .getOrElse(bfarm.SubmissionReport.LibraryType.Undefined),
-          report.healthInsuranceType,
-          true // QC passed by definition, because otherwise no report would have been created in the DIP MVH module
-        )
+        report.createdAt.toLocalDate,
+        report.`type`,
+        report.id,
+        config.submitterId(report.site.code),
+        config.dataNodeIds(report.useCase),
+        report.useCase match { 
+          case MTB => Oncological
+          case RD  => Rare
+        },
+        report.sequencingType.collect { 
+          case GenomeLongRead  => LibraryType.WGSLr
+          case GenomeShortRead => LibraryType.WGS
+          case Exome           => LibraryType.WES
+          case Panel           => LibraryType.Panel
+        }
+        .getOrElse(bfarm.SubmissionReport.LibraryType.Undefined),
+        report.healthInsuranceType,
       )
   }
 

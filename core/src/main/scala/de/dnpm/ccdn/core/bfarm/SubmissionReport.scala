@@ -77,6 +77,7 @@ object SubmissionReport
     submitterId: Id[Site],
     dataNodeId: Id[CDN],
     diseaseType: DiseaseType.Value,
+    dataCategory: DataCategory.Value,
     libraryType: LibraryType.Value,
     coverageType: HealthInsurance.Type.Value,
     dataQualityCheckPassed: Boolean
@@ -91,8 +92,7 @@ object SubmissionReport
     dataNodeId: Id[CDN],
     diseaseType: DiseaseType.Value,
     libraryType: LibraryType.Value,
-    coverageType: HealthInsurance.Type.Value,
-    dataQualityCheckPassed: Boolean
+    coverageType: HealthInsurance.Type.Value
   ): SubmissionReport =
     SubmissionReport(
       Case(
@@ -102,9 +102,10 @@ object SubmissionReport
         submitterId,
         dataNodeId,
         diseaseType,
+        DataCategory.Clinical,
         libraryType,
         coverageType,
-        dataQualityCheckPassed
+        true  // QC passed by default
       )
     )
 

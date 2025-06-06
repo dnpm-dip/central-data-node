@@ -43,7 +43,7 @@ final class ReportQueueProviderImpl extends ReportQueueProvider
 object FSBackedReportQueue extends Logging
 {
 
-  private val PROP = "dnpm.ccdn.queue.dir"
+  private val PROP = "ccdn.queue.dir"
 
   private val ENV = "CCDN_QUEUE_DIR"
 

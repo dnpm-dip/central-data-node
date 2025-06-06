@@ -67,9 +67,10 @@ object BrokerConnector
   {
     lazy val instance =
       Config(
-        System.getenv("CCDN_BROKER_BASEURL"),
-        Option(System.getProperty("CCDN_BROKER_CONNECTOR_TIMEOUT")).map(_.toInt),
-        Option(System.getProperty("CCDN_BROKER_CONNECTOR_UPDATE_PERIOD")).map(_.toLong)
+//        System.getenv("CCDN_BROKER_BASEURL"),
+        Option(System.getenv("CCDN_BROKER_BASEURL")).getOrElse(System.getProperty("ccdn.dnpm.broker.baseurl")),
+        Option(System.getenv("CCDN_BROKER_CONNECTOR_TIMEOUT")).map(_.toInt),
+        Option(System.getenv("CCDN_BROKER_CONNECTOR_UPDATE_PERIOD")).map(_.toLong)
       )
   }
 
