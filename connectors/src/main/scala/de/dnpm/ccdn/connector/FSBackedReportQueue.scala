@@ -80,6 +80,7 @@ with Logging
       .map(TrieMap.from)
       .getOrElse(TrieMap.empty)
 
+      
   private val queue: Queue[Submission.Report] =
     dir.listFiles(
       (_,name) => name.startsWith("Report_") && name.endsWith(".json")
@@ -135,8 +136,11 @@ with Logging
   override def add(
     report: Submission.Report
   ): this.type = {
-    Try(queue += report)
-      .map(_ => save(report,file(report)))
+
+    // Don't enqueue the same report twice
+    if (!queue.exists(_ == report))
+      Try(queue += report)
+        .map(_ => save(report,file(report)))
 
     this
   }

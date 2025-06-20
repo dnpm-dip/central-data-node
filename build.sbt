@@ -9,7 +9,8 @@ ThisBuild / assemblyMergeStrategy := {
   case PathList("META-INF", "services", xs @ _*) => MergeStrategy.first
   case PathList("META-INF", xs @ _*)             => MergeStrategy.discard
   case "reference.conf"                          => MergeStrategy.concat
-  case x                                         => MergeStrategy.first
+//  case _                                         => MergeStrategy.deduplicate
+  case _                                         => MergeStrategy.last
 }
 
 
@@ -41,6 +42,12 @@ lazy val core = project
       dependencies.rd_dtos,
       dependencies.service_base
     ),
+/*
+    excludeDependencies ++= Seq(
+      ExclusionRule("com.github.andyglow","scala-jsonschema-play-json"),
+      ExclusionRule("com.typesafe.play", "play-json")
+    ),
+*/
     assembly / assemblyJarName := "dnpm-ccdn-core.jar",
     assembly / mainClass       := Some("de.dnpm.ccdn.core.MVHReportingService")
   )

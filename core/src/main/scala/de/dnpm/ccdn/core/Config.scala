@@ -26,8 +26,8 @@ final case class Config
   polling: Config.Polling,
   dataNodeIds: Map[UseCase.Value,Id[CDN]],
   sites: Map[Code[Site],Config.SiteInfo]
-)
-{
+){
+
   def activeUseCases =
     dataNodeIds.keySet
 
@@ -77,7 +77,7 @@ object Config extends Logging
       getClass.getClassLoader.getResourceAsStream("config.json")
     )
     .orElse {
-      log.warn(s"Couldn't load config file, attempting to load it from file configured via ENV variable $ENV")
+      log.debug(s"Loading Config from file configured via ENV variable $ENV")
       Option(System.getenv(ENV)).map(new FileInputStream(_))
     }
     .orElse {

@@ -11,7 +11,10 @@ import scala.concurrent.{
   Future,
   ExecutionContext
 }
-import scala.util.Success
+import scala.util.{
+  Failure,
+  Success
+}
 import de.dnpm.dip.util.Logging
 import de.dnpm.ccdn.core.dip
 import de.dnpm.ccdn.core.bfarm
@@ -40,9 +43,10 @@ object MVHReportingService
     
     Runtime.getRuntime.addShutdownHook(
       new Thread { 
-        override def run =
+        override def run = {
           println("Shutting down MVH Reporting service...")
           service.stop()
+        }
       }
     )
     
@@ -70,13 +74,21 @@ extends Logging
 
   private var scheduledTask: Option[JavaFuture[_]] = None
 
-  def start(): Unit =
+
+  def start(): Unit = {
     log.info("Starting MVH Reporting service")
+
     scheduledTask =
       Some(
         executor.scheduleAtFixedRate(
           () => {
-            pollReports.flatMap(u => uploadReports)
+            for {
+              _ <- uploadReports  // Start by draining the report queue, in case the service had been interrupted and
+                                  // it thus contains reports whose upload hasn't been confirmed to the origin DIP,
+                                  // to avoid polling them again
+              _ <- pollReports
+              _ <- uploadReports
+            } yield ()
             ()
           },
           0,
@@ -85,10 +97,12 @@ extends Logging
         )
       )
    
-   
+  }
+
+
   def stop(): Unit = {
     log.info("Stopping MVH Reporting service")
-    scheduledTask.foreach(_.cancel(false))
+    scheduledTask.foreach(_ cancel false)
   }
 
 
@@ -127,7 +141,8 @@ extends Logging
     log.info("Polling SubmissionReports...")
 
     Future.sequence(
-      config.sites.map {
+      config.sites.toList.sortBy(_._1.value).map {
+//      config.sites.map {
         case (site,info) =>
         
           log.info(s"Polling SubmissionReports of site '$site'")
@@ -147,8 +162,11 @@ extends Logging
                 .addAll(reports)
                 .setLastPollingTime(site,now)
         
-            case _ =>
-              log.error(s"Error(s) occurred polling SubmissionReports of site '$site")
+            case Success(Left(err)) =>
+              log.error(s"Problem polling SubmissionReports of site '$site: $err")
+
+            case Failure(t) =>
+              log.error(s"Error(s) occurred polling SubmissionReports of site '$site",t)
         
           }   
       }  
@@ -169,16 +187,20 @@ extends Logging
               .upload(toBfarmReport(report))
               .flatMap {
                 case Right(_) =>
-                  log.debug("Upload successful, confirming submission")
+                  log.debug(s"Upload successful: Site = ${report.site.code} TAN = ${report.id}, confirming submission")
                   dipConnector.confirmSubmitted(report)
+
                 case err @ Left(msg) =>
-                  log.error(s"Problem uploading BfArM report ${report.id}: $msg")
+                  log.error(s"Problem uploading report, Site = ${report.site.code} TAN = ${report.id}: $msg")
                   Future.successful(err)
               }
               .andThen {
                 case Success(Right(_)) =>
                   log.debug("Submission confirmation successful")
                   queue.remove(report)
+
+                case Failure(t) =>
+                  log.error(s"Problem confirming submission",t)
               }
         )
     )
@@ -186,73 +208,4 @@ extends Logging
     
   }
 
-/*  
-  private[core] def pollReports: Future[Unit] = {
-
-    log.info("Polling dip-SubmissionReports...")
-
-    dipConnector.sites.flatMap {
-      case Right(sites) =>
-        Future.sequence(
-          sites.map {
-            site =>
-          
-              log.info(s"Polling SubmissionReports of site '${site.display.getOrElse(site.code)}'")
-          
-              dipConnector.dataSubmissionReports(
-                site,
-                config.activeUseCases,
-                Submission.Report.Filter(
-                  queue.lastPollingTime(site).map(t => Period(t)),
-                  Some(Set(Submission.Report.Status.Unsubmitted))
-                )
-              )
-              .andThen {
-                case Success(Right(reports)) =>
-                  log.debug(s"Enqueueing ${reports.size} reports")
-                  queue
-                    .addAll(reports)
-                    .setLastPollingTime(site,now)
-
-                case _ =>
-                  log.error(s"Error(s) occurred polling SubmissionReports of site '${site.display.getOrElse(site.code)}")
-
-              }   
-          }
-        )
-        .map(_ => ())
-
-      case Left(err) =>
-        s"Problem getting site info list: $err"
-          .tap(log.error)
-          .pipe(new Exception(_))
-          .pipe(Future.failed)
-      }
-  }
-
-  private[core] def uploadReports: Future[Unit] = {
-
-    log.info("Uploading SubmissionReports...")
-   
-    Future.sequence(
-      queue.entries
-        .map(
-          report =>
-            bfarmConnector
-              .upload(toBfarmReport(report))
-              .andThen { 
-                case Success(Right(_)) =>
-                  log.debug("Upload successful")
-                  dipConnector
-                    .confirmSubmitted(report)
-                    .andThen {
-                      case Success(Right(_)) =>
-                        log.debug("Submission confirmation successful")
-                        queue.remove(report)
-                    }
-              }
-        )
-    )
-    .map(_ => ())  
-*/
 }

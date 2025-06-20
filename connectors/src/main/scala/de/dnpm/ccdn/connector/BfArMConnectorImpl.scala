@@ -73,7 +73,7 @@ object BfArMConnectorImpl
     authURL: String,
     clientId: String,
     clientSecret: String,
-    timeout: Int
+    timeout: Option[Int]
   )
 
   object Config
@@ -86,15 +86,10 @@ object BfArMConnectorImpl
 
       Config(
         baseURL,
-        Option(System.getenv("CCDN_BFARM_AUTH_URL"))
-          .getOrElse(s"$baseURL/realms/mvgenomseq/protocol/openid-connect/token"),
-        Option(System.getenv("CCDN_BFARM_AUTH_CLIENT_ID"))
-          .getOrElse(System.getProperty("ccdn.bfarm.api.client.id")),
-        Option(System.getenv("CCDN_BFARM_AUTH_CLIENT_SECRET"))
-          .getOrElse(System.getProperty("ccdn.bfarm.api.client.secret")),
-        Option(System.getenv("CCDN_BFARM_API_TIMEOUT"))
-          .map(_.toInt)
-          .getOrElse(10)
+        Option(System.getenv("CCDN_BFARM_AUTH_URL")).getOrElse(s"$baseURL/realms/mvgenomseq/protocol/openid-connect/token"),
+        Option(System.getenv("CCDN_BFARM_AUTH_CLIENT_ID")).getOrElse(System.getProperty("ccdn.bfarm.api.client.id")),
+        Option(System.getenv("CCDN_BFARM_AUTH_CLIENT_SECRET")).getOrElse(System.getProperty("ccdn.bfarm.api.client.secret")),
+        Option(System.getenv("CCDN_BFARM_API_TIMEOUT")).map(_.toInt)
       )
     }
   }
@@ -125,6 +120,9 @@ with Logging
   import java.util.concurrent.TimeUnit.SECONDS
   import java.util.concurrent.atomic.AtomicReference
 
+  private val timeout =
+    config.timeout.getOrElse(10) seconds
+
   private val executor =
     Executors.newSingleThreadScheduledExecutor
 
@@ -137,7 +135,7 @@ with Logging
 
     wsclient
       .url(config.authURL)
-      .withRequestTimeout(config.timeout seconds)
+      .withRequestTimeout(timeout)
       .post(
         Map(
           "grant_type"    -> Seq("client_credentials"),
@@ -180,7 +178,7 @@ with Logging
       tkn =>
         wsclient.url(s"${config.apiBaseURL}/$uri")
           .withHttpHeaders("Authorization" -> s"${tkn.token_type} ${tkn.access_token}")
-          .withRequestTimeout(config.timeout seconds)
+          .withRequestTimeout(timeout)
     )
   }
 
@@ -199,7 +197,9 @@ with Logging
 
     } yield resp.status match {
       case 200 => ().asRight
-      case _   => resp.body[JsValue].as[Error].message.asLeft
+      case _   =>
+        val err = resp.body[JsValue].as[Error]
+        s"${err.statusCode} ${err.error}: ${err.message}".asLeft
     }
 
 }

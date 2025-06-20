@@ -24,7 +24,10 @@ import play.api.libs.ws.{
   StandaloneWSRequest => WSRequest,
 }
 import play.api.libs.ws.JsonBodyReadables._
-import de.dnpm.dip.util.Logging
+import de.dnpm.dip.util.{
+  Logging,
+  Retry
+}
 import de.dnpm.dip.coding.Code
 import de.dnpm.dip.model.Site
 import de.dnpm.dip.service.mvh.{
@@ -67,8 +70,7 @@ object BrokerConnector
   {
     lazy val instance =
       Config(
-//        System.getenv("CCDN_BROKER_BASEURL"),
-        Option(System.getenv("CCDN_BROKER_BASEURL")).getOrElse(System.getProperty("ccdn.dnpm.broker.baseurl")),
+        Option(System.getenv("CCDN_BROKER_BASEURL")).orElse(Option(System.getProperty("ccdn.dnpm.broker.baseurl"))).get,
         Option(System.getenv("CCDN_BROKER_CONNECTOR_TIMEOUT")).map(_.toInt),
         Option(System.getenv("CCDN_BROKER_CONNECTOR_UPDATE_PERIOD")).map(_.toLong)
       )
@@ -122,7 +124,7 @@ with Logging
 
   // Set-up for periodic auto-update of config
 
-  import java.util.concurrent.Executors
+  import java.util.concurrent.{Executors,ScheduledExecutorService}
   import java.util.concurrent.TimeUnit.MINUTES
   import java.util.concurrent.atomic.AtomicReference
 
@@ -130,7 +132,7 @@ with Logging
   private val sitesConfig: AtomicReference[Map[Code[Site],String]] =
     new AtomicReference(Map.empty)
 
-
+/*  
   private def getSiteConfig(): Unit = {
 
     import ExecutionContext.Implicits.global
@@ -154,22 +156,52 @@ with Logging
       }
 
   }
+*/
 
-
-  private lazy val executor =
+  private implicit lazy val executor: ScheduledExecutorService =
     Executors.newSingleThreadScheduledExecutor
+
+  private val getSiteConfigTask =
+    Retry(
+      () => {
+
+        import ExecutionContext.Implicits.global
+    
+        log.debug(s"Requesting peer connectivity config")
+    
+        request("/sites")
+          .get()
+          .map(_.body[JsValue].as[SiteConfig])
+          .onComplete {
+            case Success(SiteConfig(sites)) =>
+              sitesConfig.set(
+                sites.map {
+                  case SiteEntry(id,_,vhost) => Code[Site](id) -> vhost
+                }
+                .toMap
+              )
+    
+            case Failure(t) =>
+              log.error(s"Broker connection error: ${t.getMessage}")
+          }
+      },
+      name = "Get site config",
+      maxTries = 5,
+      period = 10
+    )
 
 
   config.updatePeriod match {
     case Some(period) =>
       executor.scheduleAtFixedRate(
-        () => getSiteConfig(),
+        getSiteConfigTask,
         0,
         period,
         MINUTES
       )
+
     case None =>
-      getSiteConfig()
+      getSiteConfigTask.run
   }
 
 
