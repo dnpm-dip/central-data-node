@@ -13,7 +13,6 @@ import de.dnpm.dip.coding.icd.{
   ICD10GM,
   ICDO3
 }
-import de.dnpm.dip.model.Medications
 import de.dnpm.dip.mtb.model.{
   ECOG,
   OBDSGrading,
@@ -40,7 +39,6 @@ import play.api.libs.json.{
  *
  */
 
-
 final case class OncologyCase
 (
   diagnosisOd: OncologyCase.Diagnosis,
@@ -63,7 +61,8 @@ object OncologyCase
     topography: Coding[ICDO3.T],
     grading: Option[Code[OBDSGrading.Value]],
     tnmClassifications: Option[Set[Coding[TumorStaging.TNM.Systems]]],
-    additionalClassification: Option[Coding[TumorStaging.OtherSystems]]
+//    libraryType: SequencingType.Value, ??? Issue reported
+    additionalClassification: Option[List[KeyCoding[TumorStaging.OtherSystems]]]
   )
 
   object Diagnosis
@@ -83,25 +82,7 @@ object OncologyCase
 
   object PriorDiagnostics
   {
-/*
-    object Type extends Enumeration
-    {
- 
-      val Array           = Value("array")
-      val Single          = Value("single")
-      val Karyotyping     = Value("karyotyping")
-      val Panel           = Value("panel")
-      val Exome           = Value("exome")
-      val GenomeShortRead = Value("genomeShortRead")
-      val GenomeLongRead  = Value("genomeLongRead")
-      val Other           = Value("other")
-      val NonePerformed   = Value("none")
- 
-      implicit val format: Format[Value] =
-        Json.formatEnum(this)
-  
-    }
-*/
+
     final case class SimpleVariant
     (
       gene: Coding[HGNC],
@@ -126,7 +107,8 @@ object OncologyCase
     intention: Option[Code[MTBTherapy.Intent.Value]],
     therapyStartDate: Option[LocalDate],
     therapyEndDate: Option[LocalDate],
-    substances: Option[Set[Coding[Medications]]],
+    substances: Option[Set[Substance]],
+//    substances: Option[Set[Coding[Medications]]],
     terminationReasonOBDS: Option[TerminationReason.Value],
     therapyResponse: Option[Code[RECIST.Value]]
   )

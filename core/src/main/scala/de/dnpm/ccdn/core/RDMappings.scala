@@ -358,7 +358,7 @@ trait RDMappings extends Mappings
        Map(
          Coding.System[NCT].uri     -> "NCT",
          Coding.System[DRKS].uri    -> "DRKS",
-         Coding.System[EudraCT].uri -> "EudraCT",
+         Coding.System[EudraCT].uri -> "Eudra-CT/CTIS",
        )
        .orElse {
          case _ => "other"

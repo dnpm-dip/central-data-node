@@ -72,9 +72,13 @@ object OncologyMolecular
     genomicSource: GenomicSource.Value,
     gene: Coding[HGNC],
     localization: Localization.Value,
-    transcriptId: Id[Transcript],
+    startPosition: Long,
+    endPosition: Long,
+    ref: String,
+    alt: String,
     dnaChange: Code[HGVS],
     proteinChange: Option[Code[HGVS]],
+    transcriptId: Coding[Transcript.Systems],
     variantTypes: Option[List[Coding[SequenceOntology]]],
     loh: Option[Boolean]
   )

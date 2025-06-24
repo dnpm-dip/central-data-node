@@ -19,8 +19,11 @@ import de.dnpm.dip.util.mapping.syntax._
 import de.dnpm.dip.service.mvh
 import de.dnpm.dip.model.{
   BaseVariant,
-  Id
+  ExternalId,
+  Id,
+  Medications
 }
+import de.dnpm.dip.coding.atc.ATC
 import de.dnpm.dip.model.FollowUp.PatientStatus
 import PatientStatus.LostToFU
 import de.dnpm.dip.mtb.model._
@@ -31,6 +34,23 @@ trait MTBMappings extends Mappings
 {
 
   override val useCase: mvh.UseCase.Value = mvh.UseCase.MTB
+
+
+  protected implicit def extIdToCoding[T,S](extId: ExternalId[T,S]): Coding[S] =
+    Coding(
+      code = Code[S](extId.value),
+      system = extId.system,
+      display = None,
+      version = None
+    )
+
+
+  protected implicit val medicationCodingToSubstance: Coding[Medications] => Substance =
+    coding =>
+      coding.system match { 
+        case sys if sys == Coding.System[ATC].uri => CodedSubstance(coding)
+        case _                                    => NamedSubstance(coding.display.getOrElse(coding.code.value))
+      }
 
 
   protected implicit def oncoDiagnosis(
@@ -56,6 +76,10 @@ trait MTBMappings extends Mappings
             .toSet
         )
         .filter(_.nonEmpty)
+
+      val tumorStaging =
+        mainDiagnosis.staging
+          .map(_.latestBy(_.date))
 
 
       OncologyCase.Diagnosis(
@@ -90,13 +114,18 @@ trait MTBMappings extends Mappings
                 c.code.asInstanceOf[Code[OBDSGrading.Value]]
             }
           ),
-        mainDiagnosis.staging
-          .map(_.latestBy(_.date))
+        tumorStaging
           .flatMap(_.tnmClassification)
           .collect { 
-            case TumorStaging.TNM(t,n,m) => Set(t,n,m)
+            case TumorStaging.TNM(t,n,m) =>
+              Set(t,n,m)
+                .map(c => c.copy(display = c.display.orElse(Some(c.code.value))))
           },
-        None  // ignore additional staging classifications
+        tumorStaging
+          .flatMap(
+            _.otherClassifications
+             .map(_.map(c => KeyCoding(c.code,c.system)))
+          )
       )
   }
 
@@ -125,7 +154,8 @@ trait MTBMappings extends Mappings
         .map(
           report => OncologyCase.PriorDiagnostics(
             report.`type`.mapTo[DiagnosticType.Value],
-            Some(report.issuedOn), // Simple and Copy Number Variants not represented in MTB-KDS PRIOR molecular diagnostics
+            Some(report.issuedOn),
+            // Simple and Copy Number Variants not represented in MTB-KDS PRIOR molecular diagnostics
             None,
             None
           )
@@ -165,7 +195,7 @@ trait MTBMappings extends Mappings
         therapy.intent.map(_.code),
         therapy.period.map(_.start),
         therapy.period.flatMap(_.endOption),
-        therapy.medication,
+        therapy.medication.map(_.mapAllTo[Substance]),
         therapy.statusReason.map(_.mapTo[TerminationReason.Value]),
         responses
           .collectFirst { 
@@ -217,9 +247,13 @@ trait MTBMappings extends Mappings
         GenomicSource.Somatic,
         snv.gene,
         snv.localization.getOrElse(Set.empty).mapTo[Localization.Value],
-        snv.transcriptId,
+        snv.position.start,
+        snv.position.end.getOrElse(snv.position.start),
+        snv.refAllele.value,
+        snv.altAllele.value,
         snv.dnaChange,
         snv.proteinChange,
+        snv.transcriptId,
         None,  // Not defind in MTB-KDS
         None   // Not defind in MTB-KDS
       )
@@ -316,7 +350,7 @@ trait MTBMappings extends Mappings
             .useType
             .getOrElse(Coding(UseType.Unknown))
             .mapTo[SystemicTherapyRecommendation.Type.Value],
-          recommendation.medication,
+          recommendation.medication.mapAllTo[Substance],
           recommendation.levelOfEvidence
             .map(_.grading)
             .getOrElse(Coding(LevelOfEvidence.Grading.Undefined))
@@ -359,7 +393,7 @@ trait MTBMappings extends Mappings
           studyRegisters(studyRef.system),
           studyRef.display.getOrElse("N/A") ,
           studyRef.id,
-          recommendation.medication,
+          recommendation.medication.map(_.mapAllTo[Substance]),
           recommendation.levelOfEvidence
             .map(_.grading)
             .getOrElse(Coding(LevelOfEvidence.Grading.Undefined))
