@@ -79,7 +79,7 @@ object RDPlan
     register: String,
     name: String,
     id: Id[Study],
-    variants: Option[List[Id[Variant]]]
+    variantReferences: Option[List[Id[Variant]]]
   )
 
   object StudyRecommendation

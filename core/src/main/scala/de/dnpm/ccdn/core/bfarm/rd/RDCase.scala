@@ -54,11 +54,10 @@ object RDCase
   final case class Diagnosis
   (
     phenotypes: NonEmptyList[Coding[HPO]],
-    hpoVersion: String,
     symptomOnsetDate: YearMonth,
     molecularBoardDecisionDate: LocalDate,
     diagnosticExtent: Diagnosis.Extent.Value,
-    diagnosticAssessment: Option[Diagnosis.Status.Value],
+    diagnosticAssessment: Diagnosis.Status.Value,
     diagnoses: NonEmptyList[Coding[RDDiagnosis.Systems]],
     noMatchingCodeExists: Option[Boolean],
     diagnosisGmfcs: Option[Code[GMFCS.Value]]
@@ -82,7 +81,7 @@ object RDCase
     {
       val NoGeneticDiagnosis                 = Value("noGeneticDiagnosis")
       val SuspectedGeneticDiagnosis          = Value("suspectedGeneticDiagnosis")
-      val FurtherGeneticDiagnosisRecommended = Value("furtherGeneticDiagnosisRecommended")
+      val FurtherGeneticDiagnosisRecommended = Value("furtherGeneticDiagnosticRecommended")
       val ConfirmedGeneticDiagnosis          = Value("confirmedGeneticDiagnosis")
       val PartialGeneticDiagnosis            = Value("partialGeneticDiagnosis")
 
@@ -98,6 +97,7 @@ object RDCase
   final case class PriorRD
   (
     genomicTestType: DiagnosticType.Value,
+    genomicStudyType: PriorRD.Value,
     diagnosticDate: Option[LocalDate],
     diagnosticResult: PriorRD.DiagnosticAssessment.Value,
     hospitalizationPeriods: PriorRD.Hospitalizations.Value,
@@ -107,6 +107,18 @@ object RDCase
 
   object PriorRD
   {
+
+    // Note: Not my idea to use two different Enums for the same concept (see above Diagnosis.Extent above),
+    // Issue reported
+    object Extent extends Enumeration
+    {
+      val Single = Value("single")
+      val Duo    = Value("duo")
+      val Trio   = Value("trio")
+
+      implicit val format: Format[Value] =
+        Json.formatEnum(this)
+    }
 
     object DiagnosticAssessment extends Enumeration
     {

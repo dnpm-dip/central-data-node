@@ -52,13 +52,13 @@ object RDMolecular
   {
     val id: Id[Variant]
     val genes: Option[Set[Coding[HGNC]]]
-    val localization: Option[Variant.Localization.Value]
+    val localization: Option[Set[Coding[Variant.Localization.Value]]]
     val cdnaChange: Option[Code[HGVS.DNA]]
     val gdnaChange: Option[Code[HGVS.DNA]]
     val proteinChange: Option[Code[HGVS.Protein]]
-    val acmgClass: ACMG.Class.Value
+    val acmgClass: Option[ACMG.Class.Value]
     val acmgCriteria: Option[Set[ACMGCriterion]]
-    val zygosity: Variant.Zygosity.Value
+    val zygosity: Option[Variant.Zygosity.Value]
     val segregationAnalysis: Option[Variant.SegregationAnalysis.Value]
     val modeOfInheritance: Option[Variant.ModeOfInheritance.Value]
     val diagnosticSignificance: Option[Significance.Value]
@@ -144,16 +144,17 @@ object RDMolecular
     id: Id[SmallVariant],
     genes: Option[Set[Coding[HGNC]]],
     chromosome: Chromosome.Value,
-    position: Int,
+    startPosition: Int,
+    endPosition: Int,
     ref: String,
     alt: String,
     localization: Option[Variant.Localization.Value],
     cdnaChange: Option[Code[HGVS.DNA]],
     gdnaChange: Option[Code[HGVS.DNA]],
     proteinChange: Option[Code[HGVS.Protein]],
-    acmgClass: ACMG.Class.Value,
+    acmgClass: Option[ACMG.Class.Value],
     acmgCriteria: Option[Set[ACMGCriterion]],
-    zygosity: Variant.Zygosity.Value,
+    zygosity: Option[Variant.Zygosity.Value],
     segregationAnalysis: Option[Variant.SegregationAnalysis.Value],
     modeOfInheritance: Option[Variant.ModeOfInheritance.Value],
     diagnosticSignificance: Option[Significance.Value],
@@ -172,9 +173,9 @@ object RDMolecular
     gdnaChange: Option[Code[HGVS.DNA]],
     proteinChange: Option[Code[HGVS.Protein]],
     description: Option[Code[ISCN]],
-    acmgClass: ACMG.Class.Value,
+    acmgClass: Option[ACMG.Class.Value],
     acmgCriteria: Option[Set[ACMGCriterion]],
-    zygosity: Variant.Zygosity.Value,
+    zygosity: Option[Variant.Zygosity.Value],
     segregationAnalysis: Option[Variant.SegregationAnalysis.Value],
     modeOfInheritance: Option[Variant.ModeOfInheritance.Value],
     diagnosticSignificance: Option[Significance.Value],
@@ -196,9 +197,9 @@ object RDMolecular
     cdnaChange: Option[Code[HGVS.DNA]],
     gdnaChange: Option[Code[HGVS.DNA]],
     proteinChange: Option[Code[HGVS.Protein]],
-    acmgClass: ACMG.Class.Value,
+    acmgClass: Option[ACMG.Class.Value],
     acmgCriteria: Option[Set[ACMGCriterion]],
-    zygosity: Variant.Zygosity.Value,
+    zygosity: Option[Variant.Zygosity.Value],
     segregationAnalysis: Option[Variant.SegregationAnalysis.Value],
     modeOfInheritance: Option[Variant.ModeOfInheritance.Value],
     diagnosticSignificance: Option[Significance.Value],
