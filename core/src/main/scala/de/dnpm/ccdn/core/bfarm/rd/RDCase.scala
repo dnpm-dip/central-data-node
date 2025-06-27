@@ -97,7 +97,7 @@ object RDCase
   final case class PriorRD
   (
     genomicTestType: DiagnosticType.Value,
-    genomicStudyType: PriorRD.Value,
+    genomicStudyType: PriorRD.Extent.Value,
     diagnosticDate: Option[LocalDate],
     diagnosticResult: PriorRD.DiagnosticAssessment.Value,
     hospitalizationPeriods: PriorRD.Hospitalizations.Value,
@@ -109,7 +109,6 @@ object RDCase
   {
 
     // Note: Not my idea to use two different Enums for the same concept (see above Diagnosis.Extent above),
-    // Issue reported
     object Extent extends Enumeration
     {
       val Single = Value("single")

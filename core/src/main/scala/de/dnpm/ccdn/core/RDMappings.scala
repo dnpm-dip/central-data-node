@@ -37,6 +37,13 @@ trait RDMappings extends Mappings
       RDDiagnosis.FamilyControlLevel.Trio   -> Diagnosis.Extent.TrioGenome
     )
 
+  protected implicit val prioRdExtent: RDDiagnosis.FamilyControlLevel.Value => RDCase.PriorRD.Extent.Value =
+    Map(
+      RDDiagnosis.FamilyControlLevel.Single -> PriorRD.Extent.Single,
+      RDDiagnosis.FamilyControlLevel.Duo    -> PriorRD.Extent.Duo,
+      RDDiagnosis.FamilyControlLevel.Trio   -> PriorRD.Extent.Trio
+    )
+
   protected implicit val diagnosisStatus: RDDiagnosis.VerificationStatus.Value => RDCase.Diagnosis.Status.Value =
     Map(
       RDDiagnosis.VerificationStatus.Confirmed   -> Diagnosis.Status.ConfirmedGeneticDiagnosis,
@@ -58,7 +65,6 @@ trait RDMappings extends Mappings
 
       RDCase.Diagnosis(
         hpoTerms.map(_.value),
-        hpoTerms.head.value.version.get,
         diagnoses.toList.map(_.onsetDate).min,
         carePlans.map(_.issuedOn)
           .minOption
@@ -71,13 +77,12 @@ trait RDMappings extends Mappings
           .collect { case RDDiagnosis.FamilyControlLevel(v) => v } 
           .max
           .mapTo[Diagnosis.Extent.Value],
-        Option(
-          diagnoses.toList
-            .map(_.verificationStatus)  
-            .collect { case RDDiagnosis.VerificationStatus(v) => v } 
-            .max
-            .mapTo[Diagnosis.Status.Value]
-        ),
+        diagnoses.toList
+          .map(_.verificationStatus)  
+          .collect { case RDDiagnosis.VerificationStatus(v) => v } 
+          .maxOption
+          .getOrElse(RDDiagnosis.VerificationStatus.Unconfirmed)
+          .mapTo[Diagnosis.Status.Value],
         diagnoses.flatMap(_.codes),
         Option.when(diagnoses.exists(_.missingCodeReason.isDefined))(true),
         gmfcs.minByOption(_.effectiveDate).map(_.value.code)
@@ -158,6 +163,7 @@ trait RDMappings extends Mappings
         priorDiagnostics
           .map(_.`type`.mapTo[DiagnosticType.Value])
           .getOrElse(DiagnosticType.NonePerformed),
+        RDDiagnosis.FamilyControlLevel.Single.mapTo[PriorRD.Extent.Value],  //TODO!!!!!!
         priorDiagnostics.map(_.issuedOn),
         priorDiagnostics
           .flatMap(_.conclusion)
@@ -186,7 +192,7 @@ trait RDMappings extends Mappings
           (
             record.diagnoses,
             record.hpoTerms,
-            record.carePlans.getOrElse(List.empty),
+            record.carePlans.toList,
             record.gmfcsStatus.getOrElse(List.empty)
           )
           .mapTo[RDCase.Diagnosis]
@@ -211,15 +217,29 @@ trait RDMappings extends Mappings
       ModeOfInheritance,
       SegregationAnalysis
     }
- 
-    implicit val localizationMapping: Set[Coding[BaseVariant.Localization.Value]] => Localization.Value =
-     _.collect { case BaseVariant.Localization(l) => l } match {
- 
-       case locs if locs contains BaseVariant.Localization.CodingRegion     => Localization.CodingRegion
-       case locs if locs contains BaseVariant.Localization.SplicingRegion   => Localization.SplicingRegion
-       case locs if locs contains BaseVariant.Localization.RegulatoryRegion => Localization.RegulatoryRegion
-       case _                                                               => Localization.IntronicIntergenic
-     }
+
+/*    
+    implicit val localizationMapping: BaseVariant.Localization.Value => Localization.Value =
+      Map(
+        BaseVariant.Localization.CodingRegion     -> Localization.CodingRegion,
+        BaseVariant.Localization.SplicingRegion   -> Localization.SplicingRegion,  
+        BaseVariant.Localization.RegulatoryRegion -> Localization.RegulatoryRegion,
+        BaseVariant.Localization.Intronic         -> Localization.Intronic,
+        BaseVariant.Localization.Intergenic       -> Localization.Intergenic     
+      )
+*/
+
+    implicit val localizationMapping: BaseVariant.Localization.Value => Coding[Localization.Value] =
+      Map(
+        BaseVariant.Localization.CodingRegion     -> Localization.CodingRegion,
+        BaseVariant.Localization.SplicingRegion   -> Localization.SplicingRegion,  
+        BaseVariant.Localization.RegulatoryRegion -> Localization.RegulatoryRegion,
+        BaseVariant.Localization.Intronic         -> Localization.Intronic,
+        BaseVariant.Localization.Intergenic       -> Localization.Intergenic     
+      )
+      .map {
+        case (k,v) => (k,Coding(v))
+      }
  
     implicit val zygosity: Variant.Zygosity.Value => Zygosity.Value =
       Map(
@@ -259,16 +279,17 @@ trait RDMappings extends Mappings
         sv.id,
         sv.genes,
         sv.chromosome.mapTo[Chromosome.Value],
-        sv.position,
+        sv.startPosition,
+        sv.endPosition,
         sv.ref,
         sv.alt,
-        sv.localization.map(_.mapTo[Localization.Value]),
+        sv.localization.map(_.mapAllTo[Coding[Localization.Value]]),
         sv.cDNAChange,
         sv.gDNAChange,
         sv.proteinChange,
-        sv.acmgClass.mapTo[ACMG.Class.Value],
+        sv.acmgClass.map(_.mapTo[ACMG.Class.Value]),
         sv.acmgCriteria.map(_.mapAllTo[RDMolecular.ACMGCriterion]),
-        sv.zygosity.mapTo[Variant.Zygosity.Value],
+        sv.zygosity.map(_.mapTo[Variant.Zygosity.Value]),
         sv.segregationAnalysis.map(_.mapTo[SegregationAnalysis.Value]),
         sv.modeOfInheritance.map(_.mapTo[ModeOfInheritance.Value]),
         sv.significance.map(_.mapTo[Variant.Significance.Value]),
@@ -280,14 +301,14 @@ trait RDMappings extends Mappings
       sv => RDMolecular.StructuralVariant(
         sv.id,
         sv.genes,
-        sv.localization.map(_.mapTo[Localization.Value]),
+        sv.localization.map(_.mapAllTo[Coding[Localization.Value]]),
         sv.cDNAChange,
         sv.gDNAChange,
         sv.proteinChange,
         sv.iscnDescription,
-        sv.acmgClass.mapTo[ACMG.Class.Value],
+        sv.acmgClass.map(_.mapTo[ACMG.Class.Value]),
         sv.acmgCriteria.map(_.mapAllTo[RDMolecular.ACMGCriterion]),
-        sv.zygosity.mapTo[Variant.Zygosity.Value],
+        sv.zygosity.map(_.mapTo[Variant.Zygosity.Value]),
         sv.segregationAnalysis.map(_.mapTo[SegregationAnalysis.Value]),
         sv.modeOfInheritance.map(_.mapTo[ModeOfInheritance.Value]),
         sv.significance.map(_.mapTo[Variant.Significance.Value]),
@@ -303,13 +324,13 @@ trait RDMappings extends Mappings
         cnv.startPosition,
         cnv.endPosition,
         cnv.`type`.mapTo[CopyNumberVariant.Type.Value],  
-        cnv.localization.map(_.mapTo[Localization.Value]),
+        cnv.localization.map(_.mapAllTo[Coding[Localization.Value]]),
         cnv.cDNAChange,
         cnv.gDNAChange,
         cnv.proteinChange,
-        cnv.acmgClass.mapTo[ACMG.Class.Value],
+        cnv.acmgClass.map(_.mapTo[ACMG.Class.Value]),
         cnv.acmgCriteria.map(_.mapAllTo[RDMolecular.ACMGCriterion]),
-        cnv.zygosity.mapTo[Variant.Zygosity.Value],
+        cnv.zygosity.map(_.mapTo[Variant.Zygosity.Value]),
         cnv.segregationAnalysis.map(_.mapTo[SegregationAnalysis.Value]),
         cnv.modeOfInheritance.map(_.mapTo[ModeOfInheritance.Value]),
         cnv.significance.map(_.mapTo[Variant.Significance.Value]),
@@ -498,13 +519,13 @@ trait RDMappings extends Mappings
     val mvh.Submission(record,metadata,dateTime) = submission   
 
     val patient = record.patient
-    val mvhCarePlan = record.carePlans.getOrElse(List.empty).minBy(_.issuedOn)
+    val mvhCarePlan = record.carePlans.toList.minBy(_.issuedOn)
 
     RDSubmission(
       (patient,dateTime.toLocalDate,mvhCarePlan,metadata).mapTo[Metadata],
       record.mapTo[RDCase],
       record.ngsReports.map(_.mapTo[RDMolecular]),
-      record.carePlans.flatMap(_.maxByOption(_.issuedOn)).mapTo[Option[RDPlan]],
+      record.carePlans.toList.maxByOption(_.issuedOn).mapTo[Option[RDPlan]],
       record.mapTo[Option[RDFollowUps]]
     )
 

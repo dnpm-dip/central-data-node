@@ -4,7 +4,9 @@ package de.dnpm.ccdn.core.bfarm.rd
 
 import de.dnpm.dip.coding.{
   Code,
-  Coding
+  CodedEnum,
+  Coding,
+  DefaultCodeSystem
 }
 import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.hgvs.HGVS
@@ -89,12 +91,14 @@ object RDMolecular
   object Variant
   {
 
-    object Localization extends Enumeration
+//    object Localization extends Enumeration
+    object Localization extends CodedEnum("bfarm/mvh/variant/localization") with DefaultCodeSystem
     {
-      val CodingRegion       = Value("codingRegion")
-      val SplicingRegion     = Value("splicingRegion")
-      val RegulatoryRegion   = Value("regulatoryRegion")
-      val IntronicIntergenic = Value("intronicIntergenic")
+      val CodingRegion     = Value("codingRegion")
+      val SplicingRegion   = Value("splicingRegion")
+      val RegulatoryRegion = Value("regulatoryRegion")
+      val Intronic         = Value("intronic")
+      val Intergenic       = Value("intergenic")
 
       implicit val format: Format[Value] =
         Json.formatEnum(this)
@@ -148,7 +152,7 @@ object RDMolecular
     endPosition: Int,
     ref: String,
     alt: String,
-    localization: Option[Variant.Localization.Value],
+    localization: Option[Set[Coding[Variant.Localization.Value]]],
     cdnaChange: Option[Code[HGVS.DNA]],
     gdnaChange: Option[Code[HGVS.DNA]],
     proteinChange: Option[Code[HGVS.Protein]],
@@ -168,7 +172,7 @@ object RDMolecular
   (
     id: Id[SmallVariant],
     genes: Option[Set[Coding[HGNC]]],
-    localization: Option[Variant.Localization.Value],
+    localization: Option[Set[Coding[Variant.Localization.Value]]],
     cdnaChange: Option[Code[HGVS.DNA]],
     gdnaChange: Option[Code[HGVS.DNA]],
     proteinChange: Option[Code[HGVS.Protein]],
@@ -193,7 +197,7 @@ object RDMolecular
     startPosition: Int,
     endPosition: Int,
     `type`: CNV.Type.Value,
-    localization: Option[Variant.Localization.Value],
+    localization: Option[Set[Coding[Variant.Localization.Value]]],
     cdnaChange: Option[Code[HGVS.DNA]],
     gdnaChange: Option[Code[HGVS.DNA]],
     proteinChange: Option[Code[HGVS.Protein]],
