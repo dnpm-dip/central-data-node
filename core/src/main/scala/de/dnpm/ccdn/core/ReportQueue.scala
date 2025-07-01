@@ -7,7 +7,6 @@ import de.dnpm.dip.util.{
   SPILoader
 }
 import de.dnpm.dip.coding.Code
-//import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.Site
 import de.dnpm.dip.service.mvh.Submission
 

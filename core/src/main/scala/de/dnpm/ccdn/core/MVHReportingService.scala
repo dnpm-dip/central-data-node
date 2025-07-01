@@ -11,10 +11,8 @@ import scala.concurrent.{
   Future,
   ExecutionContext
 }
-import scala.util.{
-  Failure,
-  Success
-}
+import scala.util.Success
+import cats.syntax.either._
 import de.dnpm.dip.util.Logging
 import de.dnpm.ccdn.core.dip
 import de.dnpm.ccdn.core.bfarm
@@ -76,7 +74,11 @@ extends Logging
 
 
   def start(): Unit = {
+
     log.info("Starting MVH Reporting service")
+
+    log.info(s"Active Use Cases: ${config.activeUseCases.mkString(", ")}")
+    log.info(s"Active sites:\n${config.sites.keys.toList.sortBy(_.value).mkString(", ")}")
 
     scheduledTask =
       Some(
@@ -85,7 +87,7 @@ extends Logging
             for {
               _ <- uploadReports  // Start by draining the report queue, in case the service had been interrupted and
                                   // it thus contains reports whose upload hasn't been confirmed to the origin DIP,
-                                  // to avoid polling them again
+                                  // in order to avoid polling them again
               _ <- pollReports
               _ <- uploadReports
             } yield ()
@@ -136,75 +138,70 @@ extends Logging
   }
 
 
-  private[core] def pollReports: Future[Unit] = {
-
-    log.info("Polling SubmissionReports...")
-
-    Future.sequence(
-      config.sites.toList.sortBy(_._1.value).map {
-//      config.sites.map {
-        case (site,info) =>
+  private[core] def pollReports: Future[Seq[Either[String,Seq[Submission.Report]]]] =
+    Future.traverse(
+      config.sites.toList.sortBy(_._1.value)
+    ){
+      case (site,info) =>
+      
+        log.info(s"Polling SubmissionReports of '$site'")
         
-          log.info(s"Polling SubmissionReports of site '$site'")
-          
-          dipConnector.submissionReports(
-            site,
-            info.useCases intersect config.activeUseCases,
-            Submission.Report.Filter(
-              queue.lastPollingTime(site).map(t => Period(t)),
-              Some(Set(Submission.Report.Status.Unsubmitted))
-            )
+        dipConnector.submissionReports(
+          site,
+          info.useCases intersect config.activeUseCases,
+          Submission.Report.Filter(
+            queue.lastPollingTime(site).map(t => Period(t)),
+            Some(Set(Submission.Report.Status.Unsubmitted))
           )
-          .andThen {
-            case Success(Right(reports)) =>
-              log.debug(s"Enqueuing ${reports.size} reports")
-              queue
-                .addAll(reports)
-                .setLastPollingTime(site,now)
-        
-            case Success(Left(err)) =>
-              log.error(s"Problem polling SubmissionReports of site '$site: $err")
+        )
+        .andThen { 
+          case Success(Right(reports)) =>
+            log.debug(s"Enqueuing ${reports.size} reports")
+            queue
+              .addAll(reports)
+              .setLastPollingTime(site,now)
+      
+          case Success(Left(err)) =>
+            log.error(s"Problem polling SubmissionReports of site '$site: $err")
+        }
+        // Recover lest the Future.sequence be "short-circuited" into a failed Future 
+        .recover {
+          case t =>  
+            log.error(s"Error(s) occurred polling SubmissionReports of '$site",t)
+            t.getMessage.asLeft
+        }
+    }  
 
-            case Failure(t) =>
-              log.error(s"Error(s) occurred polling SubmissionReports of site '$site",t)
-        
-          }   
-      }  
-    )
-    .map(_ => ())
-  }
 
-
-  private[core] def uploadReports: Future[Unit] = {
+  private[core] def uploadReports: Future[Seq[Either[String,Unit]]] = {
 
     log.info("Uploading SubmissionReports...")
    
-    Future.sequence(
-      queue.entries
-        .map(
-          report =>
-            bfarmConnector
-              .upload(toBfarmReport(report))
-              .flatMap {
-                case Right(_) =>
-                  log.debug(s"Upload successful: Site = ${report.site.code} TAN = ${report.id}, confirming submission")
-                  dipConnector.confirmSubmitted(report)
+    Future.traverse(queue.entries)(
+      report =>
+        bfarmConnector
+          .upload(toBfarmReport(report))
+          .flatMap {
+            case Right(_) =>
+              log.debug(s"Upload successful, Site: ${report.site.code} TAN = ${report.id} - confirming submission")
+              dipConnector.confirmSubmitted(report)
 
-                case err @ Left(msg) =>
-                  log.error(s"Problem uploading report, Site = ${report.site.code} TAN = ${report.id}: $msg")
-                  Future.successful(err)
-              }
-              .andThen {
-                case Success(Right(_)) =>
-                  log.debug("Submission confirmation successful")
-                  queue.remove(report)
-
-                case Failure(t) =>
-                  log.error(s"Problem confirming submission",t)
-              }
-        )
+            case err @ Left(msg) =>
+              log.error(s"Problem uploading report, Site: ${report.site.code} TAN: ${report.id} - $msg")
+              Future.successful(err)
+          }
+          .andThen {
+            case Success(Right(_)) =>
+              log.debug("Submission confirmation successful")
+              queue.remove(report)
+          }
+          // Recover lest the Future.sequence be "short-circuited" into a failed Future 
+          .recover {
+            case t =>
+              log.error(s"Problem confirming submission",t)
+              t.getMessage.asLeft
+          }
     )
-    .map(_ => ())
     
   }
 

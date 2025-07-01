@@ -132,32 +132,6 @@ with Logging
   private val sitesConfig: AtomicReference[Map[Code[Site],String]] =
     new AtomicReference(Map.empty)
 
-/*  
-  private def getSiteConfig(): Unit = {
-
-    import ExecutionContext.Implicits.global
-
-    log.debug(s"Requesting peer connectivity config")
-
-    request("/sites")
-      .get()
-      .map(_.body[JsValue].as[SiteConfig])
-      .onComplete {
-        case Success(SiteConfig(sites)) =>
-          sitesConfig.set(
-            sites.map {
-              case SiteEntry(id,_,vhost) => Code[Site](id) -> vhost
-            }
-            .toMap
-          )
-
-        case Failure(t) =>
-          log.error(s"Broker connection error: ${t.getMessage}")
-      }
-
-  }
-*/
-
   private implicit lazy val executor: ScheduledExecutorService =
     Executors.newSingleThreadScheduledExecutor
 
@@ -268,7 +242,7 @@ with Logging
           )
           .recover {
             case t =>
-              log.error(s"Connection error: ${t.getMessage}")
+              log.error(s"Site: $site, Connection error: ${t.getMessage}")
               Seq.empty[Submission.Report].asRight
           }
       )
