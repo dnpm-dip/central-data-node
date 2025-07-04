@@ -108,6 +108,7 @@ extends Logging
   }
 
 
+/*
   private val toBfarmReport: Submission.Report => bfarm.SubmissionReport = {
 
     import de.dnpm.dip.service.mvh.UseCase._
@@ -120,6 +121,40 @@ extends Logging
         report.createdAt.toLocalDate,
         report.`type`,
         report.id,
+        config.submitterId(report.site.code),
+        config.dataNodeIds(report.useCase),
+        report.useCase match { 
+          case MTB => Oncological
+          case RD  => Rare
+        },
+        report.sequencingType.collect { 
+          case GenomeLongRead  => LibraryType.WGSLr
+          case GenomeShortRead => LibraryType.WGS
+          case Exome           => LibraryType.WES
+          case Panel           => LibraryType.Panel
+        }
+        .getOrElse(bfarm.SubmissionReport.LibraryType.Undefined),
+        report.healthInsuranceType,
+      )
+  }
+*/
+
+  private val toTESTBfarmReport: Submission.Report => bfarm.SubmissionReport = {
+
+    import de.dnpm.dip.service.mvh.UseCase._
+    import bfarm.SubmissionReport.LibraryType
+    import bfarm.SubmissionReport.DiseaseType._
+    import NGSReport.Type._
+    import java.time.LocalDate
+    import java.time.Month.JANUARY
+    import scala.util.Random
+    import de.dnpm.dip.model.Id
+
+    report =>
+      bfarm.SubmissionReport(
+        LocalDate.of(2001,JANUARY,1),
+        report.`type`,
+        Id(s"TEST${config.dataNodeIds(report.useCase)}${config.submitterId(report.site.code)}${Random.nextString(42)}"),
         config.submitterId(report.site.code),
         config.dataNodeIds(report.useCase),
         report.useCase match { 
@@ -186,7 +221,8 @@ extends Logging
     Future.traverse(queue.entries)(
       report =>
         bfarmConnector
-          .upload(toBfarmReport(report))
+          .upload(toTESTBfarmReport(report))
+//          .upload(toBfarmReport(report))
           .flatMap {
             case Right(_) =>
               log.debug(s"Upload successful, Site: ${report.site.code} TAN = ${report.id} - confirming submission")

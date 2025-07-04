@@ -17,7 +17,8 @@ final class Tests extends AnyFlatSpec
       .toFile
 
   System.setProperty("ccdn.dnpm.broker.baseurl","http://localhost")
-  System.setProperty("ccdn.bfarm.api.baseurl","http://localhost/bfarm")
+  System.setProperty("ccdn.bfarm.api.url","http://localhost/bfarm")
+  System.setProperty("ccdn.bfarm.auth.url","http://localhost/bfarm")
   System.setProperty("ccdn.bfarm.api.client.id","dummy")
   System.setProperty("ccdn.bfarm.api.client.secret","dummy")
   System.setProperty("ccdn.queue.dir",queueDir.getAbsolutePath)

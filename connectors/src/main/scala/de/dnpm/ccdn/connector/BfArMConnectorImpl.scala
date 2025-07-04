@@ -69,7 +69,7 @@ object BfArMConnectorImpl
 
   final case class Config
   (
-    apiBaseURL: String,
+    apiURL: String,
     authURL: String,
     clientId: String,
     clientSecret: String,
@@ -81,12 +81,11 @@ object BfArMConnectorImpl
 
     lazy val instance = {
 
-      val baseURL =
-        Option(System.getenv("CCDN_BFARM_API_BASEURL")).getOrElse(System.getProperty("ccdn.bfarm.api.baseurl"))
+      val url = Option(System.getenv("CCDN_BFARM_API_URL")).getOrElse(System.getProperty("ccdn.bfarm.api.url"))
 
       Config(
-        baseURL,
-        Option(System.getenv("CCDN_BFARM_AUTH_URL")).getOrElse(s"$baseURL/realms/mvgenomseq/protocol/openid-connect/token"),
+        url,
+        Option(System.getenv("CCDN_BFARM_AUTH_URL")).getOrElse(System.getProperty("ccdn.bfarm.auth.url")),
         Option(System.getenv("CCDN_BFARM_AUTH_CLIENT_ID")).getOrElse(System.getProperty("ccdn.bfarm.api.client.id")),
         Option(System.getenv("CCDN_BFARM_AUTH_CLIENT_SECRET")).getOrElse(System.getProperty("ccdn.bfarm.api.client.secret")),
         Option(System.getenv("CCDN_BFARM_API_TIMEOUT")).map(_.toInt)
@@ -165,6 +164,7 @@ with Logging
     )
 
 
+/*
   private def request(
     rawUri: String
   )(
@@ -182,7 +182,6 @@ with Logging
     )
   }
 
-
   override def upload(
     report: SubmissionReport
   )(
@@ -190,6 +189,38 @@ with Logging
   ): Future[Either[String,Unit]] =
     for {
       req <- request("api/upload")
+
+      _ = log.info(s"Uploading SubmissionReport ${report.SubmittedCase.tan}")
+
+      resp <- req.post(Json.toJson(report))
+
+    } yield resp.status match {
+      case 200 => ().asRight
+      case _   =>
+        val err = resp.body[JsValue].as[Error]
+        s"${err.statusCode} ${err.error}: ${err.message}".asLeft
+    }
+*/
+
+  private def request(
+    url: String
+  )(
+    implicit ec: ExecutionContext
+  ): Future[WSRequest] =
+    token.get.map(
+      tkn =>
+        wsclient.url(url)
+          .withHttpHeaders("Authorization" -> s"${tkn.token_type} ${tkn.access_token}")
+          .withRequestTimeout(timeout)
+    )
+
+  override def upload(
+    report: SubmissionReport
+  )(
+    implicit ec: ExecutionContext
+  ): Future[Either[String,Unit]] =
+    for {
+      req <- request(config.apiURL)
 
       _ = log.info(s"Uploading SubmissionReport ${report.SubmittedCase.tan}")
 
