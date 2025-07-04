@@ -245,6 +245,7 @@ trait MTBMappings extends Mappings
       snv => SmallVariant(
         snv.id,
         GenomicSource.Somatic,
+        snv.chromosome.mapTo[Chromosome.Value],
         snv.gene,
         snv.localization.getOrElse(Set.empty).mapTo[Localization.Value],
         snv.position.start,
@@ -342,7 +343,24 @@ trait MTBMappings extends Mappings
           Coding(UseType.SecPreventive) -> SystemicTherapyRecommendation.Type.SecPreventive,
           Coding(UseType.Unknown)       -> SystemicTherapyRecommendation.Type.Unknown      
         )
- 
+
+      implicit val category: Set[MTBMedicationRecommendation.Category.Value] => SystemicTherapyRecommendation.Strategy.Value = {
+         import MTBMedicationRecommendation.Category._
+         Map(
+           Set(CH,IM,ZS) -> SystemicTherapyRecommendation.Strategy.CIZ,
+           Set(CH,IM)    -> SystemicTherapyRecommendation.Strategy.CI,
+           Set(CH,ZS)    -> SystemicTherapyRecommendation.Strategy.CZ,
+           Set(CH)       -> SystemicTherapyRecommendation.Strategy.CH,
+           Set(HO)       -> SystemicTherapyRecommendation.Strategy.HO,
+           Set(IM)       -> SystemicTherapyRecommendation.Strategy.IM,
+           Set(ZS)       -> SystemicTherapyRecommendation.Strategy.ZS,
+           Set(SZ)       -> SystemicTherapyRecommendation.Strategy.SZ,
+         )
+         .orElse {
+           case _ => SystemicTherapyRecommendation.Strategy.SO
+         }
+      }
+        
       recommendation =>
         OncologyPlan.SystemicTherapyRecommendation(
           recommendation.id,
@@ -363,8 +381,9 @@ trait MTBMappings extends Mappings
           recommendation.supportingVariants.map(_.map(_.variant.id)),
           recommendation
             .category
-            .getOrElse(Coding(MTBMedicationRecommendation.Category.SO))
-            .code,
+            .getOrElse(Set.empty)
+            .collect { case MTBMedicationRecommendation.Category(value) => value }
+            .mapTo[SystemicTherapyRecommendation.Strategy.Value]
         )
     }
  

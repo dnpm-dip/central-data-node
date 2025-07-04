@@ -70,6 +70,7 @@ object OncologyMolecular
   (
     identifier: Id[SmallVariant],
     genomicSource: GenomicSource.Value,
+    chromosome: Chromosome.Value,
     gene: Coding[HGNC],
     localization: Localization.Value,
     startPosition: Long,

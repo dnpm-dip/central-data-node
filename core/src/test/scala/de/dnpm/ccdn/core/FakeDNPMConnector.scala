@@ -3,10 +3,6 @@ package de.dnpm.ccdn.core
 
 import java.time.LocalDateTime
 import java.util.UUID.randomUUID
-import scala.util.{
-  Either,
-  Random
-}
 import scala.concurrent.{
   Future,
   ExecutionContext
@@ -41,15 +37,9 @@ final class FakeDIPConnectorProvider extends dip.ConnectorProvider
 object FakeDIPConnector extends dip.Connector
 {
 
-  private val rnd = new Random
-
-  private def oneOf[T, C[x] <: Iterable[x]](ts: C[T]): T =
-    ts.toSeq(rnd.nextInt(ts.size))
-
-
   private def rndReport(
     site: Code[Site],
-    useCases: Set[UseCase.Value]
+    useCase: UseCase.Value
   ): Submission.Report =
     Submission.Report(
       Id[TransferTAN](randomUUID.toString),
@@ -57,7 +47,7 @@ object FakeDIPConnector extends dip.Connector
       Id[Patient](randomUUID.toString),
       Submission.Report.Status.Unsubmitted,
       Coding[Site](site.value),
-      oneOf(useCases),
+      useCase,
       Submission.Type.Initial,
       Some(NGSReport.Type.GenomeLongRead),
       HealthInsurance.Type.UNK
@@ -66,13 +56,13 @@ object FakeDIPConnector extends dip.Connector
 
   override def submissionReports(
     site: Code[Site],
-    useCases: Set[UseCase.Value],
+    useCase: UseCase.Value,
     filter: Submission.Report.Filter
   )(
     implicit ec: ExecutionContext
   ): Future[Either[String,Seq[Submission.Report]]] =
     Future.successful(
-      Seq.fill(4)(rndReport(site,useCases)).asRight
+      Seq.fill(4)(rndReport(site,useCase)).asRight
     )
 
   override def confirmSubmitted(

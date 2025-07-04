@@ -15,6 +15,7 @@ import de.dnpm.dip.util.mapping.syntax._
 import de.dnpm.dip.service.mvh
 import de.dnpm.dip.model.{
   BaseVariant,
+  Chromosome,
   NGSReport
 }
 import de.dnpm.dip.rd.model._

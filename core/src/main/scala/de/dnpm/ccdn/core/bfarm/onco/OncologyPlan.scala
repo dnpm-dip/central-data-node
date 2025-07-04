@@ -15,7 +15,6 @@ import de.dnpm.dip.model.{
 }
 import de.dnpm.dip.mtb.model.{
   LevelOfEvidence,
-  MTBMedicationRecommendation,
   MTBProcedureRecommendation,
   Variant
 }
@@ -110,11 +109,19 @@ object OncologyPlan
     evidenceLevelDetails: Set[Code[LevelOfEvidence.Addendum.Value]],
     priority: Code[Recommendation.Priority.Value],
     variants: Option[List[Id[Variant]]],
-    therapeuticStrategy: Code[MTBMedicationRecommendation.Category.Value]
+    therapeuticStrategy: SystemicTherapyRecommendation.Strategy.Value
   )
 
   object SystemicTherapyRecommendation
   { 
+
+    object Strategy extends Enumeration
+    {
+      val CH, HO, IM, ZS, SZ, CI, CZ, CIZ, IZ, SO = Value
+
+      implicit val format: Format[Value] =
+        Json.formatEnum(this)
+    }
 
     object Type extends Enumeration
     {

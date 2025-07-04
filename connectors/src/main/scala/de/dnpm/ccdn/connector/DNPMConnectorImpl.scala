@@ -201,53 +201,40 @@ with Logging
 
   override def submissionReports(
     site: Code[Site],
-    useCases: Set[UseCase.Value],
+    useCase: UseCase.Value,
     filter: Submission.Report.Filter
   )(
     implicit ec: ExecutionContext
   ): Future[Either[String,Seq[Submission.Report]]] =
-    Future.reduceLeft(
-      useCases.map( 
-        useCase =>
-          request(
-            site,
-            s"/api/${useCase.toString.toLowerCase}/peer2peer/mvh/submission-reports"
-          )
-          .pipe(
-            req =>
-             filter.period match {
-               case Some(period) =>
-                 req.withQueryStringParameters("created-after" -> period.start.format(ISO_LOCAL_DATE_TIME))
-                   .pipe(
-                     r => period.endOption match {
-                       case Some(end) => r.withQueryStringParameters("created-before" -> end.format(ISO_LOCAL_DATE_TIME))
-                       case None      => r
-                     }
-                   )
-               case None => req
-             }
-          )
-          .pipe(
-            req => filter.status match {
-              case Some(set) => req.withQueryStringParameters("status" -> set.mkString(","))
-              case None => req
-            }
-          )
-          .get()
-          .map(
-            _.body[JsValue]
-             .as[Collection[Submission.Report]]
-             .entries
-             .asRight
-          )
-          .recover {
-            case t =>
-              log.error(s"Site: $site, Connection error: ${t.getMessage}")
-              Seq.empty[Submission.Report].asRight
-          }
-      )
-    )(
-      _ combine _
+    request(
+      site, s"/api/${useCase.toString.toLowerCase}/peer2peer/mvh/submission-reports"
+    )
+    .pipe(
+      req => filter.status match {
+        case Some(set) => req.addQueryStringParameters("status" -> set.mkString(","))
+        case None      => req
+      }
+    )
+    .pipe {
+      req =>
+        filter.period match {
+          case Some(period) =>
+            req.addQueryStringParameters("created-after" -> period.start.format(ISO_LOCAL_DATE_TIME))
+              .pipe(
+                r => period.endOption match {
+                  case Some(end) => r.addQueryStringParameters("created-before" -> end.format(ISO_LOCAL_DATE_TIME))
+                  case None      => r
+                }
+              )
+          case None => req
+        }
+    }
+    .get()
+    .map(
+      _.body[JsValue]
+       .as[Collection[Submission.Report]]
+       .entries
+       .asRight
     )
     .recover {
       case t => t.getMessage.asLeft

@@ -23,11 +23,21 @@ trait ConnectorOps[F[_],Env,Err]
 
   def submissionReports(
     site: Code[Site],
+    useCase: UseCase.Value,
+    filter: Submission.Report.Filter
+  )(
+    implicit env: Env
+  ): F[Either[Err,Seq[Submission.Report]]]
+
+/*
+  def submissionReports(
+    site: Code[Site],
     useCases: Set[UseCase.Value],
     filter: Submission.Report.Filter
   )(
     implicit env: Env
   ): F[Either[Err,Seq[Submission.Report]]]
+*/
 
 
   def confirmSubmitted(

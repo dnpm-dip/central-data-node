@@ -67,8 +67,13 @@ trait Mappings
     coding =>
       f(w.value.unapply(coding.code.value).get)
 
-
+/*
   protected implicit def chromosomeMapping[Chr <: Chromosome with Enumeration]: Chr#Value => bfarm.Chromosome.Value =
+    _.toString.replace("chr","")
+     .pipe(bfarm.Chromosome.withName)
+*/
+
+  protected implicit val chromosomeMapping: Chromosome.Value => bfarm.Chromosome.Value =
     _.toString.replace("chr","")
      .pipe(bfarm.Chromosome.withName)
 

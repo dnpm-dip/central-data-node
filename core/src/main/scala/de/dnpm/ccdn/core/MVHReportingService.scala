@@ -78,7 +78,7 @@ extends Logging
     log.info("Starting MVH Reporting service")
 
     log.info(s"Active Use Cases: ${config.activeUseCases.mkString(", ")}")
-    log.info(s"Active sites:\n${config.sites.keys.toList.sortBy(_.value).mkString(", ")}")
+    log.info(s"Active sites: ${config.sites.keys.toList.sortBy(_.value).mkString(", ")}")
 
     scheduledTask =
       Some(
@@ -138,37 +138,43 @@ extends Logging
   }
 
 
-  private[core] def pollReports: Future[Seq[Either[String,Seq[Submission.Report]]]] =
+//  private[core] def pollReports: Future[Seq[Either[String,Seq[Submission.Report]]]] =
+  private[core] def pollReports: Future[Any] =
     Future.traverse(
       config.sites.toList.sortBy(_._1.value)
     ){
       case (site,info) =>
-      
-        log.info(s"Polling SubmissionReports of '$site'")
+
+        Future.traverse(
+          info.useCases intersect config.activeUseCases  // ensure only active use cases are polled
+        ){
+          useCase => 
         
-        dipConnector.submissionReports(
-          site,
-          info.useCases intersect config.activeUseCases,
-          Submission.Report.Filter(
-            queue.lastPollingTime(site).map(t => Period(t)),
-            Some(Set(Submission.Report.Status.Unsubmitted))
-          )
-        )
-        .andThen { 
-          case Success(Right(reports)) =>
-            log.debug(s"Enqueuing ${reports.size} reports")
-            queue
-              .addAll(reports)
-              .setLastPollingTime(site,now)
-      
-          case Success(Left(err)) =>
-            log.error(s"Problem polling SubmissionReports of site '$site: $err")
-        }
-        // Recover lest the Future.sequence be "short-circuited" into a failed Future 
-        .recover {
-          case t =>  
-            log.error(s"Error(s) occurred polling SubmissionReports of '$site",t)
-            t.getMessage.asLeft
+            log.info(s"Polling $useCase SubmissionReports of $site")
+            dipConnector.submissionReports(
+              site,
+              useCase,
+              Submission.Report.Filter(
+                queue.lastPollingTime(site).map(t => Period(t)),
+                Some(Set(Submission.Report.Status.Unsubmitted))
+              )
+            )
+            .andThen { 
+              case Success(Right(reports)) =>
+                log.info(s"Enqueuing ${reports.size} $useCase reports")
+                queue
+                  .addAll(reports)
+                  .setLastPollingTime(site,now)
+            
+              case Success(Left(err)) =>
+                log.error(s"Problem polling $useCase SubmissionReports of site $site: $err")
+            }
+            // Recover lest the Future traversal be "short-circuited" into a failed Future 
+            .recover {
+              case t =>  
+                log.error(s"Error(s) occurred polling $useCase SubmissionReports of '$site",t)
+                t.getMessage.asLeft
+            }
         }
     }  
 
@@ -198,7 +204,7 @@ extends Logging
           // Recover lest the Future.sequence be "short-circuited" into a failed Future 
           .recover {
             case t =>
-              log.error(s"Problem confirming submission",t)
+              log.error(s"Problem confirming submission: ${t.getMessage}")
               t.getMessage.asLeft
           }
     )
