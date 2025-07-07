@@ -3,6 +3,7 @@ package de.dnpm.ccdn.core
 
 import java.net.URI
 import java.time.YearMonth
+import java.time.Month.JANUARY
 import cats.data.NonEmptyList
 import de.dnpm.ccdn.core.bfarm.{
   DiagnosticType,
@@ -66,7 +67,9 @@ trait RDMappings extends Mappings
 
       RDCase.Diagnosis(
         hpoTerms.map(_.value),
-        diagnoses.toList.map(_.onsetDate).min,
+        diagnoses.toList.flatMap(_.onsetDate).minOption
+          .orElse(hpoTerms.toList.flatMap(_.onsetDate).minOption)
+          .getOrElse(YearMonth.of(0,JANUARY)),
         carePlans.map(_.issuedOn)
           .minOption
           .getOrElse(
