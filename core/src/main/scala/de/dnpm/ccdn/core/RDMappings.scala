@@ -8,6 +8,7 @@ import cats.data.NonEmptyList
 import de.dnpm.ccdn.core.bfarm.{
   DiagnosticType,
   Metadata,
+  SequencingType,
   VitalStatus
 }
 import de.dnpm.ccdn.core.bfarm.rd._
@@ -54,44 +55,35 @@ trait RDMappings extends Mappings
       RDDiagnosis.VerificationStatus.Unconfirmed -> Diagnosis.Status.NoGeneticDiagnosis
     )
 
-  protected implicit val diagnosisMapping: (
-    (
-      NonEmptyList[RDDiagnosis],
-      NonEmptyList[HPOTerm],
-      List[RDCarePlan],
-      List[GMFCSStatus]
-    )
-  ) => RDCase.Diagnosis = {
-
-    case (diagnoses,hpoTerms,carePlans,gmfcs) => 
-
+  protected implicit val diagnosisMapping: RDPatientRecord => RDCase.Diagnosis =
+    record =>
       RDCase.Diagnosis(
-        hpoTerms.map(_.value),
-        diagnoses.toList.flatMap(_.onsetDate).minOption
-          .orElse(hpoTerms.toList.flatMap(_.onsetDate).minOption)
+        record.hpoTerms.map(_.value),
+        record.diagnoses.toList.flatMap(_.onsetDate).minOption
+          .orElse(record.hpoTerms.toList.flatMap(_.onsetDate).minOption)
           .getOrElse(YearMonth.of(0,JANUARY)),
-        carePlans.map(_.issuedOn)
-          .minOption
-          .getOrElse(
-            diagnoses.toList.map(_.recordedOn).min
-          ),
-        diagnoses
+        record.carePlans.map(_.issuedOn).toList.min,
+        record.diagnoses
           .toList
           .map(_.familyControlLevel)
           .collect { case RDDiagnosis.FamilyControlLevel(v) => v } 
           .max
           .mapTo[Diagnosis.Extent.Value],
-        diagnoses.toList
+        record.diagnoses.toList
           .map(_.verificationStatus)  
           .collect { case RDDiagnosis.VerificationStatus(v) => v } 
           .maxOption
           .getOrElse(RDDiagnosis.VerificationStatus.Unconfirmed)
           .mapTo[Diagnosis.Status.Value],
-        diagnoses.flatMap(_.codes),
-        Option.when(diagnoses.exists(_.missingCodeReason.isDefined))(true),
-        gmfcs.minByOption(_.effectiveDate).map(_.value.code)
+        record.diagnoses.flatMap(_.codes),
+        Option.when(record.diagnoses.exists(_.missingCodeReason.isDefined))(true),
+        record.gmfcsStatus.flatMap(_.minByOption(_.effectiveDate)).map(_.value.code),
+        record.ngsReports
+          .filter(_ => !record.carePlans.exists(_.noSequencingPerformedReason.isDefined))
+          .flatMap(_.maxByOption(_.issuedOn))
+          .map(_.`type`.mapTo[SequencingType.Value])
+          .getOrElse(SequencingType.None)
       )
-  }
 
 
   import RDNGSReport.Conclusion._
@@ -188,19 +180,10 @@ trait RDMappings extends Mappings
 
   }
 
-  protected implicit val rdCaseMapping: RDPatientRecord => RDCase = {
+  protected implicit val rdCaseMapping: RDPatientRecord => RDCase =
     record =>
-
       RDCase(
-        Option(
-          (
-            record.diagnoses,
-            record.hpoTerms,
-            record.carePlans.toList,
-            record.gmfcsStatus.getOrElse(List.empty)
-          )
-          .mapTo[RDCase.Diagnosis]
-        ),
+        record.mapTo[RDCase.Diagnosis],
         Option(
           (
             record.getNgsReports,
@@ -210,7 +193,6 @@ trait RDMappings extends Mappings
           .mapTo[RDCase.PriorRD]
         )
       )
-  }
 
 
   protected implicit val rdMolecular: List[RDNGSReport] => RDMolecular = {
@@ -222,16 +204,6 @@ trait RDMappings extends Mappings
       SegregationAnalysis
     }
 
-/*    
-    implicit val localizationMapping: BaseVariant.Localization.Value => Localization.Value =
-      Map(
-        BaseVariant.Localization.CodingRegion     -> Localization.CodingRegion,
-        BaseVariant.Localization.SplicingRegion   -> Localization.SplicingRegion,  
-        BaseVariant.Localization.RegulatoryRegion -> Localization.RegulatoryRegion,
-        BaseVariant.Localization.Intronic         -> Localization.Intronic,
-        BaseVariant.Localization.Intergenic       -> Localization.Intergenic     
-      )
-*/
 
     implicit val localizationMapping: BaseVariant.Localization.Value => Coding[Localization.Value] =
       Map(

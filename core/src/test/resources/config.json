@@ -1,7 +1,8 @@
 { 
   "polling": {
     "period": 10,
-    "timeUnit": "SECONDS"
+    "timeUnit": "SECONDS",
+    "startTime": "10:35"
   },
   "dataNodeIds": {
     "MTB": "KDKTUE005",

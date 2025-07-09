@@ -1,7 +1,7 @@
 package de.dnpm.ccdn.core
 
 
-import java.time.LocalDateTime.now
+import java.time.LocalDateTime
 import java.util.concurrent.{
   Executors,
   ScheduledExecutorService
@@ -76,9 +76,24 @@ extends Logging
   def start(): Unit = {
 
     log.info("Starting MVH Reporting service")
-
     log.info(s"Active Use Cases: ${config.activeUseCases.mkString(", ")}")
     log.info(s"Active sites: ${config.sites.keys.toList.sortBy(_.value).mkString(", ")}")
+
+/*
+    val delay =
+      config.polling.startTime
+        .map(ChronoUnit.SECONDS.between(OffsetTime.now.toLocalTime,_))
+        .map {
+          case d if d >= 0 => d
+          case d           => d + 3600*24  // offset by 1 day
+        }
+        .getOrElse(0L)  
+
+    val period =
+      config.polling.period*toSeconds(config.polling.timeUnit)
+
+    log.info(s"Scheduling report polling to start in $delay s with $period s period")   
+*/
 
     scheduledTask =
       Some(
@@ -94,7 +109,7 @@ extends Logging
             ()
           },
           0,
-          config.polling.period.toLong,
+          config.polling.period,
           config.polling.timeUnit
         )
       )
@@ -108,8 +123,7 @@ extends Logging
   }
 
 
-/*
-  private val toBfarmReport: Submission.Report => bfarm.SubmissionReport = {
+  private val BfarmReport: Submission.Report => bfarm.SubmissionReport = {
 
     import de.dnpm.dip.service.mvh.UseCase._
     import bfarm.SubmissionReport.LibraryType
@@ -137,9 +151,9 @@ extends Logging
         report.healthInsuranceType,
       )
   }
-*/
 
-  private val toTESTBfarmReport: Submission.Report => bfarm.SubmissionReport = {
+/*
+  private val TESTBfarmReport: Submission.Report => bfarm.SubmissionReport = {
 
     import de.dnpm.dip.service.mvh.UseCase._
     import bfarm.SubmissionReport.LibraryType
@@ -151,6 +165,13 @@ extends Logging
     import de.dnpm.dip.model.Id
 
     report =>
+
+      val tan =
+        report.id.value match {
+          case tan if tan.size >= 42 => tan.take(42)
+          case x                     => List.fill((42 % tan.size) + 1)(x).mkString.take(42)
+        }
+
       bfarm.SubmissionReport(
         LocalDate.of(2001,JANUARY,1),
         report.`type`,
@@ -171,6 +192,7 @@ extends Logging
         report.healthInsuranceType,
       )
   }
+*/
 
 
 //  private[core] def pollReports: Future[Seq[Either[String,Seq[Submission.Report]]]] =
@@ -199,7 +221,7 @@ extends Logging
                 log.info(s"Enqueuing ${reports.size} $useCase reports")
                 queue
                   .addAll(reports)
-                  .setLastPollingTime(site,now)
+                  .setLastPollingTime(site,LocalDateTime.now)
             
               case Success(Left(err)) =>
                 log.error(s"Problem polling $useCase SubmissionReports of site $site: $err")
@@ -221,8 +243,8 @@ extends Logging
     Future.traverse(queue.entries)(
       report =>
         bfarmConnector
-          .upload(toTESTBfarmReport(report))
-//          .upload(toBfarmReport(report))
+//          .upload(TESTBfarmReport(report))
+          .upload(BfarmReport(report))
           .flatMap {
             case Right(_) =>
               log.debug(s"Upload successful, Site: ${report.site.code} TAN = ${report.id} - confirming submission")

@@ -21,7 +21,10 @@ import de.dnpm.dip.rd.model.{
   HPO,
   RDDiagnosis
 }
-import de.dnpm.ccdn.core.bfarm.DiagnosticType
+import de.dnpm.ccdn.core.bfarm.{
+  DiagnosticType,
+  SequencingType
+}
 import play.api.libs.json.{
   Json,
   Format,
@@ -43,7 +46,7 @@ import play.api.libs.json.{
 
 final case class RDCase
 (
-  diagnosisRd: Option[RDCase.Diagnosis],
+  diagnosisRd: RDCase.Diagnosis,
   priorRd: Option[RDCase.PriorRD]
 )
 
@@ -60,7 +63,8 @@ object RDCase
     diagnosticAssessment: Diagnosis.Status.Value,
     diagnoses: NonEmptyList[Coding[RDDiagnosis.Systems]],
     noMatchingCodeExists: Option[Boolean],
-    diagnosisGmfcs: Option[Code[GMFCS.Value]]
+    diagnosisGmfcs: Option[Code[GMFCS.Value]],
+    libraryType: SequencingType.Value
   )
 
 

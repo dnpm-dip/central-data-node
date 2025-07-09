@@ -18,6 +18,7 @@ import de.dnpm.dip.model.{
   ExternalId,
   Gender,
   Id,
+  NGSReport,
   Patient
 }
 import de.dnpm.dip.service.mvh
@@ -67,15 +68,37 @@ trait Mappings
     coding =>
       f(w.value.unapply(coding.code.value).get)
 
-/*
-  protected implicit def chromosomeMapping[Chr <: Chromosome with Enumeration]: Chr#Value => bfarm.Chromosome.Value =
-    _.toString.replace("chr","")
-     .pipe(bfarm.Chromosome.withName)
-*/
 
   protected implicit val chromosomeMapping: Chromosome.Value => bfarm.Chromosome.Value =
     _.toString.replace("chr","")
      .pipe(bfarm.Chromosome.withName)
+
+/*
+  protected implicit def sequencingType[E <: CodedEnum with MolecularDiagnostics.Type](
+    implicit seqType: Witness.Aux[E]
+  ): seqType.value.Value => SequencingType.Value =
+    Map(
+      seqType.value.GenomeLongRead  -> SequencingType.WGSLr,
+      seqType.value.GenomeShortRead -> SequencingType.WGS,
+      seqType.value.Exome           -> SequencingType.WES,
+      seqType.value.Panel           -> SequencingType.Panel
+    )
+    .orElse {
+      case _ => SequencingType.None
+    }
+*/
+
+
+  protected implicit val sequencingType: NGSReport.Type.Value => SequencingType.Value =
+    Map(
+      NGSReport.Type.GenomeLongRead  -> SequencingType.WGSLr,
+      NGSReport.Type.GenomeShortRead -> SequencingType.WGS,
+      NGSReport.Type.Exome           -> SequencingType.WES, 
+      NGSReport.Type.Panel           -> SequencingType.Panel
+    )
+    .orElse {
+      case _ => SequencingType.None
+    }
 
 
   protected implicit val nonInclusionReasonMapping: CarePlan.NoSequencingPerformedReason.Value => Metadata.RejectionJustification.Value = {
@@ -116,8 +139,8 @@ trait Mappings
         date,
         metadata.`type`,
         config.submitterId(patient.managingSite.get.code),
-        config.gdcId(patient.managingSite.get.code),
         config.dataNodeIds(useCase),
+ Some(config.gdcId(patient.managingSite.get.code)),  //TODO
         useCase.mapTo[DiseaseType.Value]
       ),
       patient.healthInsurance.`type`.code,

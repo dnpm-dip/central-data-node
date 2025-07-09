@@ -21,7 +21,10 @@ import de.dnpm.dip.mtb.model.{
   RECIST,
   TumorStaging
 }
-import de.dnpm.ccdn.core.bfarm.DiagnosticType
+import de.dnpm.ccdn.core.bfarm.{
+  DiagnosticType,
+  SequencingType
+}
 import play.api.libs.json.{
   Json,
   OFormat
@@ -61,8 +64,8 @@ object OncologyCase
     topography: Coding[ICDO3.T],
     grading: Option[Code[OBDSGrading.Value]],
     tnmClassifications: Option[Set[Coding[TumorStaging.TNM.Systems]]],
-//    libraryType: SequencingType.Value, ??? Issue reported
-    additionalClassification: Option[List[KeyCoding[TumorStaging.OtherSystems]]]
+    additionalClassification: Option[List[KeyCoding[TumorStaging.OtherSystems]]],
+    libraryType: SequencingType.Value
   )
 
   object Diagnosis

@@ -86,8 +86,9 @@ object Metadata
     date: LocalDate,
     `type`: mvh.Submission.Type.Value,
     submitterId: Id[Site],
-    genomicDataCenterId: Id[GDC],
     clinicalDataNodeId: Id[CDN],
+//    genomicDataCenterId: Id[GDC],
+    genomicDataCenterId: Option[Id[GDC]],
     diseaseType: DiseaseType.Value, 
   )
 

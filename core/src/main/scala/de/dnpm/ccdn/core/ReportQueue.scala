@@ -39,6 +39,12 @@ trait QueueOps[T]
     t: T
   ): this.type
 
+  def size: Int = this.entries.size
+
+  def isEmpty: Boolean = this.size == 0
+
+  def nonEmpty: Boolean = !this.isEmpty
+
 }
 
 trait ReportQueue extends QueueOps[Submission.Report]

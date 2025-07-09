@@ -78,19 +78,14 @@ object BfArMConnectorImpl
 
   object Config
   { 
-
-    lazy val instance = {
-
-      val url = Option(System.getenv("CCDN_BFARM_API_URL")).getOrElse(System.getProperty("ccdn.bfarm.api.url"))
-
+    lazy val instance =
       Config(
-        url,
+        Option(System.getenv("CCDN_BFARM_API_URL")).getOrElse(System.getProperty("ccdn.bfarm.api.url")),
         Option(System.getenv("CCDN_BFARM_AUTH_URL")).getOrElse(System.getProperty("ccdn.bfarm.auth.url")),
         Option(System.getenv("CCDN_BFARM_AUTH_CLIENT_ID")).getOrElse(System.getProperty("ccdn.bfarm.api.client.id")),
         Option(System.getenv("CCDN_BFARM_AUTH_CLIENT_SECRET")).getOrElse(System.getProperty("ccdn.bfarm.api.client.secret")),
         Option(System.getenv("CCDN_BFARM_API_TIMEOUT")).map(_.toInt)
       )
-    }
   }
 
 

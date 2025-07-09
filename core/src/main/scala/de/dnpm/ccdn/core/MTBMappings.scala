@@ -9,7 +9,10 @@ import de.dnpm.ccdn.core.bfarm.{
   Metadata,
   VitalStatus
 }
-import de.dnpm.ccdn.core.bfarm.Chromosome
+import de.dnpm.ccdn.core.bfarm.{
+  Chromosome,
+  SequencingType
+}
 import de.dnpm.ccdn.core.bfarm.onco._
 import de.dnpm.dip.coding.{
   Code,
@@ -21,7 +24,7 @@ import de.dnpm.dip.model.{
   BaseVariant,
   ExternalId,
   Id,
-  Medications
+  Medications,
 }
 import de.dnpm.dip.coding.atc.ATC
 import de.dnpm.dip.model.FollowUp.PatientStatus
@@ -52,14 +55,11 @@ trait MTBMappings extends Mappings
         case _                                    => NamedSubstance(coding.display.getOrElse(coding.code.value))
       }
 
+  protected implicit def oncoDiagnosis: MTBPatientRecord => OncologyCase.Diagnosis = {
 
-  protected implicit def oncoDiagnosis(
-    implicit
-    specimens: List[TumorSpecimen],
-    histologyReports: List[HistologyReport]
-  ): ((List[MTBDiagnosis],List[PerformanceStatus])) => OncologyCase.Diagnosis = {
+    record =>
 
-    case (diagnoses,ecogs) =>
+      val diagnoses = record.diagnoses.toList
 
       val (mainDiagnosis,otherDiagnoses) = 
         diagnoses.partition {
@@ -81,6 +81,7 @@ trait MTBMappings extends Mappings
         mainDiagnosis.staging
           .map(_.latestBy(_.date))
 
+      implicit val specimens = record.getSpecimens
 
       OncologyCase.Diagnosis(
         CodingWithDate(
@@ -92,12 +93,12 @@ trait MTBMappings extends Mappings
         )(
           otherDiagnoses.map(d => CodingWithDate(d.code,d.recordedOn)).toSet
         ),
-        ecogs.minByOption(_.effectiveDate)
+        record.getPerformanceStatus.minByOption(_.effectiveDate)
           .map(_.value.code)
           .getOrElse(Code[ECOG.Value]("unknown")),
         germlineDiagnoses.isDefined,
         germlineDiagnoses,
-        histologyReports.find(
+        record.getHistologyReports.find(
           _.specimen
            .resolve
            .flatMap(_.diagnosis.resolveOn(diagnoses))
@@ -125,7 +126,13 @@ trait MTBMappings extends Mappings
           .flatMap(
             _.otherClassifications
              .map(_.map(c => KeyCoding(c.code,c.system)))
-          )
+          ),
+        record.ngsReports match {
+          case Some(reports) if reports.nonEmpty =>
+            reports.maxBy(_.issuedOn).`type`.mapTo[SequencingType.Value]
+
+          case _ => SequencingType.None
+        }
       )
   }
 
@@ -133,16 +140,16 @@ trait MTBMappings extends Mappings
 
     import DiagnosticType._           
 
-    implicit val diagnosticType: Coding[MolecularDiagnosticReport.Type.Value] => DiagnosticType.Value =
+    implicit val diagnosticType: MolecularDiagnosticReport.Type.Value => DiagnosticType.Value =
       Map(
-        Coding(MolecularDiagnosticReport.Type.Array)           -> Array,
-        Coding(MolecularDiagnosticReport.Type.Single)          -> Single,
-        Coding(MolecularDiagnosticReport.Type.Karyotyping)     -> Karyotyping,
-        Coding(MolecularDiagnosticReport.Type.GenePanel)       -> Panel,
-        Coding(MolecularDiagnosticReport.Type.Panel)           -> Panel,
-        Coding(MolecularDiagnosticReport.Type.Exome)           -> Exome,
-        Coding(MolecularDiagnosticReport.Type.GenomeShortRead) -> GenomeShortRead,
-        Coding(MolecularDiagnosticReport.Type.GenomeLongRead)  -> GenomeLongRead
+        MolecularDiagnosticReport.Type.Array           -> Array,
+        MolecularDiagnosticReport.Type.Single          -> Single,
+        MolecularDiagnosticReport.Type.Karyotyping     -> Karyotyping,
+        MolecularDiagnosticReport.Type.GenePanel       -> Panel,
+        MolecularDiagnosticReport.Type.Panel           -> Panel,
+        MolecularDiagnosticReport.Type.Exome           -> Exome,
+        MolecularDiagnosticReport.Type.GenomeShortRead -> GenomeShortRead,
+        MolecularDiagnosticReport.Type.GenomeLongRead  -> GenomeLongRead
       )
       .orElse {
         case _ => Other          
@@ -213,12 +220,10 @@ trait MTBMappings extends Mappings
 
     case mvh.Submission(record,metadata,_) =>
 
-      implicit val specimens = record.getSpecimens
-      implicit val histologyReports = record.getHistologyReports
       implicit val responses = record.getResponses
 
       OncologyCase(
-        (record.diagnoses.toList,record.getPerformanceStatus).mapTo[OncologyCase.Diagnosis],
+        record.mapTo[OncologyCase.Diagnosis],
         record.priorDiagnosticReports.getOrElse(List.empty).mapTo[Option[OncologyCase.PriorDiagnostics]],
         record.guidelineTherapies.map(
           _.mapAllTo[OncologyCase.PriorTherapy]
