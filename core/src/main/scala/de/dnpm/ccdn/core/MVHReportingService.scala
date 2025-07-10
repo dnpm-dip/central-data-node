@@ -243,7 +243,6 @@ extends Logging
     Future.traverse(queue.entries)(
       report =>
         bfarmConnector
-//          .upload(TESTBfarmReport(report))
           .upload(BfarmReport(report))
           .flatMap {
             case Right(_) =>

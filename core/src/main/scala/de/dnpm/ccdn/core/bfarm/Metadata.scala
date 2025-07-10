@@ -61,7 +61,7 @@ object Metadata
   {
     val Oncological = Value("oncological")
     val Rare        = Value("rare")
-//    val HT            = Value("hereditary")
+//    val HT            = Value("hereditary")  // Irrelevant for us
  
     implicit val format: Format[Value] =
       Json.formatEnum(this)
@@ -87,7 +87,6 @@ object Metadata
     `type`: mvh.Submission.Type.Value,
     submitterId: Id[Site],
     clinicalDataNodeId: Id[CDN],
-//    genomicDataCenterId: Id[GDC],
     genomicDataCenterId: Option[Id[GDC]],
     diseaseType: DiseaseType.Value, 
   )

@@ -9,10 +9,7 @@ import de.dnpm.ccdn.core.bfarm.{
   Metadata,
   VitalStatus
 }
-import de.dnpm.ccdn.core.bfarm.{
-  Chromosome,
-  SequencingType
-}
+import de.dnpm.ccdn.core.bfarm.Chromosome
 import de.dnpm.ccdn.core.bfarm.onco._
 import de.dnpm.dip.coding.{
   Code,
@@ -33,7 +30,7 @@ import de.dnpm.dip.mtb.model._
 
 
 
-trait MTBMappings extends Mappings
+trait MTBMappings extends Mappings[MTBPatientRecord]
 {
 
   override val useCase: mvh.UseCase.Value = mvh.UseCase.MTB
@@ -54,6 +51,7 @@ trait MTBMappings extends Mappings
         case sys if sys == Coding.System[ATC].uri => CodedSubstance(coding)
         case _                                    => NamedSubstance(coding.display.getOrElse(coding.code.value))
       }
+
 
   protected implicit def oncoDiagnosis: MTBPatientRecord => OncologyCase.Diagnosis = {
 
@@ -127,12 +125,7 @@ trait MTBMappings extends Mappings
             _.otherClassifications
              .map(_.map(c => KeyCoding(c.code,c.system)))
           ),
-        record.ngsReports match {
-          case Some(reports) if reports.nonEmpty =>
-            reports.maxBy(_.issuedOn).`type`.mapTo[SequencingType.Value]
-
-          case _ => SequencingType.None
-        }
+        performedSequencingType(record)
       )
   }
 
@@ -171,18 +164,18 @@ trait MTBMappings extends Mappings
 
 
 
-  protected implicit val statusReason: Coding[MTBTherapy.StatusReason.Value] => TerminationReason.Value = {
+  protected implicit val statusReason: MTBTherapy.StatusReason.Value => TerminationReason.Value = {
 
     import MTBTherapy.StatusReason._
 
     Map(
-      Coding(PatientRefusal)                       -> TerminationReason.V,
-      Coding(PatientDeath)                         -> TerminationReason.T,
-      Coding(Progression)                          -> TerminationReason.P,
-      Coding(Toxicity)                             -> TerminationReason.A,
-      Coding(RegularCompletion)                    -> TerminationReason.E,
-      Coding(RegularCompletionWithDosageReduction) -> TerminationReason.R,
-      Coding(RegularCompletionWithSubstanceChange) -> TerminationReason.W
+      PatientRefusal                       -> TerminationReason.V,
+      PatientDeath                         -> TerminationReason.T,
+      Progression                          -> TerminationReason.P,
+      Toxicity                             -> TerminationReason.A,
+      RegularCompletion                    -> TerminationReason.E,
+      RegularCompletionWithDosageReduction -> TerminationReason.R,
+      RegularCompletionWithSubstanceChange -> TerminationReason.W
     )
     .orElse { 
       _ => TerminationReason.S
@@ -239,7 +232,6 @@ trait MTBMappings extends Mappings
 
     implicit val localizationMapping: Set[Coding[BaseVariant.Localization.Value]] => Localization.Value =
       _.collect { case BaseVariant.Localization(l) => l} match {
-  
         case locs if locs contains BaseVariant.Localization.CodingRegion     => Localization.Coding
         case locs if locs contains BaseVariant.Localization.RegulatoryRegion => Localization.Regulatory
         case _                                                               => Localization.Neither
@@ -339,14 +331,14 @@ trait MTBMappings extends Mappings
     implicit val therayRecommendation: MTBMedicationRecommendation => SystemicTherapyRecommendation = {
  
       import MTBMedicationRecommendation.UseType
- 
-      implicit val useType: Coding[UseType.Value] => SystemicTherapyRecommendation.Type.Value =
+
+      implicit val useType: UseType.Value => SystemicTherapyRecommendation.Type.Value =
         Map(
-          Coding(UseType.InLabel)       -> SystemicTherapyRecommendation.Type.InLabel, 
-          Coding(UseType.OffLabel)      -> SystemicTherapyRecommendation.Type.OffLabel,
-          Coding(UseType.Compassionate) -> SystemicTherapyRecommendation.Type.Compassionate,
-          Coding(UseType.SecPreventive) -> SystemicTherapyRecommendation.Type.SecPreventive,
-          Coding(UseType.Unknown)       -> SystemicTherapyRecommendation.Type.Unknown      
+          UseType.InLabel       -> SystemicTherapyRecommendation.Type.InLabel, 
+          UseType.OffLabel      -> SystemicTherapyRecommendation.Type.OffLabel,
+          UseType.Compassionate -> SystemicTherapyRecommendation.Type.Compassionate,
+          UseType.SecPreventive -> SystemicTherapyRecommendation.Type.SecPreventive,
+          UseType.Unknown       -> SystemicTherapyRecommendation.Type.Unknown      
         )
 
       implicit val category: Set[MTBMedicationRecommendation.Category.Value] => SystemicTherapyRecommendation.Strategy.Value = {
@@ -579,22 +571,23 @@ trait MTBMappings extends Mappings
 
   def apply(submission: mvh.Submission[MTBPatientRecord]): OncologySubmission = {
 
-    val mvh.Submission(record,metadata,dateTime) = submission   
-
-    val patient = record.patient
-    val mvhCarePlan = record.getCarePlans.minByOption(_.issuedOn).get
-
     OncologySubmission(
-      (patient,dateTime.toLocalDate,mvhCarePlan,metadata).mapTo[Metadata],
+      submission.mapTo[Metadata],
       submission.mapTo[OncologyCase],
-      record.getNgsReports
-        .pipe(
+      submission.record.ngsReports
+        .flatMap(
           reports =>
             Option.when(reports.nonEmpty)(reports.mapTo[OncologyMolecular])
         ),
-      record.getCarePlans.mapTo[Option[OncologyPlan]],
-      record.mapTo[Option[OncologyFollowUps]]
+      submission.record.getCarePlans.mapTo[Option[OncologyPlan]],
+      submission.record.mapTo[Option[OncologyFollowUps]]
     )
 
   }
+
+}
+
+object MTBMappings extends MTBMappings
+{
+   override lazy val config = Config.instance
 }

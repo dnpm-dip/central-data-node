@@ -8,7 +8,6 @@ import cats.data.NonEmptyList
 import de.dnpm.ccdn.core.bfarm.{
   DiagnosticType,
   Metadata,
-  SequencingType,
   VitalStatus
 }
 import de.dnpm.ccdn.core.bfarm.rd._
@@ -27,7 +26,7 @@ import RDCase.{
 }
 
 
-trait RDMappings extends Mappings
+trait RDMappings extends Mappings[RDPatientRecord]
 {
 
   override val useCase: mvh.UseCase.Value = mvh.UseCase.RD
@@ -55,6 +54,7 @@ trait RDMappings extends Mappings
       RDDiagnosis.VerificationStatus.Unconfirmed -> Diagnosis.Status.NoGeneticDiagnosis
     )
 
+
   protected implicit val diagnosisMapping: RDPatientRecord => RDCase.Diagnosis =
     record =>
       RDCase.Diagnosis(
@@ -78,11 +78,7 @@ trait RDMappings extends Mappings
         record.diagnoses.flatMap(_.codes),
         Option.when(record.diagnoses.exists(_.missingCodeReason.isDefined))(true),
         record.gmfcsStatus.flatMap(_.minByOption(_.effectiveDate)).map(_.value.code),
-        record.ngsReports
-          .filter(_ => !record.carePlans.exists(_.noSequencingPerformedReason.isDefined))
-          .flatMap(_.maxByOption(_.issuedOn))
-          .map(_.`type`.mapTo[SequencingType.Value])
-          .getOrElse(SequencingType.None)
+        performedSequencingType(record)
       )
 
 
@@ -490,22 +486,19 @@ trait RDMappings extends Mappings
   }
 
 
-  def apply(submission: mvh.Submission[RDPatientRecord]): RDSubmission = {
 
-    val mvh.Submission(record,metadata,dateTime) = submission   
-
-    val patient = record.patient
-    val mvhCarePlan = record.carePlans.toList.minBy(_.issuedOn)
-
+  def apply(submission: mvh.Submission[RDPatientRecord]): RDSubmission =
     RDSubmission(
-      (patient,dateTime.toLocalDate,mvhCarePlan,metadata).mapTo[Metadata],
-      record.mapTo[RDCase],
-      record.ngsReports.map(_.mapTo[RDMolecular]),
-      record.carePlans.toList.maxByOption(_.issuedOn).mapTo[Option[RDPlan]],
-      record.mapTo[Option[RDFollowUps]]
+      submission.mapTo[Metadata],
+      submission.record.mapTo[RDCase],
+      submission.record.ngsReports.map(_.mapTo[RDMolecular]),
+      submission.record.carePlans.toList.maxByOption(_.issuedOn).mapTo[Option[RDPlan]],
+      submission.record.mapTo[Option[RDFollowUps]]
     )
 
-  }
  
-
+}
+object RDMapping extends RDMappings
+{
+   override lazy val config = Config.instance
 }

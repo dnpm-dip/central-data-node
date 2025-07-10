@@ -2,10 +2,7 @@ package de.dnpm.ccdn.core
 
 
 import scala.util.chaining._
-import java.time.{
-  LocalDate,
-  YearMonth
-}
+import java.time.YearMonth
 import de.dnpm.ccdn.core.bfarm._
 import de.dnpm.dip.coding.{
   CodedEnum,
@@ -19,7 +16,7 @@ import de.dnpm.dip.model.{
   Gender,
   Id,
   NGSReport,
-  Patient
+  PatientRecord
 }
 import de.dnpm.dip.service.mvh
 import de.dnpm.dip.service.mvh.{
@@ -30,7 +27,7 @@ import de.dnpm.dip.util.mapping.syntax._
 import shapeless.Witness
 
 
-trait Mappings
+trait Mappings[RecordType <: PatientRecord]
 {
 
   val config: Config
@@ -73,21 +70,6 @@ trait Mappings
     _.toString.replace("chr","")
      .pipe(bfarm.Chromosome.withName)
 
-/*
-  protected implicit def sequencingType[E <: CodedEnum with MolecularDiagnostics.Type](
-    implicit seqType: Witness.Aux[E]
-  ): seqType.value.Value => SequencingType.Value =
-    Map(
-      seqType.value.GenomeLongRead  -> SequencingType.WGSLr,
-      seqType.value.GenomeShortRead -> SequencingType.WGS,
-      seqType.value.Exome           -> SequencingType.WES,
-      seqType.value.Panel           -> SequencingType.Panel
-    )
-    .orElse {
-      case _ => SequencingType.None
-    }
-*/
-
 
   protected implicit val sequencingType: NGSReport.Type.Value => SequencingType.Value =
     Map(
@@ -113,9 +95,25 @@ trait Mappings
     )
   }
 
-  protected implicit def metadataMapping[CP <: CarePlan]: ((Patient,LocalDate,CP,Submission.Metadata)) => Metadata = {
 
-    case (patient,date,carePlan,metadata) =>
+  protected def performedSequencingType(record: RecordType): SequencingType.Value =
+    record.ngsReports match {
+
+      case Some(reports) if !record.getCarePlans.exists(_.noSequencingPerformedReason.isDefined) => 
+        // Pick the type of the last performed NGS report containing variants, to exclude empty variant reports
+        reports
+          .sortBy(_.issuedOn)
+          .findLast(_.variants.nonEmpty)
+          .map(_.`type`.mapTo[SequencingType.Value])
+          .getOrElse(SequencingType.None)
+
+      case _ => SequencingType.None
+    }
+    
+
+  protected implicit val alternativeMetadataMapping: Submission[RecordType] => Metadata = {
+
+    case Submission(record,metadata,datetime) =>
     
       import Metadata._
 
@@ -132,18 +130,20 @@ trait Mappings
           mvh.ModelProjectConsent.Purpose.CaseIdentification -> MVConsent.Scope.Domain.CaseIdentification
         )
 
-    val Gender(gender) = patient.gender
+
+    val mvhCarePlan = record.getCarePlans.minBy(_.issuedOn)  // minBy safe here, because validation ensures non-empty careplan list vor MVH submissions 
 
     Metadata(
       Metadata.Submission(
-        date,
+        datetime.toLocalDate,
         metadata.`type`,
-        config.submitterId(patient.managingSite.get.code),
+        config.submitterId(record.patient.managingSite.get.code),
         config.dataNodeIds(useCase),
- Some(config.gdcId(patient.managingSite.get.code)),  //TODO
+        Option.when(performedSequencingType(record) != SequencingType.None)(
+          config.gdcId(record.patient.managingSite.get.code)),
         useCase.mapTo[DiseaseType.Value]
       ),
-      patient.healthInsurance.`type`.code,
+      record.patient.healthInsurance.`type`.code,
       Metadata.MVConsent(
         metadata.modelProjectConsent.date,
         metadata.modelProjectConsent.version,
@@ -165,12 +165,12 @@ trait Mappings
         )
       ),
       metadata.transferTAN,
-      gender,
-      YearMonth.from(patient.birthDate),
-      patient.address.municipalityCode,
-      carePlan.noSequencingPerformedReason.isEmpty,
-      carePlan.issuedOn,
-      carePlan.noSequencingPerformedReason.map(_.mapTo[RejectionJustification.Value]),
+      Gender.unapply(record.patient.gender).get,  // .get call safe here
+      YearMonth.from(record.patient.birthDate),
+      record.patient.address.map(_.municipalityCode.value).getOrElse(""),
+      mvhCarePlan.noSequencingPerformedReason.isEmpty,
+      mvhCarePlan.issuedOn,
+      mvhCarePlan.noSequencingPerformedReason.map(_.mapTo[RejectionJustification.Value]),
     )
   }
 
