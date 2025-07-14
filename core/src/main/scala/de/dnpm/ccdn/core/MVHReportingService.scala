@@ -1,12 +1,19 @@
 package de.dnpm.ccdn.core
 
 
-import java.time.LocalDateTime
+import java.time.{
+  LocalDateTime,
+  LocalTime
+}
+import java.time.temporal.ChronoUnit
 import java.util.concurrent.{
   Executors,
   ScheduledExecutorService
 }
-import java.util.concurrent.{Future => JavaFuture}
+import java.util.concurrent.{
+  Future => JavaFuture,
+  TimeUnit
+}
 import scala.concurrent.{
   Future,
   ExecutionContext
@@ -72,6 +79,13 @@ extends Logging
 
   private var scheduledTask: Option[JavaFuture[_]] = None
 
+  private val toSeconds =
+    Map(
+      TimeUnit.SECONDS -> 1,
+      TimeUnit.MINUTES -> 60,
+      TimeUnit.HOURS   -> 3600,
+      TimeUnit.HOURS   -> 86400,
+    )
 
   def start(): Unit = {
 
@@ -79,13 +93,12 @@ extends Logging
     log.info(s"Active Use Cases: ${config.activeUseCases.mkString(", ")}")
     log.info(s"Active sites: ${config.sites.keys.toList.sortBy(_.value).mkString(", ")}")
 
-/*
     val delay =
       config.polling.startTime
-        .map(ChronoUnit.SECONDS.between(OffsetTime.now.toLocalTime,_))
+        .map(ChronoUnit.SECONDS.between(LocalTime.now,_))
         .map {
           case d if d >= 0 => d
-          case d           => d + 3600*24  // offset by 1 day
+          case d           => d + 86400  // offset by 1 day
         }
         .getOrElse(0L)  
 
@@ -93,7 +106,7 @@ extends Logging
       config.polling.period*toSeconds(config.polling.timeUnit)
 
     log.info(s"Scheduling report polling to start in $delay s with $period s period")   
-*/
+
 
     scheduledTask =
       Some(
@@ -108,9 +121,9 @@ extends Logging
             } yield ()
             ()
           },
-          0,
-          config.polling.period,
-          config.polling.timeUnit
+          delay,
+          period,
+          TimeUnit.SECONDS
         )
       )
    
@@ -151,48 +164,6 @@ extends Logging
         report.healthInsuranceType,
       )
   }
-
-/*
-  private val TESTBfarmReport: Submission.Report => bfarm.SubmissionReport = {
-
-    import de.dnpm.dip.service.mvh.UseCase._
-    import bfarm.SubmissionReport.LibraryType
-    import bfarm.SubmissionReport.DiseaseType._
-    import NGSReport.Type._
-    import java.time.LocalDate
-    import java.time.Month.JANUARY
-    import scala.util.Random
-    import de.dnpm.dip.model.Id
-
-    report =>
-
-      val tan =
-        report.id.value match {
-          case tan if tan.size >= 42 => tan.take(42)
-          case x                     => List.fill((42 % tan.size) + 1)(x).mkString.take(42)
-        }
-
-      bfarm.SubmissionReport(
-        LocalDate.of(2001,JANUARY,1),
-        report.`type`,
-        Id(s"TEST${config.dataNodeIds(report.useCase)}${config.submitterId(report.site.code)}${Random.nextString(42)}"),
-        config.submitterId(report.site.code),
-        config.dataNodeIds(report.useCase),
-        report.useCase match { 
-          case MTB => Oncological
-          case RD  => Rare
-        },
-        report.sequencingType.collect { 
-          case GenomeLongRead  => LibraryType.WGSLr
-          case GenomeShortRead => LibraryType.WGS
-          case Exome           => LibraryType.WES
-          case Panel           => LibraryType.Panel
-        }
-        .getOrElse(bfarm.SubmissionReport.LibraryType.Undefined),
-        report.healthInsuranceType,
-      )
-  }
-*/
 
 
 //  private[core] def pollReports: Future[Seq[Either[String,Seq[Submission.Report]]]] =

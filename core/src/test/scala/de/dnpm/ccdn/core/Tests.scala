@@ -22,8 +22,7 @@ final class Tests extends AsyncFlatSpec
       bfarmConnector
     )
 
-
-  "Dummy" must "..." in {
+  "Dummy test" must "succeed" in {
 
     for {
       

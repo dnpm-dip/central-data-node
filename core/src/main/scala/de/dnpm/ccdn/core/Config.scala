@@ -3,7 +3,6 @@ package de.dnpm.ccdn.core
 
 import java.io.FileInputStream
 import java.time.LocalTime
-//import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 import scala.util.chaining._
 import play.api.libs.json.{
