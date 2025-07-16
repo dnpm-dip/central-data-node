@@ -61,7 +61,7 @@ trait RDMappings extends Mappings[RDPatientRecord]
         record.hpoTerms.map(_.value),
         record.diagnoses.toList.flatMap(_.onsetDate).minOption
           .orElse(record.hpoTerms.toList.flatMap(_.onsetDate).minOption)
-          .getOrElse(YearMonth.of(0,JANUARY)),
+          .getOrElse(YearMonth.of(1800,JANUARY)),
         record.carePlans.map(_.issuedOn).toList.min,
         record.diagnoses
           .toList

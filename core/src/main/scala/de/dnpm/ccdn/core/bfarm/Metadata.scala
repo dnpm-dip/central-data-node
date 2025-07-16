@@ -16,6 +16,7 @@ import de.dnpm.dip.model.{
   Gender,
   HealthInsurance,
   Id,
+  Patient,
   Site
 }
 import de.dnpm.dip.service.mvh
@@ -46,6 +47,7 @@ final case class Metadata
   mvConsent: Metadata.MVConsent,
   researchConsents: Option[List[Metadata.ResearchConsent]],
   tanC: Id[TransferTAN],
+  localCaseId: Id[Patient],
   gender: Gender.Value,
   birthDate: YearMonth,
   addressAGS: String,
@@ -61,7 +63,6 @@ object Metadata
   {
     val Oncological = Value("oncological")
     val Rare        = Value("rare")
-//    val HT            = Value("hereditary")  // Irrelevant for us
  
     implicit val format: Format[Value] =
       Json.formatEnum(this)

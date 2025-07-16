@@ -96,26 +96,21 @@ trait Mappings[RecordType <: PatientRecord]
   }
 
 
+  import mvh.extensions._
+
   protected def performedSequencingType(record: RecordType): SequencingType.Value =
-    record.ngsReports match {
+    record.mvhSequencingReports
+      .maxByOption(_.issuedOn)
+      .map(_.`type`.mapTo[SequencingType.Value])
+      .getOrElse(SequencingType.None)
 
-      case Some(reports) if !record.getCarePlans.exists(_.noSequencingPerformedReason.isDefined) => 
-        // Pick the type of the last performed NGS report containing variants, to exclude empty variant reports
-        reports
-          .sortBy(_.issuedOn)
-          .findLast(_.variants.nonEmpty)
-          .map(_.`type`.mapTo[SequencingType.Value])
-          .getOrElse(SequencingType.None)
-
-      case _ => SequencingType.None
-    }
-    
 
   protected implicit val alternativeMetadataMapping: Submission[RecordType] => Metadata = {
 
     case Submission(record,metadata,datetime) =>
     
       import Metadata._
+
 
       implicit val consentProvisionType: mvh.Consent.Provision.Type.Value => MVConsent.Scope.Type.Value =
         Map(
@@ -140,7 +135,8 @@ trait Mappings[RecordType <: PatientRecord]
         config.submitterId(record.patient.managingSite.get.code),
         config.dataNodeIds(useCase),
         Option.when(performedSequencingType(record) != SequencingType.None)(
-          config.gdcId(record.patient.managingSite.get.code)),
+          config.gdcId(record.patient.managingSite.get.code)
+        ),
         useCase.mapTo[DiseaseType.Value]
       ),
       record.patient.healthInsurance.`type`.code,
@@ -165,6 +161,7 @@ trait Mappings[RecordType <: PatientRecord]
         )
       ),
       metadata.transferTAN,
+      record.patient.id,
       Gender.unapply(record.patient.gender).get,  // .get call safe here
       YearMonth.from(record.patient.birthDate),
       record.patient.address.map(_.municipalityCode.value).getOrElse(""),
