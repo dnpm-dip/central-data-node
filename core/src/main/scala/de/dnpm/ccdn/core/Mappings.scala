@@ -161,7 +161,7 @@ trait Mappings[RecordType <: PatientRecord]
         )
       ),
       metadata.transferTAN,
-      record.patient.id,
+      None,  // Don't transmit Patient.id (for now)
       Gender.unapply(record.patient.gender).get,  // .get call safe here
       YearMonth.from(record.patient.birthDate),
       record.patient.address.map(_.municipalityCode.value).getOrElse(""),

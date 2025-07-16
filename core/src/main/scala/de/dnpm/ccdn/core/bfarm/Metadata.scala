@@ -47,7 +47,7 @@ final case class Metadata
   mvConsent: Metadata.MVConsent,
   researchConsents: Option[List[Metadata.ResearchConsent]],
   tanC: Id[TransferTAN],
-  localCaseId: Id[Patient],
+  localCaseId: Option[Id[Patient]],
   gender: Gender.Value,
   birthDate: YearMonth,
   addressAGS: String,
