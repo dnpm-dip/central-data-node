@@ -104,7 +104,7 @@ import BfArMConnectorImpl._
 final class BfArMConnectorImpl
 (
   private val config: Config,
-  private val wsclient: WSClient,
+  private val wsclient: WSClient
 )
 extends bfarm.Connector
 with Logging
@@ -117,10 +117,88 @@ with Logging
   private val timeout =
     config.timeout.getOrElse(10) seconds
 
+
   private val executor =
     Executors.newSingleThreadScheduledExecutor
 
 
+  private val token: AtomicReference[Option[Token]] =
+    new AtomicReference(None)
+
+
+  private val expire: Runnable =
+    () => token.set(None)
+
+
+  private def getToken: Future[Token] = {
+
+    import scala.concurrent.ExecutionContext.Implicits.global
+
+    log.info("Getting API token")
+
+    wsclient
+      .url(config.authURL)
+      .withRequestTimeout(timeout)
+      .post(
+        Map(
+          "grant_type"    -> Seq("client_credentials"),
+          "client_id"     -> Seq(config.clientId),
+          "client_secret" -> Seq(config.clientSecret)
+        )
+      )
+      .map(_.body[JsValue].as[Token])
+      .andThen {
+        case Success(tkn) =>
+          token.set(Some(tkn))
+          executor.schedule(expire, tkn.expires_in - 5, SECONDS)
+
+        case Failure(t) =>
+          log.error("Failed to get BfArM API token",t)
+      }
+  }
+
+
+  private def request(
+    url: String
+  )(
+    implicit ec: ExecutionContext
+  ): Future[WSRequest] =
+    token.get
+      .fold(
+        getToken
+      )(
+        Future.successful
+      )
+      .map(tkn =>
+        wsclient.url(url)
+          .withHttpHeaders("Authorization" -> s"${tkn.token_type} ${tkn.access_token}")
+          .withRequestTimeout(timeout)
+      )
+
+  override def upload(
+    report: SubmissionReport
+  )(
+    implicit ec: ExecutionContext
+  ): Future[Either[String,Unit]] =
+    for {
+      req <- request(config.apiURL)
+
+      _ = log.info(s"Uploading SubmissionReport ${report.SubmittedCase.tan}")
+
+      resp <- req.post(Json.toJson(report))
+
+      result <- resp.status match {
+        case 200 => Future.successful(().asRight)
+        case 401 => upload(report)
+        case _   =>
+          val err = resp.body[JsValue].as[Error]
+          Future.successful(s"${err.statusCode} ${err.error}: ${err.message}".asLeft)
+      }
+
+    } yield result
+
+
+/*
   private def getToken: Future[Token] = {
 
     import scala.concurrent.ExecutionContext.Implicits.global
@@ -159,44 +237,6 @@ with Logging
     )
 
 
-/*
-  private def request(
-    rawUri: String
-  )(
-    implicit ec: ExecutionContext
-  ): Future[WSRequest] = {
-    val uri = 
-      if (rawUri startsWith "/") rawUri.substring(1)
-      else rawUri
-
-    token.get.map(
-      tkn =>
-        wsclient.url(s"${config.apiBaseURL}/$uri")
-          .withHttpHeaders("Authorization" -> s"${tkn.token_type} ${tkn.access_token}")
-          .withRequestTimeout(timeout)
-    )
-  }
-
-  override def upload(
-    report: SubmissionReport
-  )(
-    implicit ec: ExecutionContext
-  ): Future[Either[String,Unit]] =
-    for {
-      req <- request("api/upload")
-
-      _ = log.info(s"Uploading SubmissionReport ${report.SubmittedCase.tan}")
-
-      resp <- req.post(Json.toJson(report))
-
-    } yield resp.status match {
-      case 200 => ().asRight
-      case _   =>
-        val err = resp.body[JsValue].as[Error]
-        s"${err.statusCode} ${err.error}: ${err.message}".asLeft
-    }
-*/
-
   private def request(
     url: String
   )(
@@ -208,6 +248,7 @@ with Logging
           .withHttpHeaders("Authorization" -> s"${tkn.token_type} ${tkn.access_token}")
           .withRequestTimeout(timeout)
     )
+
 
   override def upload(
     report: SubmissionReport
@@ -227,5 +268,6 @@ with Logging
         val err = resp.body[JsValue].as[Error]
         s"${err.statusCode} ${err.error}: ${err.message}".asLeft
     }
+*/
 
 }

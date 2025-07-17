@@ -217,7 +217,7 @@ extends Logging
           .upload(BfarmReport(report))
           .flatMap {
             case Right(_) =>
-              log.debug(s"Upload successful, Site: ${report.site.code} TAN = ${report.id} - confirming submission")
+              log.info(s"Upload successful, Site: ${report.site.code} TAN: ${report.id} - confirming submission")
               dipConnector.confirmSubmitted(report)
 
             case err @ Left(msg) =>
@@ -229,7 +229,7 @@ extends Logging
               log.debug("Submission confirmation successful")
               queue.remove(report)
           }
-          // Recover lest the Future.sequence be "short-circuited" into a failed Future 
+          // Recover lest the Future traversal be "short-circuited" into a failed Future 
           .recover {
             case t =>
               log.error(s"Problem confirming submission: ${t.getMessage}")
