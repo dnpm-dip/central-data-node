@@ -60,12 +60,8 @@ trait MTBMappings extends Mappings[MTBPatientRecord]
       val diagnoses = record.diagnoses.toList
 
       val (mainDiagnosis,otherDiagnoses) = 
-        diagnoses.partition {
-          d =>
-            val MTBDiagnosis.Type(t) = d.`type`.latestBy(_.date).value
-            t == MTBDiagnosis.Type.Main
-        }
-        .pipe { case (mains,others) => (mains.head,others) }
+        diagnoses.partition(_.`type`.latestBy(_.date).value.code.enumValue == MTBDiagnosis.Type.Main)
+          .pipe { case (mains,others) => (mains.head,others) }
 
       val germlineDiagnoses =
         Option(
@@ -153,7 +149,7 @@ trait MTBMappings extends Mappings[MTBPatientRecord]
         .maxByOption(_.issuedOn)
         .map(
           report => OncologyCase.PriorDiagnostics(
-            report.`type`.mapTo[DiagnosticType.Value],
+            report.`type`.code.enumValue.mapTo[DiagnosticType.Value],
             Some(report.issuedOn),
             // Simple and Copy Number Variants not represented in MTB-KDS PRIOR molecular diagnostics
             None,
@@ -196,7 +192,7 @@ trait MTBMappings extends Mappings[MTBPatientRecord]
         therapy.period.map(_.start),
         therapy.period.flatMap(_.endOption),
         therapy.medication.map(_.mapAllTo[Substance]),
-        therapy.statusReason.map(_.mapTo[TerminationReason.Value]),
+        therapy.statusReason.map(_.code.enumValue.mapTo[TerminationReason.Value]),
         responses
           .collectFirst { 
             case r if r.therapy.id == therapy.id => r.value
@@ -364,6 +360,7 @@ trait MTBMappings extends Mappings[MTBPatientRecord]
           recommendation
             .useType
             .getOrElse(Coding(UseType.Unknown))
+            .code.enumValue
             .mapTo[SystemicTherapyRecommendation.Type.Value],
           recommendation.medication.mapAllTo[Substance],
           recommendation.levelOfEvidence
@@ -500,11 +497,11 @@ trait MTBMappings extends Mappings[MTBPatientRecord]
             therapy.id,
             therapy.period.get.start,
             therapy.period.flatMap(_.endOption),
-            therapy.statusReason.map(_.mapTo[TerminationReason.Value]),
+            therapy.statusReason.map(_.code.enumValue.mapTo[TerminationReason.Value]),
             therapy.medication,
             response.map(_.effectiveDate),
             response
-              .map(_.value.mapTo[RECIST.Value])
+              .map(_.value.code.enumValue)
               .collect(standardRecist)
           )
     
@@ -521,12 +518,9 @@ trait MTBMappings extends Mappings[MTBPatientRecord]
        implicit val responses = record.getResponses
 
        val metachronousTumors =
-         record.diagnoses.filter {
-           d =>
-             val MTBDiagnosis.Type(t) = d.`type`.latestBy(_.date).value
-             t == MTBDiagnosis.Type.Metachronous
-         }
-
+         record.diagnoses.filter(
+           _.`type`.latestBy(_.date).value.code.enumValue == MTBDiagnosis.Type.Metachronous
+         )
        Some(
          OncologyFollowUps(
            NonEmptyList.of(
@@ -547,7 +541,7 @@ trait MTBMappings extends Mappings[MTBPatientRecord]
                record.getPerformanceStatus.maxByOption(_.effectiveDate)
                  .map(_.value.code)
                  .getOrElse(Code[ECOG.Value]("unknown")),
-               record.patient.vitalStatus.mapTo[VitalStatus.Value],
+               record.patient.vitalStatus.code.enumValue.mapTo[VitalStatus.Value],
                record.followUps
                  .getOrElse(List.empty)
                  .filter(

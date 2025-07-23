@@ -4,16 +4,11 @@ package de.dnpm.ccdn.core
 import scala.util.chaining._
 import java.time.YearMonth
 import de.dnpm.ccdn.core.bfarm._
-import de.dnpm.dip.coding.{
-  CodedEnum,
-  Coding
-}
 import de.dnpm.dip.model
 import de.dnpm.dip.model.{
   Chromosome,
   CarePlan,
   ExternalId,
-  Gender,
   Id,
   NGSReport,
   PatientRecord
@@ -24,7 +19,6 @@ import de.dnpm.dip.service.mvh.{
   UseCase
 }
 import de.dnpm.dip.util.mapping.syntax._
-import shapeless.Witness
 
 
 trait Mappings[RecordType <: PatientRecord]
@@ -50,21 +44,6 @@ trait Mappings[RecordType <: PatientRecord]
       UseCase.MTB -> bfarm.Metadata.DiseaseType.Oncological,
       UseCase.RD  -> bfarm.Metadata.DiseaseType.Rare
     )
-
-  protected implicit def enumCodingToValue[E <: CodedEnum](
-    implicit w: Witness.Aux[E]
-  ): Coding[E#Value] => E#Value =
-    coding =>
-      w.value.unapply(coding.code.value).get
-
-  protected implicit def enumCodingToTargetValue[E <: CodedEnum,T](
-    implicit
-    w: Witness.Aux[E],
-    f: E#Value => T
-  ): Coding[E#Value] => T =
-    coding =>
-      f(w.value.unapply(coding.code.value).get)
-
 
   protected implicit val chromosomeMapping: Chromosome.Value => bfarm.Chromosome.Value =
     _.toString.replace("chr","")
@@ -101,7 +80,7 @@ trait Mappings[RecordType <: PatientRecord]
   protected def performedSequencingType(record: RecordType): SequencingType.Value =
     record.mvhSequencingReports
       .maxByOption(_.issuedOn)
-      .map(_.`type`.mapTo[SequencingType.Value])
+      .map(_.`type`.code.enumValue.mapTo[SequencingType.Value])
       .getOrElse(SequencingType.None)
 
 
@@ -162,12 +141,12 @@ trait Mappings[RecordType <: PatientRecord]
       ),
       metadata.transferTAN,
       None,  // Don't transmit Patient.id (for now)
-      Gender.unapply(record.patient.gender).get,  // .get call safe here
+      record.patient.gender.code,  // .get call safe here
       YearMonth.from(record.patient.birthDate),
       record.patient.address.map(_.municipalityCode.value).getOrElse(""),
       mvhCarePlan.noSequencingPerformedReason.isEmpty,
       mvhCarePlan.issuedOn,
-      mvhCarePlan.noSequencingPerformedReason.map(_.mapTo[RejectionJustification.Value]),
+      mvhCarePlan.noSequencingPerformedReason.map(_.code.enumValue.mapTo[RejectionJustification.Value]),
     )
   }
 

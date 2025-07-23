@@ -7,8 +7,7 @@ import java.time.Month.JANUARY
 import cats.data.NonEmptyList
 import de.dnpm.ccdn.core.bfarm.{
   DiagnosticType,
-  Metadata,
-  VitalStatus
+  Metadata
 }
 import de.dnpm.ccdn.core.bfarm.rd._
 import de.dnpm.dip.coding.Coding
@@ -153,19 +152,19 @@ trait RDMappings extends Mappings[RDPatientRecord]
 
       PriorRD(
         priorDiagnostics
-          .map(_.`type`.mapTo[DiagnosticType.Value])
+          .map(_.`type`.code.enumValue.mapTo[DiagnosticType.Value])
           .getOrElse(DiagnosticType.NonePerformed),
         RDDiagnosis.FamilyControlLevel.Single.mapTo[PriorRD.Extent.Value],  //TODO!!!!!!
         priorDiagnostics.map(_.issuedOn),
         priorDiagnostics
           .flatMap(_.conclusion)
-          .map(_.mapTo[PriorRD.DiagnosticAssessment.Value])
+          .map(_.code.enumValue.mapTo[PriorRD.DiagnosticAssessment.Value])
           .getOrElse(PriorRD.DiagnosticAssessment.Other),
         hospitalization
-          .map(_.numberOfStays.mapTo[Hospitalizations.Value])
+          .map(_.numberOfStays.code.enumValue.mapTo[Hospitalizations.Value])
           .getOrElse(Hospitalizations.Unknown),
         hospitalization
-          .map(_.numberOfDays.mapTo[HospitalizationDays.Value])
+          .map(_.numberOfDays.code.enumValue.mapTo[HospitalizationDays.Value])
           .getOrElse(HospitalizationDays.Unknown),
         YearMonth.from(
           episodes.toList
@@ -242,8 +241,8 @@ trait RDMappings extends Mappings[RDPatientRecord]
  
     implicit val acmgCriterion: ACMG.Criterion => RDMolecular.ACMGCriterion =
       crit => RDMolecular.ACMGCriterion(
-        crit.value.mapTo[ACMG.Criterion.Type.Value],
-        crit.modifier.map(_.mapTo[ACMG.Criterion.Modifier.Value])
+        crit.value.code.enumValue,
+        crit.modifier.map(_.code.enumValue)
       )
  
     implicit val smallVariantMapping: SmallVariant => RDMolecular.SmallVariant =
@@ -255,16 +254,16 @@ trait RDMappings extends Mappings[RDPatientRecord]
         sv.endPosition,
         sv.ref,
         sv.alt,
-        sv.localization.map(_.mapAllTo[Coding[Localization.Value]]),
+        sv.localization.map(_.map(_.code.enumValue.mapTo[Coding[Localization.Value]])),
         sv.cDNAChange,
         sv.gDNAChange,
         sv.proteinChange,
-        sv.acmgClass.map(_.mapTo[ACMG.Class.Value]),
+        sv.acmgClass.map(_.code.enumValue),
         sv.acmgCriteria.map(_.mapAllTo[RDMolecular.ACMGCriterion]),
-        sv.zygosity.map(_.mapTo[Variant.Zygosity.Value]),
-        sv.segregationAnalysis.map(_.mapTo[SegregationAnalysis.Value]),
-        sv.modeOfInheritance.map(_.mapTo[ModeOfInheritance.Value]),
-        sv.significance.map(_.mapTo[Variant.Significance.Value]),
+        sv.zygosity.map(_.code.enumValue),
+        sv.segregationAnalysis.map(_.code.enumValue),
+        sv.modeOfInheritance.map(_.code.enumValue),
+        sv.significance.map(_.code.enumValue),
         sv.externalIds.flatMap(_.headOption).map(_.value),
         sv.publications.map(_.map(_.id))
       )
@@ -273,17 +272,17 @@ trait RDMappings extends Mappings[RDPatientRecord]
       sv => RDMolecular.StructuralVariant(
         sv.id,
         sv.genes,
-        sv.localization.map(_.mapAllTo[Coding[Localization.Value]]),
+        sv.localization.map(_.map(_.code.enumValue.mapTo[Coding[Localization.Value]])),
         sv.cDNAChange,
         sv.gDNAChange,
         sv.proteinChange,
         sv.iscnDescription,
-        sv.acmgClass.map(_.mapTo[ACMG.Class.Value]),
+        sv.acmgClass.map(_.code.enumValue),
         sv.acmgCriteria.map(_.mapAllTo[RDMolecular.ACMGCriterion]),
-        sv.zygosity.map(_.mapTo[Variant.Zygosity.Value]),
-        sv.segregationAnalysis.map(_.mapTo[SegregationAnalysis.Value]),
-        sv.modeOfInheritance.map(_.mapTo[ModeOfInheritance.Value]),
-        sv.significance.map(_.mapTo[Variant.Significance.Value]),
+        sv.zygosity.map(_.code.enumValue),
+        sv.segregationAnalysis.map(_.code.enumValue),
+        sv.modeOfInheritance.map(_.code.enumValue),
+        sv.significance.map(_.code.enumValue),
         sv.externalIds.flatMap(_.headOption).map(_.value),
         sv.publications.map(_.map(_.id))
       )
@@ -295,17 +294,17 @@ trait RDMappings extends Mappings[RDPatientRecord]
         cnv.chromosome.mapTo[Chromosome.Value],
         cnv.startPosition,
         cnv.endPosition,
-        cnv.`type`.mapTo[CopyNumberVariant.Type.Value],  
-        cnv.localization.map(_.mapAllTo[Coding[Localization.Value]]),
+        cnv.`type`.code.enumValue.mapTo[CopyNumberVariant.Type.Value],  
+        cnv.localization.map(_.map(_.code.enumValue.mapTo[Coding[Localization.Value]])),
         cnv.cDNAChange,
         cnv.gDNAChange,
         cnv.proteinChange,
-        cnv.acmgClass.map(_.mapTo[ACMG.Class.Value]),
+        cnv.acmgClass.map(_.code.enumValue),
         cnv.acmgCriteria.map(_.mapAllTo[RDMolecular.ACMGCriterion]),
-        cnv.zygosity.map(_.mapTo[Variant.Zygosity.Value]),
-        cnv.segregationAnalysis.map(_.mapTo[SegregationAnalysis.Value]),
-        cnv.modeOfInheritance.map(_.mapTo[ModeOfInheritance.Value]),
-        cnv.significance.map(_.mapTo[Variant.Significance.Value]),
+        cnv.zygosity.map(_.code.enumValue),
+        cnv.segregationAnalysis.map(_.code.enumValue),
+        cnv.modeOfInheritance.map(_.code.enumValue),
+        cnv.significance.map(_.code.enumValue),
         cnv.externalIds.flatMap(_.headOption).map(_.value),
         cnv.publications.map(_.map(_.id))
       )
@@ -393,7 +392,7 @@ trait RDMappings extends Mappings[RDPatientRecord]
       rec => RDPlan.TherapyRecommendation(
         rec.id,
         rec.category.code,
-        rec.`type`.mapTo[RDPlan.TherapyRecommendation.Strategy.Value],
+        rec.`type`.code.enumValue.mapTo[RDPlan.TherapyRecommendation.Strategy.Value],
         None,
         rec.supportingVariants.map(_.map(_.variant.id))
       )
@@ -410,7 +409,7 @@ trait RDMappings extends Mappings[RDPatientRecord]
             carePlan.therapyRecommendations.exists(_.nonEmpty),
             carePlan.clinicalManagementRecommendation.isDefined,
             carePlan.clinicalManagementRecommendation
-              .map(_.`type`.mapTo[RDPlan.CarePlan.ClinicalManagementDescription.Value])
+              .map(_.`type`.code.enumValue.mapTo[RDPlan.CarePlan.ClinicalManagementDescription.Value])
               .map(Set(_))
           )
         ),
@@ -453,7 +452,7 @@ trait RDMappings extends Mappings[RDPatientRecord]
                 case Some(st) =>
                   RDFollowUp.PhenotypeChange(
                     hpo.value,
-                    st.status.mapTo[RDFollowUp.PhenotypeChange.Value]
+                    st.status.code.enumValue.mapTo[RDFollowUp.PhenotypeChange.Value]
                   )
                 case None =>
                   RDFollowUp.PhenotypeChange(
@@ -472,10 +471,10 @@ trait RDMappings extends Mappings[RDPatientRecord]
           ),
           gmfcs.map(_.value.code),
           record.diagnoses
-            .map(_.verificationStatus.mapTo[RDDiagnosis.VerificationStatus.Value])
+            .map(_.verificationStatus.code.enumValue)
             .exists(s => s == Confirmed || s == Partial),
           record.diagnoses.head.notes.flatMap(_.lastOption),
-          record.patient.vitalStatus.mapTo[VitalStatus.Value],
+          record.patient.vitalStatus.code.enumValue,
           record.patient.dateOfDeath
         )
 

@@ -25,7 +25,7 @@ import de.dnpm.ccdn.core.dip
 import de.dnpm.ccdn.core.bfarm
 import de.dnpm.dip.model.{
   NGSReport,
-  Period
+//  Period
 }
 import de.dnpm.dip.service.mvh.Submission
 
@@ -34,6 +34,14 @@ object MVHReportingService
 {
 
   import scala.concurrent.ExecutionContext.Implicits.global
+
+/*
+  private implicit val executor: ScheduledExecutorService =
+    Executors.newScheduledThreadPool(4)
+
+  private implicit val ec: ExecutionContext =
+    ExecutionContext.fromExecutorService(executor)
+*/
 
   private lazy val service =
     new MVHReportingService(
@@ -69,13 +77,16 @@ class MVHReportingService
   dipConnector: dip.Connector,
   bfarmConnector: bfarm.Connector
 )(
-  implicit ec: ExecutionContext
+  implicit
+  ec: ExecutionContext
+//  executor: ScheduledExecutorService
 )
 extends Logging
 {
 
   private val executor: ScheduledExecutorService =
     Executors.newSingleThreadScheduledExecutor
+
 
   private var scheduledTask: Option[JavaFuture[_]] = None
 
@@ -183,8 +194,8 @@ extends Logging
               site,
               useCase,
               Submission.Report.Filter(
-                queue.lastPollingTime(site).map(t => Period(t)),
-                Some(Set(Submission.Report.Status.Unsubmitted))
+//                queue.lastPollingTime(site).map(t => Period(t)),
+                status = Some(Set(Submission.Report.Status.Unsubmitted))
               )
             )
             .andThen { 
@@ -217,11 +228,11 @@ extends Logging
           .upload(BfarmReport(report))
           .flatMap {
             case Right(_) =>
-              log.info(s"Upload successful, Site: ${report.site.code} TAN: ${report.id} - confirming submission")
+              log.info(s"Upload successful: Site ${report.site.code}, TAN ${report.id} - confirming submission")
               dipConnector.confirmSubmitted(report)
 
             case err @ Left(msg) =>
-              log.error(s"Problem uploading report, Site: ${report.site.code} TAN: ${report.id} - $msg")
+              log.error(s"Problem uploading report: Site ${report.site.code}, TAN ${report.id} - $msg")
               Future.successful(err)
           }
           .andThen {

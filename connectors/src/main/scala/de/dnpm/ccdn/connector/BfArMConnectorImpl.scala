@@ -121,7 +121,6 @@ with Logging
   private val executor =
     Executors.newSingleThreadScheduledExecutor
 
-
   private val token: AtomicReference[Option[Token]] =
     new AtomicReference(None)
 
@@ -130,6 +129,7 @@ with Logging
     () => token.set(None)
 
 
+//  private def getToken: Future[Either[Error,Token]] = {
   private def getToken: Future[Token] = {
 
     import scala.concurrent.ExecutionContext.Implicits.global
@@ -146,14 +146,25 @@ with Logging
           "client_secret" -> Seq(config.clientSecret)
         )
       )
-      .map(_.body[JsValue].as[Token])
+      .map(
+        resp => resp.status match {
+          case 200 => resp.body[JsValue].as[Token].asRight
+          case _   => resp.body[JsValue].as[Error].asLeft
+        }
+      )
       .andThen {
-        case Success(tkn) =>
+        case Success(Right(tkn)) =>
           token.set(Some(tkn))
           executor.schedule(expire, tkn.expires_in - 5, SECONDS)
 
+        case Success(Left(err)) =>
+          log.error(s"Failed to get BfArM API token: ${err.statusCode} ${err.error}: ${err.message}")
+
         case Failure(t) =>
           log.error("Failed to get BfArM API token",t)
+      }
+      .collect { 
+        case Right(tkn) => tkn
       }
   }
 
