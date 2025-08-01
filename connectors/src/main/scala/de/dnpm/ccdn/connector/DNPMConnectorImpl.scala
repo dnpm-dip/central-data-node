@@ -231,10 +231,10 @@ with Logging
     }
     .get()
     .map(
-      _.body[JsValue]
-       .as[Collection[Submission.Report]]
-       .entries
-       .asRight
+      resp => resp.status match {
+        case 200 => resp.body[JsValue].as[Collection[Submission.Report]].entries.asRight
+        case _   => s"Site ${site}, Use Case $useCase: SubmissionReport polling failed with status ${resp.status} ${resp.statusText}".asLeft
+      }
     )
     .recover {
       case t => t.getMessage.asLeft
@@ -252,9 +252,9 @@ with Logging
     )
     .execute("POST")
     .map(
-      r => r.status match {
+      resp => resp.status match {
         case 200 => ().asRight
-        case _   => s"Error confirming submission of report ${report.id.value}: Status ${r.status}".asLeft
+        case _   => s"Submission confirmation of report ${report.id.value} failed with status ${resp.status} ${resp.statusText}".asLeft
       } 
     )
 

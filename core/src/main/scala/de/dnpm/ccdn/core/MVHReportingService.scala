@@ -35,14 +35,6 @@ object MVHReportingService
 
   import scala.concurrent.ExecutionContext.Implicits.global
 
-/*
-  private implicit val executor: ScheduledExecutorService =
-    Executors.newScheduledThreadPool(4)
-
-  private implicit val ec: ExecutionContext =
-    ExecutionContext.fromExecutorService(executor)
-*/
-
   private lazy val service =
     new MVHReportingService(
       Config.instance,
@@ -77,9 +69,7 @@ class MVHReportingService
   dipConnector: dip.Connector,
   bfarmConnector: bfarm.Connector
 )(
-  implicit
-  ec: ExecutionContext
-//  executor: ScheduledExecutorService
+  implicit ec: ExecutionContext
 )
 extends Logging
 {
@@ -95,7 +85,7 @@ extends Logging
       TimeUnit.SECONDS -> 1,
       TimeUnit.MINUTES -> 60,
       TimeUnit.HOURS   -> 3600,
-      TimeUnit.HOURS   -> 86400,
+      TimeUnit.DAYS    -> 86400,
     )
 
   def start(): Unit = {
@@ -104,17 +94,18 @@ extends Logging
     log.info(s"Active Use Cases: ${config.activeUseCases.mkString(", ")}")
     log.info(s"Active sites: ${config.sites.keys.toList.sortBy(_.value).mkString(", ")}")
 
+    val period =
+      config.polling.period*toSeconds(config.polling.timeUnit)
+
     val delay =
       config.polling.startTime
         .map(ChronoUnit.SECONDS.between(LocalTime.now,_))
-        .map {
-          case d if d >= 0 => d
-          case d           => d + 86400  // offset by 1 day
+        .collect {
+          case delta if delta >= 0            => delta
+          case delta if (86400 % period == 0) => period - (math.abs(delta) % period) 
+          case delta                          => delta + 86400
         }
         .getOrElse(0L)  
-
-    val period =
-      config.polling.period*toSeconds(config.polling.timeUnit)
 
     log.info(s"Scheduling report polling to start in $delay s with $period s period")   
 
@@ -124,9 +115,9 @@ extends Logging
         executor.scheduleAtFixedRate(
           () => {
             for {
-              _ <- uploadReports  // Start by draining the report queue, in case the service had been interrupted and
-                                  // it thus contains reports whose upload hasn't been confirmed to the origin DIP,
-                                  // in order to avoid polling them again
+              // Start by draining the report queue, if non-empty (in case the service had been interrupted) and
+              // it thus contains reports whose upload hasn't been confirmed to the origin DIP), in order to avoid polling them again
+              _ <- if (queue.nonEmpty) uploadReports else Future.unit
               _ <- pollReports
               _ <- uploadReports
             } yield ()
