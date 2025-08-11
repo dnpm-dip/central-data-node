@@ -18,8 +18,8 @@ defaults:
     shell: bash
 
 jobs:
-  release:
-    name: Release
+  assembly:
+    name: Assembly
     runs-on: ubuntu-latest
 
     steps:
@@ -49,7 +49,29 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.release.outputs['major'] }}.${{ steps.release.outputs['minor'] }}.${{ steps.release.outputs['patch'] }}
-        run: sbt assembly && mv ./core/target/scala-2.13/dnpm-ccdn-core.jar . && mv ./connectors/target/scala-2.13/dnpm-ccdn-connectors.jar . && pwd && ls -l .
+        run: |
+          sbt assembly
+          mv ./core/target/scala-2.13/dnpm-ccdn-core.jar .
+          mv ./connectors/target/scala-2.13/dnpm-ccdn-connectors.jar .
+          pwd
+          ls -l .
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccdn_jars
+          path: |
+            dnpm-ccdn-core.jar
+            dnpm-ccdn-connectors.jar
+
+  docker-release:
+    name: build-and-release
+    runs-on: ubuntu-latest
+    needs: assembly
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ccdn_jars
 
       - name: Build and release Docker image
         #        if: steps.release.outputs.releases_created == 'true'
