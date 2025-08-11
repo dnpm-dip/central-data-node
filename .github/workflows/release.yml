@@ -58,9 +58,9 @@ jobs:
            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
              #           VERSION: ${{ steps.release.outputs['major'] }}.${{ steps.release.outputs['minor'] }}.${{ steps.release.outputs['patch'] }}
         with:
-          buildArgs: |
-            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
-            #            VERSION=${{ env.VERSION }}
+          #          buildArgs: |
+          #            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+          #            VERSION=${{ env.VERSION }}
           registryTag: |
             latest
             #            ${{ env.VERSION }}
