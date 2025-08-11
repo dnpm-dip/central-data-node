@@ -151,6 +151,7 @@ lazy val commonSettings = Seq(
   resolvers ++= Seq(
     "Local Maven Repository" at "file://" + Path.userHome.absolutePath + "/.m2/repository",
     Resolver.githubPackages("dnpm-dip"),
+    Resolver.githubPackages("KohlbacherLab"),
     Resolver.sonatypeCentralSnapshots
   )
 
