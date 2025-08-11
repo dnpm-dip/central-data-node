@@ -56,7 +56,7 @@ jobs:
         uses: tada5hi/action-docker-image-publish@v3
         env:
            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-           VERSION: ${{ steps.release.outputs['major'] }}.${{ steps.release.outputs['minor'] }}.${{ steps.release.outputs['patch'] }}
+             #           VERSION: ${{ steps.release.outputs['major'] }}.${{ steps.release.outputs['minor'] }}.${{ steps.release.outputs['patch'] }}
         with:
           buildArgs: |
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
