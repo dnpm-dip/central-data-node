@@ -23,10 +23,7 @@ import cats.syntax.either._
 import de.dnpm.dip.util.Logging
 import de.dnpm.ccdn.core.dip
 import de.dnpm.ccdn.core.bfarm
-import de.dnpm.dip.model.{
-  NGSReport,
-//  Period
-}
+import de.dnpm.dip.model.NGSReport
 import de.dnpm.dip.service.mvh.Submission
 
 

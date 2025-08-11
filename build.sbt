@@ -3,13 +3,17 @@
 name := "dnpm-ccdn"  // Central Clinical Data Node
 ThisBuild / organization := "de.dnpm"
 ThisBuild / scalaVersion := "2.13.16"
-ThisBuild / version      := "1.0-SNAPSHOT"
+ThisBuild / version      := envOrElse("VERSION","1.0.0")
+
+val ownerRepo  = envOrElse("REPOSITORY","dnpm-dip/central-data-node").split("/")
+ThisBuild / githubOwner      := ownerRepo(0)
+ThisBuild / githubRepository := ownerRepo(1)
+
 
 ThisBuild / assemblyMergeStrategy := {
   case PathList("META-INF", "services", xs @ _*) => MergeStrategy.first
   case PathList("META-INF", xs @ _*)             => MergeStrategy.discard
   case "reference.conf"                          => MergeStrategy.concat
-//  case _                                         => MergeStrategy.deduplicate
   case _                                         => MergeStrategy.last
 }
 
@@ -42,12 +46,6 @@ lazy val core = project
       dependencies.rd_dtos,
       dependencies.service_base
     ),
-/*
-    excludeDependencies ++= Seq(
-      ExclusionRule("com.github.andyglow","scala-jsonschema-play-json"),
-      ExclusionRule("com.typesafe.play", "play-json")
-    ),
-*/
     assembly / assemblyJarName := "dnpm-ccdn-core.jar",
     assembly / mainClass       := Some("de.dnpm.ccdn.core.MVHReportingService")
   )
@@ -89,9 +87,9 @@ lazy val dependencies =
     val logback      = "ch.qos.logback"    %  "logback-classic"         % "1.5.18"
     val play_ahc     = "org.playframework" %% "play-ahc-ws-standalone"  % "3.0.7"
     val play_ahc_js  = "org.playframework" %% "play-ws-standalone-json" % "3.0.7"
-    val service_base = "de.dnpm.dip"       %% "service-base"            % "1.0-SNAPSHOT"
-    val mtb_dtos     = "de.dnpm.dip"       %% "mtb-dto-model"           % "1.0-SNAPSHOT"
-    val rd_dtos      = "de.dnpm.dip"       %% "rd-dto-model"            % "1.0-SNAPSHOT"
+    val service_base = "de.dnpm.dip"       %% "service-base"            % "1.0.0"
+    val mtb_dtos     = "de.dnpm.dip"       %% "mtb-dto-model"           % "1.0.0"
+    val rd_dtos      = "de.dnpm.dip"       %% "rd-dto-model"            % "1.0.0"
   }
 
 
@@ -144,17 +142,16 @@ lazy val compilerOptions = Seq(
   "-Wunused:privates",
   "-Wunused:implicits",
   "-Wvalue-discard",
-
-  // Deactivated to avoid many false positives from 'evidence' parameters in context bounds
-//  "-Wunused:params",
 )
 
 
 lazy val commonSettings = Seq(
   scalacOptions ++= compilerOptions,
-  resolvers ++= 
-    Seq("Local Maven Repository" at "file://" + Path.userHome.absolutePath + "/.m2/repository") ++
-    Resolver.sonatypeOssRepos("releases") ++
-    Resolver.sonatypeOssRepos("snapshots")
+  resolvers ++= Seq(
+    "Local Maven Repository" at "file://" + Path.userHome.absolutePath + "/.m2/repository",
+    Resolver.githubPackages("dnpm-dip"),
+    Resolver.sonatypeCentralSnapshots
+  )
+
 )
 
