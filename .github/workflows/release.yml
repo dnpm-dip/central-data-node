@@ -49,7 +49,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.release.outputs['major'] }}.${{ steps.release.outputs['minor'] }}.${{ steps.release.outputs['patch'] }}
-        run: sbt assembly
+        run: sbt assembly && ls -l .
 
       - name: Build and release Docker image
         #        if: steps.release.outputs.releases_created == 'true'
