@@ -10,7 +10,7 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 permissions:
   contents: read
   packages: write
-    #  pull-requests: write
+  pull-requests: write
     #  issues: write
   id-token: write
   attestations: write
@@ -29,28 +29,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      #      - uses: googleapis/release-please-action@v4
-      #        id: release
-      #        with:
-      #          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout
-        #        if: steps.release.outputs.releases_created == 'true'
+        if: steps.release.outputs.releases_created == 'true'
         uses: actions/checkout@v4
 
       - name: Setup JDK
-        #        if: steps.release.outputs.releases_created == 'true'
+        if: steps.release.outputs.releases_created == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 11
 
       - name: Setup sbt launcher
-        #        if: steps.release.outputs.releases_created == 'true'
+        if: steps.release.outputs.releases_created == 'true'
         uses: sbt/setup-sbt@v1
 
       - name: Assembly
-        #        if: steps.release.outputs.releases_created == 'true'
+        if: steps.release.outputs.releases_created == 'true'
         env:
           REPOSITORY: ${{ github.repository }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -61,6 +61,7 @@ jobs:
           mv ./connectors/target/scala-2.13/dnpm-ccdn-connectors.jar .
 
       - name: Log in to the Container registry
+        if: steps.release.outputs.releases_created == 'true'
         uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
         with:
           registry: ${{ env.REGISTRY }}
@@ -68,6 +69,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
+        if: steps.release.outputs.releases_created == 'true'
         id: push
         uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
         with:
@@ -76,40 +78,9 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
       - name: Generate artifact attestation
+        if: steps.release.outputs.releases_created == 'true'
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME}}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true            
-
-            #      - name: Upload artifacts
-            #        uses: actions/upload-artifact@v4
-            #        with:
-            #          name: ccdn_jars
-            #          path: |
-            #            dnpm-ccdn-core.jar
-            #            dnpm-ccdn-connectors.jar
-
-            #  docker-release:
-            #    name: build-and-release
-            #    runs-on: ubuntu-latest
-            #    needs: assembly
-            #    steps:
-            #      - name: Download artifacts
-            #        uses: actions/download-artifact@v4
-            #        with:
-            #          name: ccdn_jars
-            #
-            #      - name: Build and release Docker image
-            #        #        if: steps.release.outputs.releases_created == 'true'
-            #        uses: tada5hi/action-docker-image-publish@v3
-            #        env:
-            #           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            #             #           VERSION: ${{ steps.release.outputs['major'] }}.${{ steps.release.outputs['minor'] }}.${{ steps.release.outputs['patch'] }}
-            #        with:
-            #          #          buildArgs: |
-            #          #            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
-            #          #            VERSION=${{ env.VERSION }}
-            #          registryTag: |
-            #            latest
-            #            ${{ env.VERSION }}

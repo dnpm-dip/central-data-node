@@ -2,8 +2,6 @@ FROM openjdk:21
 
 COPY ./dnpm-ccdn-core.jar  /opt/
 COPY ./dnpm-ccdn-connectors.jar /opt/connectors/
-#COPY ./core/target/scala-2.13/dnpm-ccdn-core.jar  /opt/
-#COPY ./connectors/target/scala-2.13/dnpm-ccdn-connectors.jar /opt/connectors/
 COPY --chmod=755 entrypoint.sh /
 
 LABEL org.opencontainers.image.licenses=MIT
