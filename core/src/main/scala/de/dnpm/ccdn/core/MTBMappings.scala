@@ -434,7 +434,7 @@ trait MTBMappings extends Mappings[MTBPatientRecord]
                  counsellingRecommended = carePlans.exists(_.geneticCounselingRecommendation.isDefined),
                  reEvaluationRecommended = carePlans.exists(_.histologyReevaluationRequests.exists(_.nonEmpty)),
                  interventionRecommended = false,  // Not in MTB-KDS
-                 suitableInterventions  = None,  // Not in MTB-KDS
+                 suitableInterventions  = None,    // Not in MTB-KDS
                  otherRecommendations =
                    carePlans
                      .flatMap(_.procedureRecommendations.getOrElse(List.empty))

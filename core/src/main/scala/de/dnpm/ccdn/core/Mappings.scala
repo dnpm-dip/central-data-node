@@ -141,7 +141,7 @@ trait Mappings[RecordType <: PatientRecord]
       ),
       metadata.transferTAN,
       None,  // Don't transmit Patient.id (for now)
-      record.patient.gender.code,  // .get call safe here
+      record.patient.gender.code,
       YearMonth.from(record.patient.birthDate),
       record.patient.address.map(_.municipalityCode.value).getOrElse(""),
       mvhCarePlan.noSequencingPerformedReason.isEmpty,

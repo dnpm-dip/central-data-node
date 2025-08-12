@@ -44,7 +44,6 @@ object FSBackedReportQueue extends Logging
 {
 
   private val PROP = "ccdn.queue.dir"
-
   private val ENV = "CCDN_QUEUE_DIR"
 
   lazy val instance =
