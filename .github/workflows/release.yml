@@ -24,8 +24,8 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  assembly:
-    name: Assembly
+  release:
+    name: Release
     runs-on: ubuntu-latest
 
     steps:
