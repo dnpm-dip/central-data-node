@@ -23,7 +23,7 @@ import de.dnpm.dip.rd.model.{
 }
 import de.dnpm.ccdn.core.bfarm.{
   DiagnosticType,
-  SequencingType
+  LibraryType
 }
 import play.api.libs.json.{
   Json,
@@ -50,7 +50,6 @@ final case class RDCase
   priorRd: Option[RDCase.PriorRD]
 )
 
-
 object RDCase
 {
 
@@ -64,7 +63,7 @@ object RDCase
     diagnoses: NonEmptyList[Coding[RDDiagnosis.Systems]],
     noMatchingCodeExists: Option[Boolean],
     diagnosisGmfcs: Option[Code[GMFCS.Value]],
-    libraryType: SequencingType.Value
+    libraryType: LibraryType.Value
   )
 
 

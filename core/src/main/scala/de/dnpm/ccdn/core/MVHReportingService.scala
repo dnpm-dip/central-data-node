@@ -138,7 +138,7 @@ extends Logging
   private val BfarmReport: Submission.Report => bfarm.SubmissionReport = {
 
     import de.dnpm.dip.service.mvh.UseCase._
-    import bfarm.SubmissionReport.LibraryType
+    import bfarm.LibraryType
     import bfarm.SubmissionReport.DiseaseType._
     import NGSReport.Type._
 
@@ -159,13 +159,12 @@ extends Logging
           case Exome           => LibraryType.WES
           case Panel           => LibraryType.Panel
         }
-        .getOrElse(bfarm.SubmissionReport.LibraryType.Undefined),
-        report.healthInsuranceType,
+        .getOrElse(LibraryType.None),
+        report.healthInsuranceType
       )
   }
 
 
-//  private[core] def pollReports: Future[Seq[Either[String,Seq[Submission.Report]]]] =
   private[core] def pollReports: Future[Any] =
     Future.traverse(
       config.sites.toList.sortBy(_._1.value)
@@ -182,7 +181,6 @@ extends Logging
               site,
               useCase,
               Submission.Report.Filter(
-//                queue.lastPollingTime(site).map(t => Period(t)),
                 status = Some(Set(Submission.Report.Status.Unsubmitted))
               )
             )

@@ -55,7 +55,7 @@ object SubmissionReport
       Json.formatEnum(this)
   }
 
-
+/*
   object LibraryType extends Enumeration
   {
     val Panel     = Value("panel")
@@ -67,7 +67,7 @@ object SubmissionReport
     implicit val format: Format[LibraryType.Value] =
       Json.formatEnum(this)
   }
-
+*/
 
   final case class Case
   (

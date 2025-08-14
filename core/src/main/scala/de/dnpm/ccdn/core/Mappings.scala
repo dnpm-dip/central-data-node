@@ -50,15 +50,15 @@ trait Mappings[RecordType <: PatientRecord]
      .pipe(bfarm.Chromosome.withName)
 
 
-  protected implicit val sequencingType: NGSReport.Type.Value => SequencingType.Value =
+  protected implicit val sequencingType: NGSReport.Type.Value => LibraryType.Value =
     Map(
-      NGSReport.Type.GenomeLongRead  -> SequencingType.WGSLr,
-      NGSReport.Type.GenomeShortRead -> SequencingType.WGS,
-      NGSReport.Type.Exome           -> SequencingType.WES, 
-      NGSReport.Type.Panel           -> SequencingType.Panel
+      NGSReport.Type.GenomeLongRead  -> LibraryType.WGSLr,
+      NGSReport.Type.GenomeShortRead -> LibraryType.WGS,
+      NGSReport.Type.Exome           -> LibraryType.WES, 
+      NGSReport.Type.Panel           -> LibraryType.Panel
     )
     .orElse {
-      case _ => SequencingType.None
+      case _ => LibraryType.None
     }
 
 
@@ -77,11 +77,11 @@ trait Mappings[RecordType <: PatientRecord]
 
   import mvh.extensions._
 
-  protected def performedSequencingType(record: RecordType): SequencingType.Value =
+  protected def performedSequencingType(record: RecordType): LibraryType.Value =
     record.mvhSequencingReports
       .maxByOption(_.issuedOn)
-      .map(_.`type`.code.enumValue.mapTo[SequencingType.Value])
-      .getOrElse(SequencingType.None)
+      .map(_.`type`.code.enumValue.mapTo[LibraryType.Value])
+      .getOrElse(LibraryType.None)
 
 
   protected implicit val alternativeMetadataMapping: Submission[RecordType] => Metadata = {
@@ -113,7 +113,7 @@ trait Mappings[RecordType <: PatientRecord]
         metadata.`type`,
         config.submitterId(record.patient.managingSite.get.code),
         config.dataNodeIds(useCase),
-        Option.when(performedSequencingType(record) != SequencingType.None)(
+        Option.when(performedSequencingType(record) != LibraryType.None)(
           config.gdcId(record.patient.managingSite.get.code)
         ),
         useCase.mapTo[DiseaseType.Value]

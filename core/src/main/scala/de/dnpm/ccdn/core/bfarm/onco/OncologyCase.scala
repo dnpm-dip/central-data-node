@@ -23,7 +23,7 @@ import de.dnpm.dip.mtb.model.{
 }
 import de.dnpm.ccdn.core.bfarm.{
   DiagnosticType,
-  SequencingType
+  LibraryType
 }
 import play.api.libs.json.{
   Json,
@@ -65,7 +65,7 @@ object OncologyCase
     grading: Option[Code[OBDSGrading.Value]],
     tnmClassifications: Option[Set[Coding[TumorStaging.TNM.Systems]]],
     additionalClassification: Option[List[KeyCoding[TumorStaging.OtherSystems]]],
-    libraryType: SequencingType.Value
+    libraryType: LibraryType.Value
   )
 
   object Diagnosis

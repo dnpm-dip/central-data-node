@@ -18,6 +18,7 @@ import de.dnpm.dip.service.mvh.Submission
 import de.dnpm.dip.service.mvh.TransferTAN
 import de.dnpm.ccdn.core.bfarm.{
   CDN,
+  LibraryType,
   SubmissionReport
 }
 import de.dnpm.ccdn.connector.BfArMConnectorImpl
@@ -37,7 +38,7 @@ object Uploader extends Logging
       Id[Site]("260840108"),
       Id[CDN]("KDKTUE005"),
       SubmissionReport.DiseaseType.Oncological,
-      SubmissionReport.LibraryType.WGSLr,
+      LibraryType.WGSLr,
       HealthInsurance.Type.UNK,
     )
 
