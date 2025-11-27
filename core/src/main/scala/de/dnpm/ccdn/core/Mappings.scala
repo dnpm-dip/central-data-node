@@ -105,7 +105,8 @@ trait Mappings[RecordType <: PatientRecord]
         )
 
 
-    val mvhCarePlan = record.getCarePlans.minBy(_.issuedOn)  // minBy safe here, because validation ensures non-empty careplan list vor MVH submissions 
+//    val mvhCarePlan = record.getCarePlans.minBy(_.issuedOn)  // minBy safe here, because validation ensures non-empty careplan list for MVH submissions 
+    val mvhCarePlan = record.mvhCarePlan.get  // .get safe here, because validation ensures non-empty careplan list for MVH submissions 
 
     Metadata(
       Metadata.Submission(

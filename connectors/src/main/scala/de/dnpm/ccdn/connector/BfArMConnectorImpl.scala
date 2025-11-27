@@ -129,7 +129,6 @@ with Logging
     () => token.set(None)
 
 
-//  private def getToken: Future[Either[Error,Token]] = {
   private def getToken: Future[Token] = {
 
     import scala.concurrent.ExecutionContext.Implicits.global
