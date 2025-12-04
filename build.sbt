@@ -88,9 +88,9 @@ lazy val dependencies =
     val logback      = "ch.qos.logback"    %  "logback-classic"         % "1.5.18"
     val play_ahc     = "org.playframework" %% "play-ahc-ws-standalone"  % "3.0.7"
     val play_ahc_js  = "org.playframework" %% "play-ws-standalone-json" % "3.0.7"
-    val service_base = "de.dnpm.dip"       %% "service-base"            % "1.0.0"
-    val mtb_dtos     = "de.dnpm.dip"       %% "mtb-dto-model"           % "1.0.0"
-    val rd_dtos      = "de.dnpm.dip"       %% "rd-dto-model"            % "1.0.0"
+    val service_base = "de.dnpm.dip"       %% "service-base"            % "1.2.0"
+    val mtb_dtos     = "de.dnpm.dip"       %% "mtb-dto-model"           % "1.1.2"
+    val rd_dtos      = "de.dnpm.dip"       %% "rd-dto-model"            % "1.1.2"
   }
 
 
