@@ -237,7 +237,7 @@ extends Logging
 
   private[core] def confirmSubmissions: Future[Seq[Either[String,Unit]]] = {
 
-    log.info("Uploading SubmissionReports...")
+    log.info("Confirming report submissions...")
    
     Future.traverse(
       queue.entries(_.status == Submitted)

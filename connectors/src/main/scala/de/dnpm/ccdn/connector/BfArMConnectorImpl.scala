@@ -153,6 +153,7 @@ with Logging
       )
       .andThen {
         case Success(Right(tkn)) =>
+          log.info(s"Updating API token reference and scheduling expiration in ${tkn.expires_in} s")
           token.set(Some(tkn))
           executor.schedule(expire, tkn.expires_in - 5, SECONDS)
 
@@ -194,7 +195,7 @@ with Logging
     for {
       req <- request(config.apiURL)
 
-      _ = log.info(s"Uploading SubmissionReport ${report.SubmittedCase.tan}")
+      _ = log.debug(s"Uploading SubmissionReport ${report.SubmittedCase.tan}")
 
       resp <- req.post(Json.toJson(report))
 
