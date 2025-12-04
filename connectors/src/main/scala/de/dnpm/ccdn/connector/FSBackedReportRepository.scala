@@ -60,17 +60,15 @@ object FSBackedReportRepository extends Logging
   private val ENV = "CCDN_QUEUE_DIR"
 
   lazy val instance =
-    Try(
-      envOrNone(ENV).orElse(propOrNone(PROP)).get
-    )
-    .map(new File(_))
-    .map(new FSBackedReportRepository(_))
-    .recoverWith { 
-      case t =>
-        log.error(s"Couldn't set up Report Repository, most likely due to undefined property '$ENV'",t)
-        Failure(t)
-    }
-    .get
+    Try(envOrNone(ENV).orElse(propOrNone(PROP)).get)
+      .map(new File(_))
+      .map(new FSBackedReportRepository(_))
+      .recoverWith { 
+        case t =>
+          log.error(s"Couldn't set up Report Repository, most likely due to undefined property '$ENV'",t)
+          Failure(t)
+      }
+      .get
 }   
 
 
