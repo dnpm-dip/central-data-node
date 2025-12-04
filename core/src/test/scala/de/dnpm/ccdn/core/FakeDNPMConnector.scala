@@ -50,7 +50,10 @@ object FakeDIPConnector extends dip.Connector
       useCase,
       Submission.Type.Initial,
       Some(NGSReport.Type.GenomeLongRead),
-      HealthInsurance.Type.UNK
+      None,
+      HealthInsurance.Type.UNK,
+      None,
+      None
     )
 
 

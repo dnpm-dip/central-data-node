@@ -19,6 +19,7 @@ import de.dnpm.dip.service.mvh.{
   UseCase
 }
 import de.dnpm.dip.util.mapping.syntax._
+import play.api.libs.json.Json
 
 
 trait Mappings[RecordType <: PatientRecord]
@@ -136,7 +137,7 @@ trait Mappings[RecordType <: PatientRecord]
           bc => ResearchConsent(
             "2025.0.1",
             bc.date,
-            bc.value
+            Json.toJson(bc)
           )
         )
       ),

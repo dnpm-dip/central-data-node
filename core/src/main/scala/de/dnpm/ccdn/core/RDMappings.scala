@@ -66,7 +66,7 @@ trait RDMappings extends Mappings[RDPatientRecord]
         record.mvhCarePlan.get.issuedOn,
         record.diagnoses
           .toList
-          .map(_.familyControlLevel.code.enumValue)
+          .flatMap(_.familyControlLevel.map(_.code.enumValue))
           .max
           .mapTo[Diagnosis.Extent.Value],
         record.diagnoses.toList
@@ -475,7 +475,7 @@ trait RDMappings extends Mappings[RDPatientRecord]
             .exists(s => s == Confirmed || s == Partial),
           record.diagnoses.head.notes.flatMap(_.lastOption),
           record.patient.vitalStatus.code.enumValue,
-          record.patient.dateOfDeath
+          record.patient.dateOfDeath.map(_.atEndOfMonth)
         )
 
       } yield RDFollowUps(

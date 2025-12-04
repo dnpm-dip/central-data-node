@@ -7,7 +7,8 @@ import java.time.{
 }
 import play.api.libs.json.{
   Json,
-  JsObject,
+//  JsObject,
+  JsValue,
   Format,
   OFormat
 }
@@ -147,8 +148,8 @@ object Metadata
   final case class ResearchConsent
   (
     schemaVersion: String,
-    presentationDate: Option[LocalDate],
-    scope: JsObject
+    presentationDate: LocalDate,
+    scope: JsValue
   )
 
   object ResearchConsent

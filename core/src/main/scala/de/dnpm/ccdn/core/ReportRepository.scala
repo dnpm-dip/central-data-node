@@ -1,55 +1,34 @@
 package de.dnpm.ccdn.core
 
 
-import java.time.LocalDateTime
+import cats.data.EitherNel
 import de.dnpm.dip.util.{
   SPI,
   SPILoader
 }
-import de.dnpm.dip.coding.Code
-import de.dnpm.dip.model.Site
 import de.dnpm.dip.service.mvh.Submission
 
 
-trait QueueOps[T]
+trait Repository[T]
 {
 
-  def setLastPollingTime(
-    site: Code[Site],
-    dt: LocalDateTime
-  ): this.type
+  def save(t: T): Either[String,Unit]
 
+  def save(ts: Seq[T]): EitherNel[T,Unit]
 
-  def lastPollingTime(
-    site: Code[Site]
-  ): Option[LocalDateTime]
+  def entries(filter: T => Boolean): Seq[T]
 
+  def exists(filter: T => Boolean): Boolean =
+    entries(filter).nonEmpty
 
-  def add(
-    t: T
-  ): this.type
-
-  def addAll(
-    ts: Seq[T]
-  ): this.type
-
-  def entries: Seq[T]
-
-  def remove(
-    t: T
-  ): this.type
-
-  def size: Int = this.entries.size
-
-  def isEmpty: Boolean = this.size == 0
-
-  def nonEmpty: Boolean = !this.isEmpty
+  def remove(t: T): Either[String,Unit]
 
 }
 
-trait ReportQueue extends QueueOps[Submission.Report]
 
-trait ReportQueueProvider extends SPI[ReportQueue]
+trait ReportRepository extends Repository[Submission.Report]
 
-object ReportQueue extends SPILoader[ReportQueueProvider]
+trait ReportRepositoryProvider extends SPI[ReportRepository]
+
+object ReportRepository extends SPILoader[ReportRepositoryProvider]
 

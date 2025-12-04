@@ -549,7 +549,7 @@ trait MTBMappings extends Mappings[MTBPatientRecord]
                  )
                  .maxByOption(_.date)
                  .map(_.date),
-               record.patient.dateOfDeath,
+               record.patient.dateOfDeath.map(_.atEndOfMonth),
                Option(
                  record.getSystemicTherapies.map(_.latest).mapTo[List[FollowUp.Therapy]]
                )
