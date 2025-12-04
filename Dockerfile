@@ -1,4 +1,4 @@
-FROM openjdk:21
+FROM amazoncorretto:21
 
 COPY ./dnpm-ccdn-core.jar  /opt/
 COPY ./dnpm-ccdn-connectors.jar /opt/connectors/
