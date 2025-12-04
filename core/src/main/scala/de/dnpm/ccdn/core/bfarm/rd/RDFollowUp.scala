@@ -11,7 +11,6 @@ import de.dnpm.dip.coding.{
   Code,
   Coding
 }
-//import de.dnpm.dip.model.VitalStatus
 import de.dnpm.ccdn.core.bfarm.VitalStatus
 import de.dnpm.dip.rd.model.{
   GMFCS,

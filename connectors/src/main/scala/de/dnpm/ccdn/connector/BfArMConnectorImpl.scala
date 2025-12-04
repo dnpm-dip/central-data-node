@@ -129,7 +129,6 @@ with Logging
     () => token.set(None)
 
 
-//  private def getToken: Future[Either[Error,Token]] = {
   private def getToken: Future[Token] = {
 
     import scala.concurrent.ExecutionContext.Implicits.global
@@ -185,6 +184,7 @@ with Logging
           .withHttpHeaders("Authorization" -> s"${tkn.token_type} ${tkn.access_token}")
           .withRequestTimeout(timeout)
       )
+
 
   override def upload(
     report: SubmissionReport

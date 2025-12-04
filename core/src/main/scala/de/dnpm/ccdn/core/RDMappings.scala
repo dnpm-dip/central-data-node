@@ -23,6 +23,8 @@ import RDCase.{
   Diagnosis, 
   PriorRD
 }
+import mvh.extensions._
+
 
 
 trait RDMappings extends Mappings[RDPatientRecord]
@@ -61,16 +63,14 @@ trait RDMappings extends Mappings[RDPatientRecord]
         record.diagnoses.toList.flatMap(_.onsetDate).minOption
           .orElse(record.hpoTerms.toList.flatMap(_.onsetDate).minOption)
           .getOrElse(YearMonth.of(1800,JANUARY)),
-        record.carePlans.map(_.issuedOn).toList.min,
+        record.mvhCarePlan.get.issuedOn,
         record.diagnoses
           .toList
-          .map(_.familyControlLevel)
-          .collect { case RDDiagnosis.FamilyControlLevel(v) => v } 
+          .flatMap(_.familyControlLevel.map(_.code.enumValue))
           .max
           .mapTo[Diagnosis.Extent.Value],
         record.diagnoses.toList
-          .map(_.verificationStatus)  
-          .collect { case RDDiagnosis.VerificationStatus(v) => v } 
+          .map(_.verificationStatus.code.enumValue)  
           .maxOption
           .getOrElse(RDDiagnosis.VerificationStatus.Unconfirmed)
           .mapTo[Diagnosis.Status.Value],
@@ -475,7 +475,7 @@ trait RDMappings extends Mappings[RDPatientRecord]
             .exists(s => s == Confirmed || s == Partial),
           record.diagnoses.head.notes.flatMap(_.lastOption),
           record.patient.vitalStatus.code.enumValue,
-          record.patient.dateOfDeath
+          record.patient.dateOfDeath.map(_.atEndOfMonth)
         )
 
       } yield RDFollowUps(

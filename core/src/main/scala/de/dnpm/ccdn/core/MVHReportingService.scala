@@ -1,10 +1,7 @@
 package de.dnpm.ccdn.core
 
 
-import java.time.{
-  LocalDateTime,
-  LocalTime
-}
+import java.time.LocalTime
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.{
   Executors,
@@ -25,6 +22,10 @@ import de.dnpm.ccdn.core.dip
 import de.dnpm.ccdn.core.bfarm
 import de.dnpm.dip.model.NGSReport
 import de.dnpm.dip.service.mvh.Submission
+import Submission.Report.Status.{
+  Submitted,
+  Unsubmitted
+}
 
 
 object MVHReportingService
@@ -35,7 +36,7 @@ object MVHReportingService
   private lazy val service =
     new MVHReportingService(
       Config.instance,
-      ReportQueue.getInstance.get,
+      ReportRepository.getInstance.get,
       dip.Connector.getInstance.get,
       bfarm.Connector.getInstance.get
     )
@@ -62,7 +63,7 @@ object MVHReportingService
 class MVHReportingService
 (
   config: Config,
-  queue: ReportQueue,
+  queue: ReportRepository,
   dipConnector: dip.Connector,
   bfarmConnector: bfarm.Connector
 )(
@@ -114,9 +115,11 @@ extends Logging
             for {
               // Start by draining the report queue, if non-empty (in case the service had been interrupted) and
               // it thus contains reports whose upload hasn't been confirmed to the origin DIP), in order to avoid polling them again
-              _ <- if (queue.nonEmpty) uploadReports else Future.unit
+              _ <- if (queue.exists(_.status == Unsubmitted)) uploadReports else Future.unit
+              _ <- if (queue.exists(_.status == Submitted)) confirmSubmissions else Future.unit
               _ <- pollReports
               _ <- uploadReports
+              _ <- confirmSubmissions
             } yield ()
             ()
           },
@@ -186,10 +189,8 @@ extends Logging
             )
             .andThen { 
               case Success(Right(reports)) =>
-                log.info(s"Enqueuing ${reports.size} $useCase reports")
-                queue
-                  .addAll(reports)
-                  .setLastPollingTime(site,LocalDateTime.now)
+                log.debug(s"Enqueuing ${reports.size} $useCase SubmissionReport")
+                queue.save(reports)
             
               case Success(Left(err)) =>
                 log.error(s"Problem polling $useCase SubmissionReports of site $site: $err")
@@ -208,32 +209,58 @@ extends Logging
 
     log.info("Uploading SubmissionReports...")
    
-    Future.traverse(queue.entries)(
+    Future.traverse(
+      queue.entries(_.status == Unsubmitted)
+    )(
       report =>
         bfarmConnector
           .upload(BfarmReport(report))
-          .flatMap {
+          .map {
             case Right(_) =>
-              log.info(s"Upload successful: Site ${report.site.code}, TAN ${report.id} - confirming submission")
-              dipConnector.confirmSubmitted(report)
+              log.info(s"SubmissionReport Uploaded: Site ${report.site.code}, TAN ${report.id}")
+              queue.save(report.copy(status = Submitted))
 
             case err @ Left(msg) =>
-              log.error(s"Problem uploading report: Site ${report.site.code}, TAN ${report.id} - $msg")
-              Future.successful(err)
-          }
-          .andThen {
-            case Success(Right(_)) =>
-              log.debug("Submission confirmation successful")
-              queue.remove(report)
+              log.error(s"Problem uploading SubmissionReport: Site ${report.site.code}, TAN ${report.id} - $msg")
+              err
           }
           // Recover lest the Future traversal be "short-circuited" into a failed Future 
           .recover {
             case t =>
-              log.error(s"Problem confirming submission: ${t.getMessage}")
+              log.error(s"Problem uploading SubmissionReport: Site ${report.site.code}, TAN ${report.id} - ${t.getMessage}")
               t.getMessage.asLeft
           }
     )
     
+  }
+
+
+  private[core] def confirmSubmissions: Future[Seq[Either[String,Unit]]] = {
+
+    log.info("Uploading SubmissionReports...")
+   
+    Future.traverse(
+      queue.entries(_.status == Submitted)
+    )(
+      report =>
+        dipConnector.confirmSubmitted(report)
+          .map {
+            case Right(_) =>
+              log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
+              queue.remove(report)
+
+            case err @ Left(msg) =>
+              log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - $msg")
+              err
+          }
+          // Recover lest the Future traversal be "short-circuited" into a failed Future 
+          .recover {
+            case t =>
+              log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - ${t.getMessage}")
+              t.getMessage.asLeft
+          }
+    )
+
   }
 
 }

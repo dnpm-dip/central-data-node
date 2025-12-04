@@ -4,7 +4,7 @@ package de.dnpm.ccdn.connector
 import java.nio.file.Files.createTempDirectory
 import scala.util.Failure
 import org.scalatest.flatspec.AnyFlatSpec
-import de.dnpm.ccdn.core.ReportQueue
+import de.dnpm.ccdn.core.ReportRepository
 import de.dnpm.ccdn.core.bfarm
 import de.dnpm.ccdn.core.dip
 
@@ -13,8 +13,7 @@ final class Tests extends AnyFlatSpec
 {
 
   val queueDir =
-    createTempDirectory("dnpm_ccdn_test_")
-      .toFile
+    createTempDirectory("dnpm_ccdn_test_").toFile
 
   System.setProperty("ccdn.dnpm.broker.baseurl","http://localhost")
   System.setProperty("ccdn.bfarm.api.url","http://localhost/bfarm")
@@ -31,7 +30,7 @@ final class Tests extends AnyFlatSpec
     bfarm.Connector.getInstance
 
   val reportQueue =
-    ReportQueue.getInstance
+    ReportRepository.getInstance
       .recoverWith { 
         case t =>
           t.printStackTrace
