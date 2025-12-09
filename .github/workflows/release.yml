@@ -7,13 +7,13 @@ on:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
-permissions:
-  contents: write
-  packages: write
-  pull-requests: write
-  issues: write
-  id-token: write
-  attestations: write
+permissions: write-all
+  #  contents: write
+  #  packages: write
+  #  pull-requests: write
+  #  issues: write
+  #  id-token: write
+  #  attestations: write
 
 defaults:
   run:
@@ -61,7 +61,6 @@ jobs:
           mv ./connectors/target/scala-2.13/dnpm-ccdn-connectors.jar .
 
       - name: Log in to the Container registry
-        if: steps.release.outputs.releases_created == 'true'
         uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
         with:
           registry: ${{ env.REGISTRY }}
