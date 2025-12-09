@@ -8,10 +8,7 @@ on:
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
-    #  packages: read
   contents: read
-    #  pull-requests: write
-    #  issues: write
 
 defaults:
   run:
