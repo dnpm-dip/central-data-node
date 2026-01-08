@@ -31,15 +31,7 @@ import play.api.libs.json.{
   Writes
 }
 import de.dnpm.dip.util.Logging
-import de.dnpm.dip.coding.Code
-import de.dnpm.dip.model.{
-  Id,
-  Site
-}
-import de.dnpm.dip.service.mvh.{
-  Submission,
-  TransferTAN
-}
+import de.dnpm.dip.service.mvh.Submission
 import de.dnpm.ccdn.core.{
   ReportRepository,
   ReportRepositoryProvider
@@ -79,9 +71,6 @@ extends ReportRepository
 with Logging
 {
 
-  type Key = (Code[Site],Id[TransferTAN])
-
-
   private val filePrefix = "Report"
 
   dir.mkdirs
@@ -102,10 +91,11 @@ with Logging
     )
 
 
-  private def file(
-    key: Key
-  ): File =
-    new File(dir,s"${filePrefix}_${key._1}_${key._2}.json")
+  private def file(report: Submission.Report): File = {
+    val (site,tan) = key(report)
+
+    new File(dir,s"${filePrefix}_${site}_${tan}.json")
+  }
     
     
   private def saveToFile[T: Writes](
@@ -123,23 +113,21 @@ with Logging
     
 
   override def saveIfAbsent(
-    key: Key,
     report: Submission.Report
   ): Either[String,Unit] =
-    cache.get(key) match {
+    cache.get(key(report)) match {
       case Some(_) => ().asRight
-      case None => replace(key,report)
+      case None => replace(report)
     }
 
 
   override def saveIfAbsent(
-    reports: Seq[Submission.Report],
-    key: Submission.Report => Key
+    reports: Seq[Submission.Report]
   ): EitherNel[Submission.Report,Unit] =
     NonEmptyList.fromList(
       reports.foldLeft(List.empty[Submission.Report])(
         (failures,report) =>
-          saveIfAbsent(key(report),report) match {
+          saveIfAbsent(report) match {
             case Right(_) => failures
             case Left(_)  => report :: failures
           }
@@ -149,11 +137,10 @@ with Logging
 
 
   override def replace(
-    key: Key,
     report: Submission.Report
   ): Either[String,Unit] =
-    Try(saveToFile(report,file(key)))
-      .map(_ => cache += key -> report)
+    Try(saveToFile(report,file(report)))
+      .map(_ => cache += key(report) -> report)
       .fold(
         _.getMessage.asLeft,
         _ => ().asRight
@@ -167,11 +154,11 @@ with Logging
 
 
   override def remove(
-    key: Key
+    report: Submission.Report
   ): Either[String,Unit] =
-    Try(file(key).delete)
+    Try(file(report).delete)
       .collect {
-        case true => cache -= key 
+        case true => cache -= key(report)
       }
       .fold(
         _.getMessage.asLeft,

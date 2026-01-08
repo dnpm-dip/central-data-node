@@ -6,15 +6,7 @@ import scala.collection.concurrent.{
   TrieMap
 }
 import cats.data.EitherNel
-import de.dnpm.dip.coding.Code
-import de.dnpm.dip.model.{
-  Id,
-  Site
-}
-import de.dnpm.dip.service.mvh.{
-  Submission,
-  TransferTAN
-}
+import de.dnpm.dip.service.mvh.Submission
 
 
 final class FakeReportRepositoryProvider extends ReportRepositoryProvider
@@ -26,33 +18,28 @@ final class FakeReportRepositoryProvider extends ReportRepositoryProvider
 object FakeReportRepository extends ReportRepository
 {
 
-  type Key = (Code[Site],Id[TransferTAN])
-
   private val cache: Map[Key,Submission.Report] =
     TrieMap.empty
 
 
   override def saveIfAbsent(
-    key: Key,
     report: Submission.Report
   ): Either[String,Unit] = {
-    cache.putIfAbsent(key,report)
+    cache.putIfAbsent(key(report),report)
     Right(())
   }
 
   override def saveIfAbsent(
     reports: Seq[Submission.Report],
-    key: Submission.Report => Key
   ): EitherNel[Submission.Report,Unit] = {
-    reports.foreach(r => saveIfAbsent(key(r),r))
+    reports.foreach(saveIfAbsent)
     Right(())
   }
 
   override def replace(
-    key: Key,
     report: Submission.Report
   ): Either[String,Unit] = {
-    cache += key -> report
+    cache += key(report) -> report
     Right(())
   }
 
@@ -60,8 +47,8 @@ object FakeReportRepository extends ReportRepository
     cache.values.filter(f).toSeq
 
 
-  override def remove(key: Key): Either[String,Unit] = {
-    cache -= key
+  override def remove(report: Submission.Report): Either[String,Unit] = {
+    cache -= key(report)
     Right(())
   }
 

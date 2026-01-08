@@ -168,8 +168,8 @@ extends Logging
   }
 
 
-  private def key(report: Submission.Report) =
-    report.site.code -> report.id
+//  private def key(report: Submission.Report) =
+//    report.site.code -> report.id
 
 
   private[core] def pollReports: Future[Any] =
@@ -194,7 +194,7 @@ extends Logging
             .andThen { 
               case Success(Right(reports)) =>
                 log.debug(s"Enqueuing ${reports.size} $useCase SubmissionReport")
-                queue.saveIfAbsent(reports,key(_))
+                queue.saveIfAbsent(reports)
             
               case Success(Left(err)) =>
                 log.error(s"Problem polling $useCase SubmissionReports of site $site: $err")
@@ -222,7 +222,7 @@ extends Logging
           .map {
             case Right(_) =>
               log.info(s"SubmissionReport Uploaded: Site ${report.site.code}, TAN ${report.id}")
-              queue.replace(key(report),report.copy(status = Submitted))
+              queue.replace(report.copy(status = Submitted))
 
             case err @ Left(msg) =>
               log.error(s"Problem uploading SubmissionReport: Site ${report.site.code}, TAN ${report.id} - $msg")
@@ -251,7 +251,7 @@ extends Logging
           .map {
             case Right(_) =>
               log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
-              queue.remove(key(report))
+              queue.remove(report)
 
             case err @ Left(msg) =>
               log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - $msg")
