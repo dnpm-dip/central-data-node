@@ -25,27 +25,43 @@ final class FakeReportRepositoryProvider extends ReportRepositoryProvider
 
 object FakeReportRepository extends ReportRepository
 {
-  
-  val queue: Map[(Code[Site],Id[TransferTAN]),Submission.Report] =
+
+  type Key = (Code[Site],Id[TransferTAN])
+
+  private val cache: Map[Key,Submission.Report] =
     TrieMap.empty
 
 
-  override def save(report: Submission.Report): Either[String,Unit] = {
-    queue += (report.site.code,report.id) -> report
+  override def saveIfAbsent(
+    key: Key,
+    report: Submission.Report
+  ): Either[String,Unit] = {
+    cache.putIfAbsent(key,report)
     Right(())
   }
 
-  override def save(reports: Seq[Submission.Report]): EitherNel[Submission.Report,Unit] = {
-    reports.foreach(save)
+  override def saveIfAbsent(
+    reports: Seq[Submission.Report],
+    key: Submission.Report => Key
+  ): EitherNel[Submission.Report,Unit] = {
+    reports.foreach(r => saveIfAbsent(key(r),r))
+    Right(())
+  }
+
+  override def replace(
+    key: Key,
+    report: Submission.Report
+  ): Either[String,Unit] = {
+    cache += key -> report
     Right(())
   }
 
   override def entries(f: Submission.Report => Boolean): Seq[Submission.Report] =
-    queue.values.filter(f).toSeq
+    cache.values.filter(f).toSeq
 
 
-  override def remove(report: Submission.Report): Either[String,Unit] = {
-    queue -= (report.site.code -> report.id)
+  override def remove(key: Key): Either[String,Unit] = {
+    cache -= key
     Right(())
   }
 

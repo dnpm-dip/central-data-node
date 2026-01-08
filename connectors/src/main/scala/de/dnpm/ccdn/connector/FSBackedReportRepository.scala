@@ -65,7 +65,7 @@ object FSBackedReportRepository extends Logging
       .map(new FSBackedReportRepository(_))
       .recoverWith { 
         case t =>
-          log.error(s"Couldn't set up Report Repository, most likely due to undefined property '$ENV'",t)
+          log.error(s"Couldn't set up Report Repository, most likely due to undefined environment variable '$ENV' or system property '$PROP'",t)
           Failure(t)
       }
       .get
@@ -78,11 +78,15 @@ final class FSBackedReportRepository(
 extends ReportRepository
 with Logging
 {
+
+  type Key = (Code[Site],Id[TransferTAN])
+
+
   private val filePrefix = "Report"
 
   dir.mkdirs
 
-  private val queue: Map[(Code[Site],Id[TransferTAN]),Submission.Report] =
+  private val cache: Map[Key,Submission.Report] =
     TrieMap.from(
       dir.listFiles(
         (_,name) => name.startsWith(filePrefix) && name.endsWith(".json")
@@ -99,12 +103,12 @@ with Logging
 
 
   private def file(
-    report: Submission.Report
+    key: Key
   ): File =
-    new File(dir,s"${filePrefix}_${report.site.code}_${report.id}.json")
+    new File(dir,s"${filePrefix}_${key._1}_${key._2}.json")
     
     
-  private def save[T: Writes](
+  private def saveToFile[T: Writes](
     t: T,
     file: File
   ): Unit = {
@@ -118,24 +122,24 @@ with Logging
   }
     
 
-  override def save(
+  override def saveIfAbsent(
+    key: Key,
     report: Submission.Report
   ): Either[String,Unit] =
-    Try(save(report,file(report)))
-      .map(_ => queue += (report.site.code,report.id) -> report)
-      .fold(
-        _.getMessage.asLeft,
-        _ => ().asRight
-      )
+    cache.get(key) match {
+      case Some(_) => ().asRight
+      case None => replace(key,report)
+    }
 
 
-  override def save(
-    reports: Seq[Submission.Report]
+  override def saveIfAbsent(
+    reports: Seq[Submission.Report],
+    key: Submission.Report => Key
   ): EitherNel[Submission.Report,Unit] =
     NonEmptyList.fromList(
       reports.foldLeft(List.empty[Submission.Report])(
         (failures,report) =>
-          save(report) match {
+          saveIfAbsent(key(report),report) match {
             case Right(_) => failures
             case Left(_)  => report :: failures
           }
@@ -144,18 +148,30 @@ with Logging
     .toLeft(())
 
 
+  override def replace(
+    key: Key,
+    report: Submission.Report
+  ): Either[String,Unit] =
+    Try(saveToFile(report,file(key)))
+      .map(_ => cache += key -> report)
+      .fold(
+        _.getMessage.asLeft,
+        _ => ().asRight
+      )
+
+
   override def entries(f: Submission.Report => Boolean): Seq[Submission.Report] =
-    queue.values
+    cache.values
       .filter(f)
       .toSeq
 
 
   override def remove(
-    report: Submission.Report
+    key: Key
   ): Either[String,Unit] =
-    Try(file(report).delete)
+    Try(file(key).delete)
       .collect {
-        case true => queue -= (report.site.code -> report.id) 
+        case true => cache -= key 
       }
       .fold(
         _.getMessage.asLeft,

@@ -6,29 +6,38 @@ import de.dnpm.dip.util.{
   SPI,
   SPILoader
 }
-import de.dnpm.dip.service.mvh.Submission
+import de.dnpm.dip.coding.Code
+import de.dnpm.dip.model.{
+  Id,
+  Site
+}
+import de.dnpm.dip.service.mvh.{
+  Submission,
+  TransferTAN
+}
 
 
-trait Repository[T]
+trait Repository[K,T]
 {
 
-  def save(t: T): Either[String,Unit]
+  def saveIfAbsent(key: K, t: T): Either[String,Unit]
 
-  def save(ts: Seq[T]): EitherNel[T,Unit]
+  def saveIfAbsent(ts: Seq[T], key: T => K): EitherNel[T,Unit]
+
+  def replace(key: K, t: T): Either[String,Unit]
 
   def entries(filter: T => Boolean): Seq[T]
 
   def exists(filter: T => Boolean): Boolean =
     entries(filter).nonEmpty
 
-  def remove(t: T): Either[String,Unit]
+  def remove(key: K): Either[String,Unit]
 
 }
 
 
-trait ReportRepository extends Repository[Submission.Report]
+trait ReportRepository extends Repository[(Code[Site],Id[TransferTAN]),Submission.Report]
 
 trait ReportRepositoryProvider extends SPI[ReportRepository]
 
 object ReportRepository extends SPILoader[ReportRepositoryProvider]
-

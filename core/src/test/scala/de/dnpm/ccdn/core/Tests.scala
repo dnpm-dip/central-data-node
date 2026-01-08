@@ -10,14 +10,14 @@ import de.dnpm.ccdn.core.bfarm
 final class Tests extends AsyncFlatSpec
 {
 
-  val reportQueue    = FakeReportRepository
+  val reportStore    = FakeReportRepository
   val dipConnector   = dip.Connector.getInstance.get
   val bfarmConnector = bfarm.Connector.getInstance.get
 
   val service =
     new MVHReportingService(
       Config.instance,
-      reportQueue,
+      reportStore,
       dipConnector, 
       bfarmConnector
     )
@@ -28,13 +28,13 @@ final class Tests extends AsyncFlatSpec
       
       _ <- service.pollReports
       
-      _ = reportQueue.queue must not be (empty)
+      _ = reportStore.entries(_ => true) must not be (empty)
 
       _ <- service.uploadReports
 
       _ <- service.confirmSubmissions
       
-    } yield reportQueue.queue must be (empty)
+    } yield reportStore.entries(_ => true) must be (empty)
 
   }
 
