@@ -31,3 +31,5 @@ target/
 .nuxt/
 
 run.sh
+
+.idea/
