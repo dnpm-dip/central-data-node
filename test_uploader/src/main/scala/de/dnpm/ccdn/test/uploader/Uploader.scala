@@ -46,7 +46,7 @@ object Uploader extends Logging
     BfArMConnectorImpl.instance
 
 
-  def main(args: Array[String]): Unit = { 
+  def main(args: Array[String]) : Unit = {
 
     val report =
       args.headOption
