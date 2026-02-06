@@ -9,7 +9,7 @@ import de.dnpm.ccdn.core.bfarm
 import de.dnpm.ccdn.core.dip
 
 
-final class Tests extends AnyFlatSpec
+final class SPITests extends AnyFlatSpec
 {
 
   val queueDir =

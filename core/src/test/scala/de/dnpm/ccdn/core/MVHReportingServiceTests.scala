@@ -7,7 +7,7 @@ import de.dnpm.ccdn.core.dip
 import de.dnpm.ccdn.core.bfarm
 
 
-final class Tests extends AsyncFlatSpec
+final class MVHReportingServiceTests extends AsyncFlatSpec
 {
 
   val reportStore    = FakeReportRepository
