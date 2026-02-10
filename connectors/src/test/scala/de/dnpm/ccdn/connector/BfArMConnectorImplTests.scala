@@ -16,6 +16,10 @@ import java.util.UUID.randomUUID
 class BfArMConnectorImplTests extends AsyncFlatSpec with TestSuite with MockFactory /* Stubs? */ {
   //uses custom config.json
 
+  trait CustomRequest extends StandaloneWSRequest {
+    type Self = CustomRequest
+  }
+
   private def rndReport: Submission.Report =
     Submission.Report(
       Id[TransferTAN](randomUUID.toString),
@@ -60,13 +64,17 @@ class BfArMConnectorImplTests extends AsyncFlatSpec with TestSuite with MockFact
       )
   }
 
+  val bfarmConnectorConfig = BfArMConnectorImpl.Config(
+    "apiURL","authURL","klient","geh heim",Some(1)
+  )
+
   val testSubmissions:List[SubmissionReport] = List.fill(10) (BfarmReport(rndReport))
-  val mockHttpClient = stub[StandaloneWSClient]
-  val stubRequest = stub[StandaloneWSRequest]
-  (mockHttpClient.url _).expects("asd").returns(stubRequest)
+  val mockHttpClient:StandaloneWSClient = mock[StandaloneWSClient]
+  val mockRequest = mock[CustomRequest]
+  (mockHttpClient.url _).expects("authURL").returns(mockRequest)
 
   val toTest = new BfArMConnectorImpl(
-    BfArMConnectorImpl.Config.instance,
+    bfarmConnectorConfig,
     mockHttpClient)
   for (curSubm <- testSubmissions) {
     toTest.upload(curSubm)
