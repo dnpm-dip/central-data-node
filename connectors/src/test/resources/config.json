@@ -1,0 +1,20 @@
+{
+  "polling": {
+    "period": 10,
+    "timeUnit": "SECONDS",
+    "startTime": "10:35"
+  },
+  "dataNodeIds": {
+    "MTB": "KDKTUE005",
+    "RD": "KDKTUE002"
+  },
+  "sites": {
+    "UKFR": {
+      "submitterId": "260832299",
+      "gdcId": "GRZTUE002",
+      "useCases": [
+        "MTB"
+      ]
+    }
+  }
+}
