@@ -8,17 +8,24 @@ import de.dnpm.dip.service.mvh.{Submission, TransferTAN, UseCase}
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.TestSuite
 import org.scalatest.flatspec.AsyncFlatSpec
-import play.api.libs.ws.{StandaloneWSClient, StandaloneWSRequest}
-
+import play.api.libs.ws.JsonBodyWritables.writeableOf_JsValue
+import play.api.libs.ws.{StandaloneWSClient, StandaloneWSRequest, StandaloneWSResponse}
 import java.time.LocalDateTime
 import java.util.UUID.randomUUID
+import scala.concurrent.Future
 
-class BfArMConnectorImplTests extends AsyncFlatSpec with TestSuite with MockFactory /* Stubs? */ {
+class BfArMConnectorImplTests extends AsyncFlatSpec
+  with TestSuite
+  with MockFactory
+{
   //uses custom config.json
+  val nUploads = 10
 
   trait CustomRequest extends StandaloneWSRequest {
     type Self = CustomRequest
+    type Response = CustomResponse
   }
+  trait CustomResponse extends StandaloneWSResponse
 
   private def rndReport: Submission.Report =
     Submission.Report(
@@ -68,10 +75,16 @@ class BfArMConnectorImplTests extends AsyncFlatSpec with TestSuite with MockFact
     "apiURL","authURL","klient","geh heim",Some(1)
   )
 
-  val testSubmissions:List[SubmissionReport] = List.fill(10) (BfarmReport(rndReport))
+
+
+  val testSubmissions:List[SubmissionReport] = List.fill(nUploads) (BfarmReport(rndReport))
   val mockHttpClient:StandaloneWSClient = mock[StandaloneWSClient]
   val mockRequest = mock[CustomRequest]
+  val mockResponse = mock[mockRequest.Response]
+
   (mockHttpClient.url _).expects("authURL").returns(mockRequest)
+  (mockRequest.withRequestTimeout _).expects(*).returns(mockRequest)
+  (mockRequest.post _).expects(*).returns(_ => Future.successful(mockResponse))
 
   val toTest = new BfArMConnectorImpl(
     bfarmConnectorConfig,
