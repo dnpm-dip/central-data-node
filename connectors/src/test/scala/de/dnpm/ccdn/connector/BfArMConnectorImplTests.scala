@@ -1,5 +1,6 @@
 package de.dnpm.ccdn.connector
 
+import de.dnpm.ccdn.connector.BfArMConnectorImpl.Token
 import de.dnpm.ccdn.core.bfarm.SubmissionReport
 import de.dnpm.ccdn.core.{Config, bfarm}
 import de.dnpm.dip.coding.Coding
@@ -21,17 +22,14 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
   with AsyncMockFactory
 {
   //uses custom config.json
-  val nUploads = 1
+  val nUploads = 10
 
   val pseudoToken:JsValue = Json.obj(
     "access_token"->  Json.toJson("Kreditkarte"),
     "expires_in"->  Json.toJson(133742),
     "refresh_expires_in"->  Json.toJson(133742),
     "scope"->  Json.toJson("monocle"),
-    "token_type"->  Json.toJson("Hammer")
-
-
-  )
+    "token_type"->  Json.toJson("Hammer"))
 
   trait CustomRequest extends StandaloneWSRequest with DefaultBodyWritables {
     type Self = CustomRequest
@@ -90,25 +88,26 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
   )
 
   val testSubmissions:List[SubmissionReport] = List.fill(nUploads) (BfarmReport(rndReport))
-  val mockHttpClient:StandaloneWSClient = mock[StandaloneWSClient]
-  val mockAuthRequest = mock[CustomRequest]
-  val mockAuthResponse = mock[mockAuthRequest.Response]
+  val mockHttpClient:StandaloneWSClient = stub[StandaloneWSClient]
+  val mockAuthRequest = stub[CustomRequest]
+  val mockAuthResponse = stub[mockAuthRequest.Response]
 
 
-  (mockHttpClient.url _).expects("authURL").returns(mockAuthRequest)
-  (mockAuthRequest.withRequestTimeout _).expects(*).returns(mockAuthRequest)
+  (mockHttpClient.url _).when("authURL").returns(mockAuthRequest)
+  (mockAuthRequest.withRequestTimeout _).when(*).returns(mockAuthRequest)
   (mockAuthRequest.post(_:Map[String,Seq[String]])(_:BodyWritable[Map[String,Seq[String]]]))
-    .expects(*,*).returns(Future.successful(mockAuthResponse))
-  (() => mockAuthResponse.status).expects().returns(200)
-  (() => mockAuthResponse.body[JsValue]).expects().returns(pseudoToken)
+    .when(*,*).returns(Future.successful(mockAuthResponse))
+  (() => mockAuthResponse.status).when().returns(200)
+  //point of this test: token should only be requested once
+  (mockAuthResponse.body[JsValue](_:BodyReadable[JsValue]))
+    .when(*).returns(pseudoToken).once()
+
 
   val toTest = new BfArMConnectorImpl(
     bfarmConnectorConfig,
     mockHttpClient)
   for (curSubm <- testSubmissions) {
     toTest.upload(curSubm)
+    //TODO NPEs are not thrown into the JVM but caught and logged. need to check against the returnvalue of upload
   }
-
-
-
 }
