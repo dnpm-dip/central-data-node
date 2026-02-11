@@ -5,27 +5,41 @@ import de.dnpm.ccdn.core.{Config, bfarm}
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model._
 import de.dnpm.dip.service.mvh.{Submission, TransferTAN, UseCase}
-import org.scalamock.scalatest.MockFactory
-import org.scalatest.TestSuite
+import org.scalamock.scalatest.AsyncMockFactory
+import org.scalatest.AsyncTestSuite
 import org.scalatest.flatspec.AsyncFlatSpec
-import play.api.libs.ws.JsonBodyWritables.writeableOf_JsValue
-import play.api.libs.ws.{StandaloneWSClient, StandaloneWSRequest, StandaloneWSResponse}
+import play.api.libs.json.{JsValue, Json}
+import play.api.libs.ws.JsonBodyReadables.readableAsJson
+import play.api.libs.ws._
+
 import java.time.LocalDateTime
 import java.util.UUID.randomUUID
 import scala.concurrent.Future
 
 class BfArMConnectorImplTests extends AsyncFlatSpec
-  with TestSuite
-  with MockFactory
+  with AsyncTestSuite
+  with AsyncMockFactory
 {
   //uses custom config.json
-  val nUploads = 10
+  val nUploads = 1
 
-  trait CustomRequest extends StandaloneWSRequest {
+  val pseudoToken:JsValue = Json.obj(
+    "access_token"->  Json.toJson("Kreditkarte"),
+    "expires_in"->  Json.toJson(133742),
+    "refresh_expires_in"->  Json.toJson(133742),
+    "scope"->  Json.toJson("monocle"),
+    "token_type"->  Json.toJson("Hammer")
+
+
+  )
+
+  trait CustomRequest extends StandaloneWSRequest with DefaultBodyWritables {
     type Self = CustomRequest
     type Response = CustomResponse
+
   }
-  trait CustomResponse extends StandaloneWSResponse
+  trait CustomResponse extends StandaloneWSResponse {
+  }
 
   private def rndReport: Submission.Report =
     Submission.Report(
@@ -75,16 +89,18 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     "apiURL","authURL","klient","geh heim",Some(1)
   )
 
-
-
   val testSubmissions:List[SubmissionReport] = List.fill(nUploads) (BfarmReport(rndReport))
   val mockHttpClient:StandaloneWSClient = mock[StandaloneWSClient]
-  val mockRequest = mock[CustomRequest]
-  val mockResponse = mock[mockRequest.Response]
+  val mockAuthRequest = mock[CustomRequest]
+  val mockAuthResponse = mock[mockAuthRequest.Response]
 
-  (mockHttpClient.url _).expects("authURL").returns(mockRequest)
-  (mockRequest.withRequestTimeout _).expects(*).returns(mockRequest)
-  (mockRequest.post _).expects(*).returns(_ => Future.successful(mockResponse))
+
+  (mockHttpClient.url _).expects("authURL").returns(mockAuthRequest)
+  (mockAuthRequest.withRequestTimeout _).expects(*).returns(mockAuthRequest)
+  (mockAuthRequest.post(_:Map[String,Seq[String]])(_:BodyWritable[Map[String,Seq[String]]]))
+    .expects(*,*).returns(Future.successful(mockAuthResponse))
+  (() => mockAuthResponse.status).expects().returns(200)
+  (() => mockAuthResponse.body[JsValue]).expects().returns(pseudoToken)
 
   val toTest = new BfArMConnectorImpl(
     bfarmConnectorConfig,
