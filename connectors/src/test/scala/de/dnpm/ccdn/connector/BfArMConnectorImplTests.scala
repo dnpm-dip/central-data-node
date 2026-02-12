@@ -1,28 +1,32 @@
 package de.dnpm.ccdn.connector
 
-import de.dnpm.ccdn.connector.BfArMConnectorImpl.Token
+import de.dnpm.ccdn.connector.BfArMFakeReportFactory.makeFakeReport
 import de.dnpm.ccdn.core.bfarm.SubmissionReport
-import de.dnpm.ccdn.core.{Config, bfarm}
-import de.dnpm.dip.coding.Coding
-import de.dnpm.dip.model._
-import de.dnpm.dip.service.mvh.{Submission, TransferTAN, UseCase}
 import org.scalamock.scalatest.AsyncMockFactory
 import org.scalatest.AsyncTestSuite
 import org.scalatest.flatspec.AsyncFlatSpec
 import play.api.libs.json.{JsValue, Json}
-import play.api.libs.ws.JsonBodyReadables.readableAsJson
 import play.api.libs.ws._
 
-import java.time.LocalDateTime
-import java.util.UUID.randomUUID
-import scala.concurrent.Future
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import scala.concurrent.duration.{Duration => AwaitTimeout}
+import scala.concurrent.{Await, ExecutionContext, Future}
 
 class BfArMConnectorImplTests extends AsyncFlatSpec
   with AsyncTestSuite
   with AsyncMockFactory
 {
   //uses custom config.json
-  val nUploads = 10
+  behavior of "BfArMConnectorProviderImpl"
+
+  implicit override def executionContext: ExecutionContext = scala.concurrent.ExecutionContext.Implicits.global
+
+  val nUploads = 10 //how many documents are uploaded
+  val tokenFetchCounter = new AtomicInteger(0) //increments every time a token is fetched, should increase once
+  val bfarmConnectorConfig = BfArMConnectorImpl.Config(
+    "apiURL", "authURL", "klient", "geh heim", Some(1)
+  )
 
   val pseudoToken:JsValue = Json.obj(
     "access_token"->  Json.toJson("Kreditkarte"),
@@ -34,80 +38,50 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
   trait CustomRequest extends StandaloneWSRequest with DefaultBodyWritables {
     type Self = CustomRequest
     type Response = CustomResponse
-
   }
   trait CustomResponse extends StandaloneWSResponse {
   }
 
-  private def rndReport: Submission.Report =
-    Submission.Report(
-      Id[TransferTAN](randomUUID.toString),
-      LocalDateTime.now,
-      Id[Patient](randomUUID.toString),
-      Submission.Report.Status.Unsubmitted,
-      Coding[Site]("UKFR"),
-      UseCase.MTB,
-      Submission.Type.Initial,
-      Some(NGSReport.Type.GenomeLongRead),
-      None,
-      HealthInsurance.Type.UNK,
-      None,
-      None
-    )
-  private val BfarmReport: Submission.Report => bfarm.SubmissionReport = {
-
-    import NGSReport.Type._
-    import bfarm.LibraryType
-    import bfarm.SubmissionReport.DiseaseType._
-    import de.dnpm.dip.service.mvh.UseCase._
-
-    report =>
-      bfarm.SubmissionReport(
-        report.createdAt.toLocalDate,
-        report.`type`,
-        report.id,
-        Config.instance.submitterId(report.site.code),
-        Config.instance.dataNodeIds(report.useCase),
-        report.useCase match {
-          case MTB => Oncological
-          case RD  => Rare
-        },
-        report.sequencingType.collect {
-            case GenomeLongRead  => LibraryType.WGSLr
-            case GenomeShortRead => LibraryType.WGS
-            case Exome           => LibraryType.WES
-            case Panel           => LibraryType.Panel
-          }
-          .getOrElse(LibraryType.None),
-        report.healthInsuranceType
-      )
-  }
-
-  val bfarmConnectorConfig = BfArMConnectorImpl.Config(
-    "apiURL","authURL","klient","geh heim",Some(1)
-  )
-
-  val testSubmissions:List[SubmissionReport] = List.fill(nUploads) (BfarmReport(rndReport))
   val mockHttpClient:StandaloneWSClient = stub[StandaloneWSClient]
-  val mockAuthRequest = stub[CustomRequest]
-  val mockAuthResponse = stub[mockAuthRequest.Response]
 
-
+  //Auth mocks
+  private val mockAuthRequest = stub[CustomRequest]
+  private val mockAuthResponse = stub[mockAuthRequest.Response]
   (mockHttpClient.url _).when("authURL").returns(mockAuthRequest)
   (mockAuthRequest.withRequestTimeout _).when(*).returns(mockAuthRequest)
   (mockAuthRequest.post(_:Map[String,Seq[String]])(_:BodyWritable[Map[String,Seq[String]]]))
-    .when(*,*).returns(Future.successful(mockAuthResponse))
+    .when(*,*)
+    .onCall(_ => {
+      tokenFetchCounter.incrementAndGet()
+      Future.successful(mockAuthResponse)
+    })
   (() => mockAuthResponse.status).when().returns(200)
   //point of this test: token should only be requested once
   (mockAuthResponse.body[JsValue](_:BodyReadable[JsValue]))
-    .when(*).returns(pseudoToken).once()
+    .when(*).returns(pseudoToken)
 
+  //Upload mocks
+  private val mockUploadRequest = stub[CustomRequest]
+  private val mockUploadResponse = stub[mockUploadRequest.Response]
+  (mockHttpClient.url _).when("apiURL").returns(mockUploadRequest)
+  (mockUploadRequest.withHttpHeaders _).when(*).returns(mockUploadRequest)
+  (mockUploadRequest.withRequestTimeout _).when(*).returns(mockUploadRequest)
+  (mockUploadRequest.post(_:Map[String,Seq[String]])(_:BodyWritable[Map[String,Seq[String]]]))
+    .when(*,*).returns(Future.successful(mockUploadResponse))
+  (() => mockUploadResponse.status).when().returns(200)
 
   val toTest = new BfArMConnectorImpl(
     bfarmConnectorConfig,
     mockHttpClient)
-  for (curSubm <- testSubmissions) {
-    toTest.upload(curSubm)
-    //TODO NPEs are not thrown into the JVM but caught and logged. need to check against the returnvalue of upload
+
+  it must "only fetch one token to make multiple uploads" in {
+    assert(tokenFetchCounter.get() == 0)
+    val testSubmissions:List[SubmissionReport] = List.fill(nUploads) (makeFakeReport)
+    val allUploads = testSubmissions.map(it => toTest.upload(it))
+    for (res <- Await.result(Future.sequence(allUploads),AwaitTimeout(1,TimeUnit.SECONDS))) {
+      //reading out the results is actually needed so that all upload threads finish
+      assert(res.isRight)
+    }
+    assert(tokenFetchCounter.get() == 1,"This means the token wasnt fetched the expected number of times (once)")
   }
 }
