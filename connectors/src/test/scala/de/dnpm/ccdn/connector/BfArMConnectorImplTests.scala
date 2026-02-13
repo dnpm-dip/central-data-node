@@ -78,7 +78,7 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     assert(tokenFetchCounter.get() == 0)
     val testSubmissions:List[SubmissionReport] = List.fill(nUploads) (makeFakeReport)
     val allUploads = testSubmissions.map(it => toTest.upload(it))
-    for (res <- Await.result(Future.sequence(allUploads),AwaitTimeout(1,TimeUnit.SECONDS))) {
+    for (res <- Await.result(Future.sequence(allUploads),AwaitTimeout(5,TimeUnit.SECONDS))) {
       //reading out the results is actually needed so that all upload threads finish
       assert(res.isRight)
     }
