@@ -125,60 +125,75 @@ with Logging
    * Is None, when expired or unused, becomes an empty promise while it is
    * being fetched, so that simultaneous request will wait for the same token.
    */
-  private var tokenPromise:Option[Promise[Token]] = None
-
+  @volatile private var tokenPromise:Option[Promise[Token]] = None
+  /**
+   * A lock object that wraps all read or write access to tokenPromise
+   */
+  private val tokenPromiseLock = new Object
   /**
    * Scheduled during token fetch to clear an expired token
    */
-  private val expire: Runnable =
-    () => tokenPromise = None
+  private val expire: Runnable = tokenPromiseLock.synchronized {
+    () => tokenPromise = None }
 
 
   private def getToken: Future[Token] = {
 
     import scala.concurrent.ExecutionContext.Implicits.global
-    if (tokenPromise.isDefined) {
-      tokenPromise.get.future
-    } else {
-      tokenPromise = Some(Promise[Token])
-      log.info("Getting fresh API token")
 
-      wsclient
-        .url(config.authURL)
-        .withRequestTimeout(timeout)
-        .post(
-          Map(
-            "grant_type"    -> Seq("client_credentials"),
-            "client_id"     -> Seq(config.clientId),
-            "client_secret" -> Seq(config.clientSecret)
-          )
+
+    tokenPromiseLock.synchronized {
+      if (tokenPromise.isDefined) {
+        return tokenPromise.get.future
+      } else {
+        tokenPromise = Some(Promise[Token]())
+      }
+    }
+    val tokenToFetch = tokenPromise.get
+    log.info("Getting fresh API token")
+
+    wsclient
+      .url(config.authURL)
+      .withRequestTimeout(timeout)
+      .post(
+        Map(
+          "grant_type"    -> Seq("client_credentials"),
+          "client_id"     -> Seq(config.clientId),
+          "client_secret" -> Seq(config.clientSecret)
         )
-        .map(
-          resp => resp.status match {
-            case 200 => resp.body[JsValue].as[Token].asRight
-            case _   => resp.body[JsValue].as[Error].asLeft
-          }
-        )
-        .andThen {
-          case Success(Right(tkn)) =>
-            log.info(s"Updating API token reference and scheduling expiration in ${tkn.expires_in} s")
-            tokenPromise.get.success(tkn)
+      )
+      .map(
+        resp => resp.status match {
+          case 200 => resp.body[JsValue].as[Token].asRight
+          case _   => resp.body[JsValue].as[Error].asLeft
+        }
+      )
+      .andThen {
+        case Success(Right(tkn)) =>
+          log.info(s"Updating API token reference and scheduling expiration in ${tkn.expires_in} s")
+          tokenPromiseLock.synchronized {
+            tokenToFetch.success(tkn)
             executor.schedule(expire, tkn.expires_in - 5, SECONDS)
             Future.successful(tokenPromise)
+          }
 
-          case Success(Left(err)) =>
-            val errMsg: String = s"Failed to get BfArM API token: ${err.statusCode} ${err.error}: ${err.message}"
-            tokenPromise.get.failure(new IOException(errMsg))
-            log.error(errMsg)
+        case Success(Left(err)) =>
+          val errMsg: String = s"Failed to get BfArM API token: ${err.statusCode} ${err.error}: ${err.message}"
+          tokenPromiseLock.synchronized {
+            tokenToFetch.failure(new IOException(errMsg))
+          }
+          log.error(errMsg)
 
-          case Failure(t) =>
-            tokenPromise.get.failure(t)
-            log.error("Failed to get BfArM API token", t)
-        }
-        .collect {
-          case Right(tkn) => tkn
-        }
-    }
+        case Failure(t) =>
+          tokenPromiseLock.synchronized {
+            tokenToFetch.failure(t)
+          }
+          log.error("Failed to get BfArM API token", t)
+      }
+      .collect {
+        case Right(tkn) => tkn
+      }
+
   }
 
 
