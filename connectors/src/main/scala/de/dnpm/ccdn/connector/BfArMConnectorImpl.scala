@@ -2,7 +2,7 @@ package de.dnpm.ccdn.connector
 
 
 import scala.concurrent.{
-  Future,
+  Future, Promise,
   ExecutionContext
 }
 import scala.concurrent.duration._
@@ -18,7 +18,7 @@ import play.api.libs.json.{
 }
 import play.api.libs.ws.{
   StandaloneWSClient => WSClient,
-  StandaloneWSRequest => WSRequest,
+  StandaloneWSRequest => WSRequest
 }
 import play.api.libs.ws.DefaultBodyWritables._
 import play.api.libs.ws.JsonBodyReadables._
@@ -27,6 +27,7 @@ import de.dnpm.dip.util.Logging
 import de.dnpm.ccdn.core.bfarm
 import bfarm.SubmissionReport
 
+import java.io.IOException
 
 
 
@@ -112,7 +113,6 @@ with Logging
 
   import java.util.concurrent.Executors
   import java.util.concurrent.TimeUnit.SECONDS
-  import java.util.concurrent.atomic.AtomicReference
 
   private val timeout =
     config.timeout.getOrElse(10) seconds
@@ -121,19 +121,36 @@ with Logging
   private val executor =
     Executors.newSingleThreadScheduledExecutor
 
-  private val token: AtomicReference[Option[Token]] =
-    new AtomicReference(None)
-
-
-  private val expire: Runnable =
-    () => token.set(None)
+  /**
+   * Is None, when expired or unused, becomes an empty promise while it is
+   * being fetched, so that simultaneous request will wait for the same token.
+   */
+  @volatile private var tokenPromise:Option[Promise[Token]] = None
+  /**
+   * A lock object that wraps all read or write access to tokenPromise
+   */
+  private val tokenPromiseLock = new Object
+  /**
+   * Scheduled during token fetch to clear an expired token
+   */
+  private val expire: Runnable = tokenPromiseLock.synchronized {
+    () => tokenPromise = None }
 
 
   private def getToken: Future[Token] = {
 
     import scala.concurrent.ExecutionContext.Implicits.global
 
-    log.info("Getting API token")
+
+    tokenPromiseLock.synchronized {
+      if (tokenPromise.isDefined) {
+        return tokenPromise.get.future
+      } else {
+        tokenPromise = Some(Promise[Token]())
+      }
+    }
+    val tokenToFetch = tokenPromise.get
+    log.info("Getting fresh API token")
 
     wsclient
       .url(config.authURL)
@@ -154,18 +171,31 @@ with Logging
       .andThen {
         case Success(Right(tkn)) =>
           log.info(s"Updating API token reference and scheduling expiration in ${tkn.expires_in} s")
-          token.set(Some(tkn))
-          executor.schedule(expire, tkn.expires_in - 5, SECONDS)
+          tokenPromiseLock.synchronized {
+            tokenToFetch.success(tkn)
+            executor.schedule(expire, tkn.expires_in - 5, SECONDS)
+            Future.successful(tokenPromise)
+          }
 
         case Success(Left(err)) =>
-          log.error(s"Failed to get BfArM API token: ${err.statusCode} ${err.error}: ${err.message}")
+          val errMsg: String = s"Failed to get BfArM API token: ${err.statusCode} ${err.error}: ${err.message}"
+          tokenPromiseLock.synchronized {
+            tokenToFetch.failure(new IOException(errMsg))
+            tokenPromise = None
+          }
+          log.error(errMsg)
 
         case Failure(t) =>
-          log.error("Failed to get BfArM API token",t)
+          tokenPromiseLock.synchronized {
+            tokenToFetch.failure(t)
+            tokenPromise = None
+          }
+          log.error("Failed to get BfArM API token", t)
       }
-      .collect { 
+      .collect {
         case Right(tkn) => tkn
       }
+
   }
 
 
@@ -174,12 +204,7 @@ with Logging
   )(
     implicit ec: ExecutionContext
   ): Future[WSRequest] =
-    token.get
-      .fold(
-        getToken
-      )(
-        Future.successful
-      )
+    getToken
       .map(tkn =>
         wsclient.url(url)
           .withHttpHeaders("Authorization" -> s"${tkn.token_type} ${tkn.access_token}")
