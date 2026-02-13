@@ -181,12 +181,14 @@ with Logging
           val errMsg: String = s"Failed to get BfArM API token: ${err.statusCode} ${err.error}: ${err.message}"
           tokenPromiseLock.synchronized {
             tokenToFetch.failure(new IOException(errMsg))
+            tokenPromise = None
           }
           log.error(errMsg)
 
         case Failure(t) =>
           tokenPromiseLock.synchronized {
             tokenToFetch.failure(t)
+            tokenPromise = None
           }
           log.error("Failed to get BfArM API token", t)
       }
