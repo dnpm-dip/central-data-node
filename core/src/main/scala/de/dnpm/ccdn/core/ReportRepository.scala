@@ -79,30 +79,3 @@ trait ReportRepository extends Repository[Submission.Report]
 trait ReportRepositoryProvider extends SPI[ReportRepository]
 
 object ReportRepository extends SPILoader[ReportRepositoryProvider]
-
-/*
-trait Repository[K,T]
-{
-
-  def saveIfAbsent(key: K, t: T): Either[String,Unit]
-
-  def saveIfAbsent(ts: Seq[T], key: T => K): EitherNel[T,Unit]
-
-  def replace(key: K, t: T): Either[String,Unit]
-
-  def entries(filter: T => Boolean): Seq[T]
-
-  def exists(filter: T => Boolean): Boolean =
-    entries(filter).nonEmpty
-
-  def remove(key: K): Either[String,Unit]
-
-}
-
-
-trait ReportRepository extends Repository[(Code[Site],Id[TransferTAN]),Submission.Report]
-
-trait ReportRepositoryProvider extends SPI[ReportRepository]
-
-object ReportRepository extends SPILoader[ReportRepositoryProvider]
-*/
