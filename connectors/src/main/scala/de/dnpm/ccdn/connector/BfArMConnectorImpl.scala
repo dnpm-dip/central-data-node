@@ -126,19 +126,18 @@ with Logging
    * Is None, when expired or unused, becomes an empty promise while it is
    * being fetched, so that simultaneous request will wait for the same token.
    */
-  private val tokenCache:AtomicReference[Option[Future[Token]]] = new AtomicReference(None)
+  private val tokenCache:AtomicReference[Future[Token]] = new AtomicReference(Future.failed(new TokenExpiredException))
 
   /**
-   * //TODO use instead of Option
    * Signals that a new fresh token should be fetched
    */
-  // private case class TokenExpiredException() extends Exception
+   private case class TokenExpiredException() extends Exception
   /**
    * Scheduled during token fetch to clear an expired token
    */
   private val expire: Runnable = () => {
     log.info("Clearing token after expiration")
-    tokenCache.set(None)
+    tokenCache.set(Future.failed(new TokenExpiredException))
   }
 
 
@@ -188,9 +187,9 @@ with Logging
   )(
     implicit ec: ExecutionContext
   ): Future[WSRequest] = {
-    tokenCache.updateAndGet(curVal => if(curVal.isDefined) curVal else Some(getToken))
-      .get
-      .map(tkn =>
+    tokenCache.updateAndGet(curVal => curVal.recoverWith {
+      case _: TokenExpiredException => getToken }
+    ).map(tkn =>
         wsclient.url(url)
           .withHttpHeaders("Authorization" -> s"${tkn.token_type} ${tkn.access_token}")
           .withRequestTimeout(timeout)
