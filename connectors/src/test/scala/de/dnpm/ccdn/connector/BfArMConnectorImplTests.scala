@@ -1,13 +1,18 @@
 package de.dnpm.ccdn.connector
 
-import de.dnpm.ccdn.connector.BfArMFakeReportFactory.makeFakeReport
+import de.dnpm.ccdn.core.{Config, bfarm}
 import de.dnpm.ccdn.core.bfarm.SubmissionReport
+import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.model.{HealthInsurance, Id, Site}
+import de.dnpm.dip.service.mvh.{Submission, TransferTAN, UseCase}
 import org.scalamock.scalatest.AsyncMockFactory
 import org.scalatest.AsyncTestSuite
 import org.scalatest.flatspec.AsyncFlatSpec
 import play.api.libs.json.{JsValue, Json}
 import play.api.libs.ws._
 
+import java.time.LocalDateTime
+import java.util.UUID.randomUUID
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.duration.{Duration => AwaitTimeout}
@@ -21,6 +26,22 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
   behavior of "BfArMConnectorProviderImpl"
 
   implicit override def executionContext: ExecutionContext = scala.concurrent.ExecutionContext.Implicits.global
+
+  private def makeFakeReport: bfarm.SubmissionReport = {
+    import bfarm.LibraryType
+    import bfarm.SubmissionReport.DiseaseType.Oncological
+
+    bfarm.SubmissionReport(
+      LocalDateTime.now.toLocalDate,
+      Submission.Type.Initial,
+      Id[TransferTAN](randomUUID.toString),
+      Config.instance.submitterId(Coding[Site]("UKFR").code),
+      Config.instance.dataNodeIds(UseCase.MTB),
+      Oncological,
+      LibraryType.WGSLr,
+      HealthInsurance.Type.UNK
+    )
+  }
 
   val nUploads = 10 //how many documents are uploaded
   val tokenFetchCounter = new AtomicInteger(0) //increments every time a token is fetched, should increase once
