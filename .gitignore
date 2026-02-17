@@ -33,3 +33,5 @@ target/
 run.sh
 
 .idea/
+
+.bsp/sbt.json
