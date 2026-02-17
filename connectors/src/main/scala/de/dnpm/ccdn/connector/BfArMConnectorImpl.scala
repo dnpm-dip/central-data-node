@@ -2,7 +2,7 @@ package de.dnpm.ccdn.connector
 
 
 import scala.concurrent.{
-  Future, Promise,
+  Future,
   ExecutionContext
 }
 import scala.concurrent.duration._
@@ -28,6 +28,7 @@ import de.dnpm.ccdn.core.bfarm
 import bfarm.SubmissionReport
 
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicReference
 
 
 
@@ -125,31 +126,25 @@ with Logging
    * Is None, when expired or unused, becomes an empty promise while it is
    * being fetched, so that simultaneous request will wait for the same token.
    */
-  @volatile private var tokenPromise:Option[Promise[Token]] = None
+  private val tokenCache:AtomicReference[Option[Future[Token]]] = new AtomicReference(None)
+
   /**
-   * A lock object that wraps all read or write access to tokenPromise
+   * //TODO use instead of Option
+   * Signals that a new fresh token should be fetched
    */
-  private val tokenPromiseLock = new Object
+  // private case class TokenExpiredException() extends Exception
   /**
    * Scheduled during token fetch to clear an expired token
    */
-  private val expire: Runnable = tokenPromiseLock.synchronized {
-    () => tokenPromise = None }
+  private val expire: Runnable = () => {
+    log.info("Clearing token after expiration")
+    tokenCache.set(None)
+  }
 
 
   private def getToken: Future[Token] = {
 
     import scala.concurrent.ExecutionContext.Implicits.global
-
-
-    tokenPromiseLock.synchronized {
-      if (tokenPromise.isDefined) {
-        return tokenPromise.get.future
-      } else {
-        tokenPromise = Some(Promise[Token]())
-      }
-    }
-    val tokenToFetch = tokenPromise.get
     log.info("Getting fresh API token")
 
     wsclient
@@ -171,45 +166,35 @@ with Logging
       .andThen {
         case Success(Right(tkn)) =>
           log.info(s"Updating API token reference and scheduling expiration in ${tkn.expires_in} s")
-          tokenPromiseLock.synchronized {
-            tokenToFetch.success(tkn)
-            executor.schedule(expire, tkn.expires_in - 5, SECONDS)
-            Future.successful(tokenPromise)
-          }
+          executor.schedule(expire, tkn.expires_in - 5, SECONDS)
+          Future.successful(tkn)
 
         case Success(Left(err)) =>
           val errMsg: String = s"Failed to get BfArM API token: ${err.statusCode} ${err.error}: ${err.message}"
-          tokenPromiseLock.synchronized {
-            tokenToFetch.failure(new IOException(errMsg))
-            tokenPromise = None
-          }
           log.error(errMsg)
+          Future.failed(new IOException(errMsg))
 
         case Failure(t) =>
-          tokenPromiseLock.synchronized {
-            tokenToFetch.failure(t)
-            tokenPromise = None
-          }
           log.error("Failed to get BfArM API token", t)
+          Future.failed(t)
       }
       .collect {
-        case Right(tkn) => tkn
+        case Right(tkn: Token) => tkn
       }
-
   }
-
 
   private def request(
     url: String
   )(
     implicit ec: ExecutionContext
-  ): Future[WSRequest] =
-    getToken
+  ): Future[WSRequest] = {
+    tokenCache.updateAndGet(curVal => if(curVal.isDefined) curVal else Some(getToken)).get
       .map(tkn =>
         wsclient.url(url)
           .withHttpHeaders("Authorization" -> s"${tkn.token_type} ${tkn.access_token}")
           .withRequestTimeout(timeout)
       )
+  }
 
 
   override def upload(
