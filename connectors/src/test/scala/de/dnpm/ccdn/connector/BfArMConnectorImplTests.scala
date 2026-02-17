@@ -29,11 +29,11 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
   )
 
   val pseudoToken:JsValue = Json.obj(
-    "access_token"->  Json.toJson("Kreditkarte"),
-    "expires_in"->  Json.toJson(133742),
-    "refresh_expires_in"->  Json.toJson(133742),
-    "scope"->  Json.toJson("monocle"),
-    "token_type"->  Json.toJson("Hammer"))
+    "access_token"      -> "babelub",
+    "expires_in"        -> 133742,
+    "refresh_expires_in"-> 133742,
+    "scope"             -> "monocle",
+    "token_type"        -> "asdbest")
 
   trait CustomRequest extends StandaloneWSRequest with DefaultBodyWritables {
     type Self = CustomRequest

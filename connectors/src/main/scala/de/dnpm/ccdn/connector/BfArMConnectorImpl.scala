@@ -188,7 +188,8 @@ with Logging
   )(
     implicit ec: ExecutionContext
   ): Future[WSRequest] = {
-    tokenCache.updateAndGet(curVal => if(curVal.isDefined) curVal else Some(getToken)).get
+    tokenCache.updateAndGet(curVal => if(curVal.isDefined) curVal else Some(getToken))
+      .get
       .map(tkn =>
         wsclient.url(url)
           .withHttpHeaders("Authorization" -> s"${tkn.token_type} ${tkn.access_token}")
