@@ -121,20 +121,17 @@ with Logging
   private val executor =
     Executors.newSingleThreadScheduledExecutor
 
-  private val token: AtomicReference[Option[Token]] =
-    new AtomicReference(None)
+
+//  private val token: AtomicReference[Future[Token]] =
+//    new AtomicReference(Future.failed(new IllegalStateException("No token yet")))
+
+  private val token: AtomicReference[Option[Future[Token]]] =
+    new AtomicReference(None)  // TODO: Consider fetching a token on instantiation to get direct error logging in case of connection/API problems
 
 
-  private val expire: Runnable =
-    () => token.set(None)
-
-
-  private def getToken: Future[Token] = {
-
-    import scala.concurrent.ExecutionContext.Implicits.global
-
-    log.info("Getting API token")
-
+  private def fetchToken(
+    implicit ec: ExecutionContext
+  ): Future[Token] = 
     wsclient
       .url(config.authURL)
       .withRequestTimeout(timeout)
@@ -145,46 +142,54 @@ with Logging
           "client_secret" -> Seq(config.clientSecret)
         )
       )
-      .map(
-        resp => resp.status match {
-          case 200 => resp.body[JsValue].as[Token].asRight
-          case _   => resp.body[JsValue].as[Error].asLeft
-        }
-      )
+      .map(_.body[JsValue].as[Token])
       .andThen {
-        case Success(Right(tkn)) =>
-          log.info(s"Updating API token reference and scheduling expiration in ${tkn.expires_in} s")
-          token.set(Some(tkn))
-          executor.schedule(expire, tkn.expires_in - 5, SECONDS)
-
-        case Success(Left(err)) =>
-          log.error(s"Failed to get BfArM API token: ${err.statusCode} ${err.error}: ${err.message}")
-
+        case Success(tkn) =>
+          // Schedule token removal after its expiration
+          executor.scheduleWithFixedDelay(
+            () => token.set(None),
+//            () => token.set(Future.failed(new IllegalStateException("Token expired"))),
+            tkn.expires_in - 5,
+            tkn.expires_in - 5,
+            SECONDS
+          )
         case Failure(t) =>
           log.error("Failed to get BfArM API token",t)
       }
-      .collect { 
-        case Right(tkn) => tkn
-      }
-  }
 
+
+/*    
+  private def request(
+    url: String
+  )(
+    implicit ec: ExecutionContext
+  ): Future[WSRequest] =
+    token.updateAndGet(
+      // Try re-fetching a token if it was removed after expiration
+      _.recoverWith { case _: IllegalStateException => fetchToken }
+    )
+    .map(tkn =>
+      wsclient.url(url)
+        .withHttpHeaders("Authorization" -> s"${tkn.token_type} ${tkn.access_token}")
+        .withRequestTimeout(timeout)
+    )
+*/    
 
   private def request(
     url: String
   )(
     implicit ec: ExecutionContext
   ): Future[WSRequest] =
-    token.get
-      .fold(
-        getToken
-      )(
-        Future.successful
-      )
-      .map(tkn =>
-        wsclient.url(url)
-          .withHttpHeaders("Authorization" -> s"${tkn.token_type} ${tkn.access_token}")
-          .withRequestTimeout(timeout)
-      )
+    token.updateAndGet(
+      // Try re-fetching a token if it was removed after expiration
+      _.orElse(Some(fetchToken))
+    )
+    .get // safe here, due to .orElse above
+    .map(tkn =>
+      wsclient.url(url)
+        .withHttpHeaders("Authorization" -> s"${tkn.token_type} ${tkn.access_token}")
+        .withRequestTimeout(timeout)
+    )
 
 
   override def upload(

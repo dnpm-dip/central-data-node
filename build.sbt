@@ -57,6 +57,7 @@ lazy val connectors = project
     settings,
     libraryDependencies ++= Seq(
       dependencies.scalatest,
+      dependencies.scalamock,
       dependencies.play_ahc,
       dependencies.play_ahc_js,
     ),
@@ -85,6 +86,7 @@ lazy val test_uploader = project
 lazy val dependencies =
   new {
     val scalatest    = "org.scalatest"     %% "scalatest"               % "3.2.18" % Test
+    val scalamock    = "org.scalamock"     %% "scalamock"               % "7.5.5"  % Test
     val logback      = "ch.qos.logback"    %  "logback-classic"         % "1.5.18"
     val play_ahc     = "org.playframework" %% "play-ahc-ws-standalone"  % "3.0.7"
     val play_ahc_js  = "org.playframework" %% "play-ws-standalone-json" % "3.0.7"
