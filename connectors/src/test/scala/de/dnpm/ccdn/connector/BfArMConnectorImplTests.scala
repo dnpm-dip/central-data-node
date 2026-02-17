@@ -43,11 +43,16 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     )
   }
 
-  val nUploads = 10 //how many documents are uploaded
-  val tokenFetchCounter = new AtomicInteger(0) //increments every time a token is fetched, should increase once
+  //how many documents are uploaded
+  val nUploads = 10
+  //increments every time a token is fetched, should increase once
+  val tokenFetchCounter = new AtomicInteger(0)
   val bfarmConnectorConfig = BfArMConnectorImpl.Config(
     "apiURL", "authURL", "klient", "geh heim", Some(1)
   )
+
+  //member names coincide with json fields and the object is built from them.
+  // So building the object from JSON ensures nobody changes field names
 
   val pseudoToken:JsValue = Json.obj(
     "access_token"      -> "babelub",
@@ -55,6 +60,12 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     "refresh_expires_in"-> 133742,
     "scope"             -> "monocle",
     "token_type"        -> "asdbest")
+  //Could also define the token like following, but the way in use also ensures
+  // that nobody changes the field names when JSON serialization depends on them
+  // coinciding with the JSON coming from the identityprovider
+  /*implicit val tokenWrites:Writes[Token] = Json.writes[Token]
+  val pseudoToken2:JsValue = Json.toJson( BfArMConnectorImpl.Token(
+    "babelub",133742,133742,"monocle","asdbest"))*/
 
   trait CustomRequest extends StandaloneWSRequest with DefaultBodyWritables {
     type Self = CustomRequest
@@ -103,6 +114,7 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
       //reading out the results is actually needed so that all upload threads finish
       assert(res.isRight)
     }
-    assert(tokenFetchCounter.get() == 1,"This means the token wasnt fetched the expected number of times (once)")
+    assert(tokenFetchCounter.get() == 1,
+      "This means the token wasnt fetched the expected number of times (once)")
   }
 }
