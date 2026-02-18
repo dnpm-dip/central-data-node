@@ -122,12 +122,12 @@ with Logging
     Executors.newSingleThreadScheduledExecutor
 
 
-//  private val token: AtomicReference[Future[Token]] =
-//    new AtomicReference(Future.failed(new IllegalStateException("No token yet")))
-
   private val token: AtomicReference[Option[Future[Token]]] =
     new AtomicReference(None)  // TODO: Consider fetching a token on instantiation to get direct error logging in case of connection/API problems
 
+
+  private val removeToken: Runnable =
+    () => token.set(None)
 
   private def fetchToken(
     implicit ec: ExecutionContext
@@ -146,34 +146,12 @@ with Logging
       .andThen {
         case Success(tkn) =>
           // Schedule token removal after its expiration
-          executor.scheduleWithFixedDelay(
-            () => token.set(None),
-//            () => token.set(Future.failed(new IllegalStateException("Token expired"))),
-            tkn.expires_in - 5,
-            tkn.expires_in - 5,
-            SECONDS
-          )
+          executor.schedule(removeToken, tkn.expires_in - 5, SECONDS)
         case Failure(t) =>
           log.error("Failed to get BfArM API token",t)
       }
 
 
-/*    
-  private def request(
-    url: String
-  )(
-    implicit ec: ExecutionContext
-  ): Future[WSRequest] =
-    token.updateAndGet(
-      // Try re-fetching a token if it was removed after expiration
-      _.recoverWith { case _: IllegalStateException => fetchToken }
-    )
-    .map(tkn =>
-      wsclient.url(url)
-        .withHttpHeaders("Authorization" -> s"${tkn.token_type} ${tkn.access_token}")
-        .withRequestTimeout(timeout)
-    )
-*/    
 
   private def request(
     url: String
