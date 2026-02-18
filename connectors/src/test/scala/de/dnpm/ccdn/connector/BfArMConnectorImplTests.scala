@@ -45,12 +45,7 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
   )
 
 
-  val pseudoToken:JsValue = Json.obj(
-    "access_token"      -> "babelub",
-    "expires_in"        -> 133742,
-    "refresh_expires_in"-> 133742,
-    "scope"             -> "monocle",
-    "token_type"        -> "asdbest")
+
   //Could also define the token like following, but the way in use also ensures
   // that nobody changes the field names when JSON serialization depends on them
   // coinciding with the JSON coming from the identityprovider
@@ -67,21 +62,34 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
 
   val mockHttpClient:StandaloneWSClient = stub[StandaloneWSClient]
 
+  private def makeToken(tokenExpiration:Int):JsValue =
+    Json.obj(
+      "access_token" -> "babelub",
+      "expires_in" -> tokenExpiration,
+      "refresh_expires_in" -> tokenExpiration,
+      "scope" -> "monocle",
+      "token_type" -> "asdbest")
+
+
   //Auth mocks
-  private val mockAuthRequest = stub[CustomRequest]
-  private val mockAuthResponse = stub[mockAuthRequest.Response]
-  (mockHttpClient.url _).when("authURL").returns(mockAuthRequest)
-  (mockAuthRequest.withRequestTimeout _).when(*).returns(mockAuthRequest)
-  (mockAuthRequest.post(_:Map[String,Seq[String]])(_:BodyWritable[Map[String,Seq[String]]]))
-    .when(*,*)
-    .onCall(_ => {
-      tokenFetchCounter.incrementAndGet()
-      Future.successful(mockAuthResponse)
-    })
-  (() => mockAuthResponse.status).when().returns(200)
-  //point of this test: token should only be requested once
-  (mockAuthResponse.body[JsValue](_:BodyReadable[JsValue]))
-    .when(*).returns(pseudoToken)
+  private def prepAuthMocks(tokenExpiration:Int=133742) = {
+    val pseudoToken:JsValue = makeToken(tokenExpiration)
+    tokenFetchCounter.set(0)
+    val mockAuthRequest = stub[CustomRequest]
+    val mockAuthResponse = stub[mockAuthRequest.Response]
+    (mockHttpClient.url _).when("authURL").returns(mockAuthRequest)
+    (mockAuthRequest.withRequestTimeout _).when(*).returns(mockAuthRequest)
+    (mockAuthRequest.post(_:Map[String,Seq[String]])(_:BodyWritable[Map[String,Seq[String]]]))
+      .when(*,*)
+      .onCall(_ => {
+        tokenFetchCounter.incrementAndGet()
+        Future.successful(mockAuthResponse)
+      })
+    (() => mockAuthResponse.status).when().returns(200)
+    //point of this test: token should only be requested once
+    (mockAuthResponse.body[JsValue](_:BodyReadable[JsValue]))
+      .when(*).returns(pseudoToken)
+  }
 
   //Upload mocks
   private val mockUploadRequest = stub[CustomRequest]
@@ -97,13 +105,24 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     bfarmConnectorConfig,
     mockHttpClient)
 
-  it must "only fetch one token to make multiple uploads" in {
+  it must "only fetch one token to make multiple uploads in short time" in {
+    prepAuthMocks()
     assert(tokenFetchCounter.get() == 0)
     val submissionReports = List.fill(nUploads)(makeFakeReport)
 
     for {
       _ <- Future.traverse(submissionReports)(toTest.upload)
     } yield tokenFetchCounter.get mustBe 1
+    assert(tokenFetchCounter.get() == 1)
+  }
+
+  it must "fetch a new token for subsequent uploads if it expires during a series of uploads" in {
+    prepAuthMocks(5)
+    assert(tokenFetchCounter.get() == 0)
+    toTest.upload(makeFakeReport) //TODO muss auf die Zukunft warten
+    assert(tokenFetchCounter.get() == 1)
+    toTest.upload(makeFakeReport)
+    assert(tokenFetchCounter.get() == 2)
   }
 
   "Token" must "be deserializable from the JSON fields that sent from BfArM" in {
@@ -111,9 +130,10 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     // So we should ensure nobody changes field names
 
     import BfArMConnectorImpl.Token
-    val functioningToken = Json.fromJson[Token](pseudoToken)
+    val expectedTokenLifetime = 123465 //TODO have a series of values for this or randomize every time
+    val functioningToken = Json.fromJson[Token](makeToken(expectedTokenLifetime))
     assert(functioningToken.isSuccess)
     assert(functioningToken.get.access_token == "babelub")
-    assert(functioningToken.get.expires_in == 133742)
+    assert(functioningToken.get.expires_in == expectedTokenLifetime)
   }
 }
