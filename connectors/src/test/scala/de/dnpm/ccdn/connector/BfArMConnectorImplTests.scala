@@ -1,10 +1,9 @@
 package de.dnpm.ccdn.connector
 
-import de.dnpm.ccdn.core.{Config, bfarm}
-import de.dnpm.ccdn.core.bfarm.SubmissionReport
-import de.dnpm.dip.coding.Coding
+import de.dnpm.ccdn.core.{bfarm}
+import de.dnpm.ccdn.core.bfarm.{CDN, SubmissionReport}
 import de.dnpm.dip.model.{HealthInsurance, Id, Site}
-import de.dnpm.dip.service.mvh.{Submission, TransferTAN, UseCase}
+import de.dnpm.dip.service.mvh.{Submission, TransferTAN}
 import org.scalamock.scalatest.AsyncMockFactory
 import org.scalatest.AsyncTestSuite
 import org.scalatest.flatspec.AsyncFlatSpec
@@ -22,7 +21,6 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
   with AsyncTestSuite
   with AsyncMockFactory
 {
-  //uses custom config.json
   behavior of "BfArMConnectorProviderImpl"
 
   implicit override def executionContext: ExecutionContext = scala.concurrent.ExecutionContext.Implicits.global
@@ -30,13 +28,12 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
   private def makeFakeReport: bfarm.SubmissionReport = {
     import bfarm.LibraryType
     import bfarm.SubmissionReport.DiseaseType.Oncological
-
     bfarm.SubmissionReport(
       LocalDateTime.now.toLocalDate,
       Submission.Type.Initial,
       Id[TransferTAN](randomUUID.toString),
-      Config.instance.submitterId(Coding[Site]("UKFR").code),
-      Config.instance.dataNodeIds(UseCase.MTB),
+      Id[Site]("260832299"),
+      Id[CDN]("KDKTUE005"),
       Oncological,
       LibraryType.WGSLr,
       HealthInsurance.Type.UNK
