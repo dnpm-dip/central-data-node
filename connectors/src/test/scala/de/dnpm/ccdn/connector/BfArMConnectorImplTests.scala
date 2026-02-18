@@ -1,29 +1,25 @@
 package de.dnpm.ccdn.connector
 
-import de.dnpm.ccdn.core.{bfarm}
-import de.dnpm.ccdn.core.bfarm.{CDN, SubmissionReport}
+import de.dnpm.ccdn.core.bfarm
+import de.dnpm.ccdn.core.bfarm.CDN
 import de.dnpm.dip.model.{HealthInsurance, Id, Site}
 import de.dnpm.dip.service.mvh.{Submission, TransferTAN}
 import org.scalamock.scalatest.AsyncMockFactory
-import org.scalatest.AsyncTestSuite
 import org.scalatest.flatspec.AsyncFlatSpec
+import org.scalatest.matchers.must.Matchers.convertToAnyMustWrapper
 import play.api.libs.json.{JsValue, Json}
 import play.api.libs.ws._
 
 import java.time.LocalDateTime
 import java.util.UUID.randomUUID
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import scala.concurrent.duration.{Duration => AwaitTimeout}
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.Future
 
 class BfArMConnectorImplTests extends AsyncFlatSpec
-  with AsyncTestSuite
   with AsyncMockFactory
 {
   behavior of "BfArMConnectorProviderImpl"
 
-  implicit override def executionContext: ExecutionContext = scala.concurrent.ExecutionContext.Implicits.global
 
   private def makeFakeReport: bfarm.SubmissionReport = {
     import bfarm.LibraryType
@@ -48,8 +44,6 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     "apiURL", "authURL", "klient", "geh heim", Some(1)
   )
 
-  //member names coincide with json fields and the object is built from them.
-  // So building the object from JSON ensures nobody changes field names
 
   val pseudoToken:JsValue = Json.obj(
     "access_token"      -> "babelub",
@@ -105,13 +99,21 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
 
   it must "only fetch one token to make multiple uploads" in {
     assert(tokenFetchCounter.get() == 0)
-    val testSubmissions:List[SubmissionReport] = List.fill(nUploads) (makeFakeReport)
-    val allUploads = testSubmissions.map(it => toTest.upload(it))
-    for (res <- Await.result(Future.sequence(allUploads),AwaitTimeout(5,TimeUnit.SECONDS))) {
-      //reading out the results is actually needed so that all upload threads finish
-      assert(res.isRight)
-    }
-    assert(tokenFetchCounter.get() == 1,
-      "This means the token wasnt fetched the expected number of times (once)")
+    val submissionReports = List.fill(20)(makeFakeReport)
+
+    for {
+      _ <- Future.traverse(submissionReports)(toTest.upload)
+    } yield tokenFetchCounter.get mustBe 1
+  }
+
+  "Token" must "be deserializable from the JSON fields that sent from BfArM" in {
+    //member names coincide with json fields and the object is built from them.
+    // So we should ensure nobody changes field names
+
+    import BfArMConnectorImpl.Token
+    val functioningToken = Json.fromJson[Token](pseudoToken)
+    assert(functioningToken.isSuccess)
+    assert(functioningToken.get.access_token == "babelub")
+    assert(functioningToken.get.expires_in == 133742)
   }
 }
