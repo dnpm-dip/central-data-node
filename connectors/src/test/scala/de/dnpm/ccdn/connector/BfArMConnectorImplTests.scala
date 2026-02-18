@@ -10,7 +10,7 @@ import org.scalatest.matchers.must.Matchers.convertToAnyMustWrapper
 import play.api.libs.json.{JsValue, Json}
 import play.api.libs.ws._
 
-import java.time.LocalDateTime
+import java.time.LocalDate
 import java.util.UUID.randomUUID
 import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.Future
@@ -25,7 +25,7 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     import bfarm.LibraryType
     import bfarm.SubmissionReport.DiseaseType.Oncological
     bfarm.SubmissionReport(
-      LocalDateTime.now.toLocalDate,
+      LocalDate.now,
       Submission.Type.Initial,
       Id[TransferTAN](randomUUID.toString),
       Id[Site]("260832299"),

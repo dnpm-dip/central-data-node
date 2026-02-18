@@ -27,7 +27,6 @@ import de.dnpm.dip.util.Logging
 import de.dnpm.ccdn.core.bfarm
 import bfarm.SubmissionReport
 
-import java.io.IOException
 import java.util.concurrent.atomic.AtomicReference
 
 
@@ -118,32 +117,22 @@ with Logging
   private val timeout =
     config.timeout.getOrElse(10) seconds
 
-
   private val executor =
     Executors.newSingleThreadScheduledExecutor
 
-  /**
-   * Is None, when expired or unused, becomes an empty promise while it is
-   * being fetched, so that simultaneous request will wait for the same token.
-   */
-  private val tokenCache:AtomicReference[Future[Token]] = new AtomicReference(Future.failed(new TokenExpiredException))
+  private val tokenCache:AtomicReference[Option[Future[Token]]] = new AtomicReference(None)
 
-  /**
-   * Signals that a new fresh token should be fetched
-   */
-   private case class TokenExpiredException() extends Exception
   /**
    * Scheduled during token fetch to clear an expired token
    */
-  private val expire: Runnable = () => {
-    log.info("Clearing token after expiration")
-    tokenCache.set(Future.failed(new TokenExpiredException))
+  private val expireToken: Runnable = () => {
+    log.debug("Clearing token")
+    tokenCache.set(None)
   }
 
 
-  private def getToken: Future[Token] = {
+  private def fetchToken(implicit ec:ExecutionContext): Future[Token] = {
 
-    import scala.concurrent.ExecutionContext.Implicits.global
     log.info("Getting fresh API token")
 
     wsclient
@@ -156,29 +145,13 @@ with Logging
           "client_secret" -> Seq(config.clientSecret)
         )
       )
-      .map(
-        resp => resp.status match {
-          case 200 => resp.body[JsValue].as[Token].asRight
-          case _   => resp.body[JsValue].as[Error].asLeft
-        }
-      )
+      .map(_.body[JsValue].as[Token])
       .andThen {
-        case Success(Right(tkn)) =>
-          log.info(s"Updating API token reference and scheduling expiration in ${tkn.expires_in} s")
-          executor.schedule(expire, tkn.expires_in - 5, SECONDS)
-          Future.successful(tkn)
-
-        case Success(Left(err)) =>
-          val errMsg: String = s"Failed to get BfArM API token: ${err.statusCode} ${err.error}: ${err.message}"
-          log.error(errMsg)
-          Future.failed(new IOException(errMsg))
-
+        case Success(tkn) =>
+          // Schedule token removal after its expiration
+          executor.schedule(expireToken, tkn.expires_in - 5, SECONDS)
         case Failure(t) =>
-          log.error("Failed to get BfArM API token", t)
-          Future.failed(t)
-      }
-      .collect {
-        case Right(tkn: Token) => tkn
+          log.error("Failed to get BfArM API token",t)
       }
   }
 
@@ -187,9 +160,9 @@ with Logging
   )(
     implicit ec: ExecutionContext
   ): Future[WSRequest] = {
-    tokenCache.updateAndGet(curVal => curVal.recoverWith {
-      case _: TokenExpiredException => getToken }
-    ).map(tkn =>
+    tokenCache.updateAndGet(_.orElse (Some(fetchToken)))
+      .get
+      .map(tkn =>
         wsclient.url(url)
           .withHttpHeaders("Authorization" -> s"${tkn.token_type} ${tkn.access_token}")
           .withRequestTimeout(timeout)
@@ -211,9 +184,9 @@ with Logging
 
       result <- resp.status match {
         case 200 => Future.successful(().asRight)
-        case 401 => upload(report)
         case _   =>
           val err = resp.body[JsValue].as[Error]
+          expireToken.run()
           Future.successful(s"${err.statusCode} ${err.error}: ${err.message}".asLeft)
       }
 
