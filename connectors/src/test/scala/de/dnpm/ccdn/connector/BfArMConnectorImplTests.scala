@@ -99,7 +99,7 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
 
   it must "only fetch one token to make multiple uploads" in {
     assert(tokenFetchCounter.get() == 0)
-    val submissionReports = List.fill(20)(makeFakeReport)
+    val submissionReports = List.fill(nUploads)(makeFakeReport)
 
     for {
       _ <- Future.traverse(submissionReports)(toTest.upload)

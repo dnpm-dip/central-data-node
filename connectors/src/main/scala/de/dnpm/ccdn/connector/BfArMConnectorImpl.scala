@@ -125,7 +125,7 @@ with Logging
   /**
    * Scheduled during token fetch to clear an expired token
    */
-  private val expireToken: Runnable = () => {
+  private val clearToken: Runnable = () => {
     log.debug("Clearing token")
     tokenCache.set(None)
   }
@@ -149,7 +149,7 @@ with Logging
       .andThen {
         case Success(tkn) =>
           // Schedule token removal after its expiration
-          executor.schedule(expireToken, tkn.expires_in - 5, SECONDS)
+          executor.schedule(clearToken, tkn.expires_in - 5, SECONDS)
         case Failure(t) =>
           log.error("Failed to get BfArM API token",t)
       }
@@ -186,7 +186,7 @@ with Logging
         case 200 => Future.successful(().asRight)
         case _   =>
           val err = resp.body[JsValue].as[Error]
-          expireToken.run()
+          clearToken.run()
           Future.successful(s"${err.statusCode} ${err.error}: ${err.message}".asLeft)
       }
 
