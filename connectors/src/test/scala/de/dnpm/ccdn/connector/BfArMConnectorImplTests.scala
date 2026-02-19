@@ -118,11 +118,16 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
 
   it must "fetch a new token for subsequent uploads if it expires during a series of uploads" in {
     prepAuthMocks(5)
-    assert(tokenFetchCounter.get() == 0)
-    toTest.upload(makeFakeReport) //TODO muss auf die Zukunft warten
-    assert(tokenFetchCounter.get() == 1)
-    toTest.upload(makeFakeReport)
-    assert(tokenFetchCounter.get() == 2)
+    //TODO Tests work when you run them individually, but not when you run the entire suite. Gotta fix the fixture.
+    for{
+      _ <- assert(tokenFetchCounter.get() == 0)
+      _ <- toTest.upload(makeFakeReport)
+      _ <- assert(tokenFetchCounter.get() == 1)
+      _ <- toTest.upload(makeFakeReport)
+      _ <- assert(tokenFetchCounter.get() == 2)
+    } yield succeed
+
+
   }
 
   "Token" must "be deserializable from the JSON fields that sent from BfArM" in {
