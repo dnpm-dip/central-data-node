@@ -5,6 +5,7 @@ import de.dnpm.ccdn.core.bfarm.CDN
 import de.dnpm.dip.model.{HealthInsurance, Id, Site}
 import de.dnpm.dip.service.mvh.{Submission, TransferTAN}
 import org.scalamock.scalatest.AsyncMockFactory
+import org.scalatest.BeforeAndAfter
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.must.Matchers.convertToAnyMustWrapper
 import play.api.libs.json.{JsValue, Json}
@@ -17,6 +18,7 @@ import scala.concurrent.Future
 
 class BfArMConnectorImplTests extends AsyncFlatSpec
   with AsyncMockFactory
+  with BeforeAndAfter
 {
   behavior of "BfArMConnectorProviderImpl"
 
@@ -38,27 +40,21 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
 
   //how many documents are uploaded
   val nUploads = 10
+  val LongTokenLifetime = 133742
+  val ZeroTokenLifetime = 5 //BfArMConnectorImpl clears the token 5 seconds before formal expiration
+  val apiUrlAddress ="somewhere"
+  val authUrlAddress ="someplaceelse"
   //increments every time a token is fetched, should increase once
   val tokenFetchCounter = new AtomicInteger(0)
   val bfarmConnectorConfig = BfArMConnectorImpl.Config(
-    "apiURL", "authURL", "klient", "geh heim", Some(1)
+    apiUrlAddress, authUrlAddress, "clientValue", "geh heim", Some(1)
   )
-
-
-
-  //Could also define the token like following, but the way in use also ensures
-  // that nobody changes the field names when JSON serialization depends on them
-  // coinciding with the JSON coming from the identityprovider
-  /*implicit val tokenWrites:Writes[Token] = Json.writes[Token]
-  val pseudoToken2:JsValue = Json.toJson( BfArMConnectorImpl.Token(
-    "babelub",133742,133742,"monocle","asdbest"))*/
 
   trait CustomRequest extends StandaloneWSRequest with DefaultBodyWritables {
     type Self = CustomRequest
     type Response = CustomResponse
   }
-  trait CustomResponse extends StandaloneWSResponse {
-  }
+  trait CustomResponse extends StandaloneWSResponse { }
 
   val mockHttpClient:StandaloneWSClient = stub[StandaloneWSClient]
 
@@ -69,15 +65,16 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
       "refresh_expires_in" -> tokenExpiration,
       "scope" -> "monocle",
       "token_type" -> "asdbest")
-
+  before{
+    tokenFetchCounter.set(0)
+  }
 
   //Auth mocks
-  private def prepAuthMocks(tokenExpiration:Int=133742) = {
+  private def prepAuthMocks(tokenExpiration:Int) = {
     val pseudoToken:JsValue = makeToken(tokenExpiration)
-    tokenFetchCounter.set(0)
     val mockAuthRequest = stub[CustomRequest]
     val mockAuthResponse = stub[mockAuthRequest.Response]
-    (mockHttpClient.url _).when("authURL").returns(mockAuthRequest)
+    (mockHttpClient.url _).when(authUrlAddress).returns(mockAuthRequest)
     (mockAuthRequest.withRequestTimeout _).when(*).returns(mockAuthRequest)
     (mockAuthRequest.post(_:Map[String,Seq[String]])(_:BodyWritable[Map[String,Seq[String]]]))
       .when(*,*)
@@ -94,7 +91,7 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
   //Upload mocks
   private val mockUploadRequest = stub[CustomRequest]
   private val mockUploadResponse = stub[mockUploadRequest.Response]
-  (mockHttpClient.url _).when("apiURL").returns(mockUploadRequest)
+  (mockHttpClient.url _).when(apiUrlAddress).returns(mockUploadRequest)
   (mockUploadRequest.withHttpHeaders _).when(*).returns(mockUploadRequest)
   (mockUploadRequest.withRequestTimeout _).when(*).returns(mockUploadRequest)
   (mockUploadRequest.post(_:Map[String,Seq[String]])(_:BodyWritable[Map[String,Seq[String]]]))
@@ -105,20 +102,27 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     bfarmConnectorConfig,
     mockHttpClient)
 
+  ////////////////////////////////////////////////// Testcases
+
   it must "only fetch one token to make multiple uploads in short time" in {
-    prepAuthMocks()
+    prepAuthMocks(LongTokenLifetime)
+
+    //TODO inject prepAuthmocks and prepUploadmocks somehow into toTest and instantiate that thing in here.......
+
     assert(tokenFetchCounter.get() == 0)
     val submissionReports = List.fill(nUploads)(makeFakeReport)
 
     for {
       _ <- Future.traverse(submissionReports)(toTest.upload)
     } yield tokenFetchCounter.get mustBe 1
-    assert(tokenFetchCounter.get() == 1)
+    assert(tokenFetchCounter.get() == 1) //TODO redundant
   }
 
   it must "fetch a new token for subsequent uploads if it expires during a series of uploads" in {
-    prepAuthMocks(5)
-    //TODO Tests work when you run them individually, but not when you run the entire suite. Gotta fix the fixture.
+    prepAuthMocks(ZeroTokenLifetime)
+
+    //TODO as above
+
     for{
       _ <- assert(tokenFetchCounter.get() == 0)
       _ <- toTest.upload(makeFakeReport)
@@ -126,8 +130,6 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
       _ <- toTest.upload(makeFakeReport)
       _ <- assert(tokenFetchCounter.get() == 2)
     } yield succeed
-
-
   }
 
   "Token" must "be deserializable from the JSON fields that sent from BfArM" in {
