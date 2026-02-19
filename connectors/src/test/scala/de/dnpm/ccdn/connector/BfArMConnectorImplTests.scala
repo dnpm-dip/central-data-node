@@ -45,7 +45,6 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
   val apiUrlAddress ="somewhere"
   val authUrlAddress ="someplaceelse"
   //increments every time a token is fetched, should increase once
-  val tokenFetchCounter = new AtomicInteger(0)
   val bfarmConnectorConfig = BfArMConnectorImpl.Config(
     apiUrlAddress, authUrlAddress, "clientValue", "geh heim", Some(1)
   )
@@ -56,7 +55,6 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
   }
   trait CustomResponse extends StandaloneWSResponse { }
 
-  val mockHttpClient:StandaloneWSClient = stub[StandaloneWSClient]
 
   private def makeToken(tokenExpiration:Int):JsValue =
     Json.obj(
@@ -65,12 +63,14 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
       "refresh_expires_in" -> tokenExpiration,
       "scope" -> "monocle",
       "token_type" -> "asdbest")
-  before{
-    tokenFetchCounter.set(0)
-  }
 
-  //Auth mocks
-  private def prepAuthMocks(tokenExpiration:Int) = {
+
+
+  private class TestFixture(tokenExpiration:Int) {
+    val tokenFetchCounter = new AtomicInteger(0)
+    val mockHttpClient:StandaloneWSClient = stub[StandaloneWSClient]
+
+    //Auth mocks
     val pseudoToken:JsValue = makeToken(tokenExpiration)
     val mockAuthRequest = stub[CustomRequest]
     val mockAuthResponse = stub[mockAuthRequest.Response]
@@ -86,49 +86,48 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     //point of this test: token should only be requested once
     (mockAuthResponse.body[JsValue](_:BodyReadable[JsValue]))
       .when(*).returns(pseudoToken)
+
+    //Upload mocks
+    private val mockUploadRequest = stub[CustomRequest]
+    private val mockUploadResponse = stub[mockUploadRequest.Response]
+    (mockHttpClient.url _).when(apiUrlAddress).returns(mockUploadRequest)
+    (mockUploadRequest.withHttpHeaders _).when(*).returns(mockUploadRequest)
+    (mockUploadRequest.withRequestTimeout _).when(*).returns(mockUploadRequest)
+    (mockUploadRequest.post(_:Map[String,Seq[String]])(_:BodyWritable[Map[String,Seq[String]]]))
+      .when(*,*).returns(Future.successful(mockUploadResponse))
+    (() => mockUploadResponse.status).when().returns(200)
+
+
+    val toTest = new BfArMConnectorImpl(
+      bfarmConnectorConfig,
+      mockHttpClient)
   }
-
-  //Upload mocks
-  private val mockUploadRequest = stub[CustomRequest]
-  private val mockUploadResponse = stub[mockUploadRequest.Response]
-  (mockHttpClient.url _).when(apiUrlAddress).returns(mockUploadRequest)
-  (mockUploadRequest.withHttpHeaders _).when(*).returns(mockUploadRequest)
-  (mockUploadRequest.withRequestTimeout _).when(*).returns(mockUploadRequest)
-  (mockUploadRequest.post(_:Map[String,Seq[String]])(_:BodyWritable[Map[String,Seq[String]]]))
-    .when(*,*).returns(Future.successful(mockUploadResponse))
-  (() => mockUploadResponse.status).when().returns(200)
-
-  val toTest = new BfArMConnectorImpl(
-    bfarmConnectorConfig,
-    mockHttpClient)
 
   ////////////////////////////////////////////////// Testcases
 
   it must "only fetch one token to make multiple uploads in short time" in {
-    prepAuthMocks(LongTokenLifetime)
+    val fixture = new TestFixture(LongTokenLifetime)
 
-    //TODO inject prepAuthmocks and prepUploadmocks somehow into toTest and instantiate that thing in here.......
-
-    assert(tokenFetchCounter.get() == 0)
+    assert(fixture.tokenFetchCounter.get() == 0)
     val submissionReports = List.fill(nUploads)(makeFakeReport)
 
     for {
-      _ <- Future.traverse(submissionReports)(toTest.upload)
-    } yield tokenFetchCounter.get mustBe 1
-    assert(tokenFetchCounter.get() == 1) //TODO redundant
+      _ <- Future.traverse(submissionReports)(fixture.toTest.upload)
+    } yield fixture.tokenFetchCounter.get mustBe 1
+    assert(fixture.tokenFetchCounter.get() == 1) //TODO redundant
   }
 
   it must "fetch a new token for subsequent uploads if it expires during a series of uploads" in {
-    prepAuthMocks(ZeroTokenLifetime)
-
-    //TODO as above
+    val fixture = new TestFixture(ZeroTokenLifetime)
 
     for{
-      _ <- assert(tokenFetchCounter.get() == 0)
-      _ <- toTest.upload(makeFakeReport)
-      _ <- assert(tokenFetchCounter.get() == 1)
-      _ <- toTest.upload(makeFakeReport)
-      _ <- assert(tokenFetchCounter.get() == 2)
+      _ <- assert(fixture.tokenFetchCounter.get() == 0)
+      _ <- fixture.toTest.upload(makeFakeReport)
+      _ <- assert(fixture.tokenFetchCounter.get() == 1)
+      _ <- fixture.toTest.upload(makeFakeReport)
+      _ <- assert(fixture.tokenFetchCounter.get() == 2)
+      _ <- fixture.toTest.upload(makeFakeReport)
+      _ <- assert(fixture.tokenFetchCounter.get() == 3)
     } yield succeed
   }
 
