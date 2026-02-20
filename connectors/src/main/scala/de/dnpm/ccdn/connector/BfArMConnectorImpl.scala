@@ -120,14 +120,19 @@ with Logging
   private val executor =
     Executors.newSingleThreadScheduledExecutor
 
-  private val tokenCache:AtomicReference[Option[Future[Token]]] = new AtomicReference(None)
+  private val tokenCache:AtomicReference[Future[Token]] =
+    new AtomicReference(Future.failed(new TokenExpiredException))
+  /**
+   * Signals that a new fresh token should be fetched
+   */
+  private case class TokenExpiredException() extends Exception
 
   /**
    * Scheduled during token fetch to clear an expired token
    */
   private val clearToken: Runnable = () => {
     log.debug("Clearing token")
-    tokenCache.set(None)
+    tokenCache.set(Future.failed(new TokenExpiredException))
   }
 
 
@@ -160,8 +165,9 @@ with Logging
   )(
     implicit ec: ExecutionContext
   ): Future[WSRequest] = {
-    tokenCache.updateAndGet(_.orElse (Some(fetchToken)))
-      .get
+    tokenCache.updateAndGet(curVal => curVal.recoverWith{
+        case _:TokenExpiredException => fetchToken
+      })
       .map(tkn =>
         wsclient.url(url)
           .withHttpHeaders("Authorization" -> s"${tkn.token_type} ${tkn.access_token}")
