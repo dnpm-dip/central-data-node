@@ -158,16 +158,14 @@ with Logging
   )(
     implicit ec: ExecutionContext
   ): Future[WSRequest] =
-    token.updateAndGet(
-      // Try re-fetching a token if it was removed after expiration
-      _.orElse(Some(fetchToken))
-    )
-    .get // safe here, due to .orElse above
-    .map(tkn =>
-      wsclient.url(url)
-        .withHttpHeaders("Authorization" -> s"${tkn.token_type} ${tkn.access_token}")
-        .withRequestTimeout(timeout)
-    )
+    // Try re-fetching a token if it was removed after expiration
+    token.updateAndGet(_ orElse Some(fetchToken))
+      .get // safe here, due to .orElse above
+      .map(tkn =>
+        wsclient.url(url)
+          .withHttpHeaders("Authorization" -> s"${tkn.token_type} ${tkn.access_token}")
+          .withRequestTimeout(timeout)
+      )
 
 
   override def upload(

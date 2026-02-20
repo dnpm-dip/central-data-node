@@ -96,12 +96,10 @@ class BfArMConnectorTests extends AsyncFlatSpec with AsyncMockFactory
 
   (wsclient.url _).when(config.authURL).returns(tokenRequest)
   (tokenRequest.withRequestTimeout _).when(*).returns(tokenRequest)
-  (tokenRequest.post(_: Map[String,Seq[String]])(_: BodyWritable[Map[String,Seq[String]]]))
-    .when(*,*)
-    .onCall(_ => {
-      tokenFetchCounter.incrementAndGet()
-      Future.successful(tokenResponse)
-    })
+  (tokenRequest.post(_: Map[String,Seq[String]])(_: BodyWritable[Map[String,Seq[String]]])).when(*,*).onCall {_ => 
+    tokenFetchCounter.incrementAndGet
+    Future.successful(tokenResponse)
+  }
   (() => tokenResponse.status).when().returns(200)
   (tokenResponse.body[JsValue](_: BodyReadable[JsValue])).when(*).returns(Json.toJson(token))
 
