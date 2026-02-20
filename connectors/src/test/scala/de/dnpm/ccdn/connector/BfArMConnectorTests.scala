@@ -3,7 +3,7 @@ package de.dnpm.ccdn.connector
 
 import java.time.LocalDate
 import java.util.UUID.randomUUID
-import java.util.concurrent.atomic.AtomicInteger
+//import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.Future
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.must.Matchers._
@@ -84,6 +84,7 @@ class BfArMConnectorTests extends AsyncFlatSpec with AsyncMockFactory
     )
 
 
+/*
   // Test purpose: Ensure that the token fetch request is performed only once even on multiple uploads
   val tokenFetchCounter = new AtomicInteger(0)
 
@@ -103,6 +104,7 @@ class BfArMConnectorTests extends AsyncFlatSpec with AsyncMockFactory
   (() => tokenResponse.status).when().returns(200)
   (tokenResponse.body[JsValue](_: BodyReadable[JsValue])).when(*).returns(Json.toJson(token))
 
+  
   // Upload request stubs
   private val uploadRequest = stub[FakeRequest]
   private val uploadResponse = stub[uploadRequest.Response]
@@ -112,6 +114,30 @@ class BfArMConnectorTests extends AsyncFlatSpec with AsyncMockFactory
   (uploadRequest.withRequestTimeout _).when(*).returns(uploadRequest)
   (uploadRequest.post(_: JsValue)(_: BodyWritable[JsValue])).when(*,*).returns(Future.successful(uploadResponse))
   (() => uploadResponse.status).when().returns(200)
+*/
+  
+  
+  val wsclient = mock[WSClient]
+
+  // Token request stubs
+  val tokenRequest = mock[FakeRequest]
+  val tokenResponse = mock[tokenRequest.Response]
+
+  (wsclient.url _).expects(config.authURL).returns(tokenRequest).atLeastOnce()
+  (tokenRequest.withRequestTimeout _).expects(*).returns(tokenRequest).atLeastOnce()
+  (tokenRequest.post(_: Map[String,Seq[String]])(_: BodyWritable[Map[String,Seq[String]]])).expects(*,*).returns(Future.successful(tokenResponse)).once()
+  (tokenResponse.body[JsValue](_: BodyReadable[JsValue])).expects(*).returns(Json.toJson(token)).atLeastOnce()
+
+  
+  // Upload request stubs
+  private val uploadRequest = mock[FakeRequest]
+  private val uploadResponse = mock[uploadRequest.Response]
+
+  (wsclient.url _).expects(config.apiURL).returns(uploadRequest).atLeastOnce()
+  (uploadRequest.withHttpHeaders _).expects(*).returns(uploadRequest).atLeastOnce()
+  (uploadRequest.withRequestTimeout _).expects(*).returns(uploadRequest).atLeastOnce()
+  (uploadRequest.post(_: JsValue)(_: BodyWritable[JsValue])).expects(*,*).returns(Future.successful(uploadResponse)).atLeastOnce()
+  (() => uploadResponse.status).expects().returns(200).atLeastOnce()
 
 
   val connector =
@@ -126,8 +152,12 @@ class BfArMConnectorTests extends AsyncFlatSpec with AsyncMockFactory
     val submissionReports = List.fill(20)(rndSubmissionReport)
 
     for {
-      _ <- Future.traverse(submissionReports)(connector.upload)
-    } yield tokenFetchCounter.get mustBe 1
+      outcomes <- Future.traverse(submissionReports)(connector.upload)
+    } yield all(outcomes) must matchPattern { case Right(_) => }
+
+//    for {
+//      _ <- Future.traverse(submissionReports)(connector.upload)
+//    } yield tokenFetchCounter.get mustBe 1
 
   }
 
