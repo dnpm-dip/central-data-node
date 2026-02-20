@@ -1,5 +1,6 @@
 package de.dnpm.ccdn.connector
 
+import de.dnpm.ccdn.connector.BfArMConnectorImpl.Token
 import de.dnpm.ccdn.core.bfarm
 import de.dnpm.ccdn.core.bfarm.CDN
 import de.dnpm.dip.model.{HealthInsurance, Id, Site}
@@ -7,8 +8,7 @@ import de.dnpm.dip.service.mvh.{Submission, TransferTAN}
 import org.scalamock.scalatest.AsyncMockFactory
 import org.scalatest.BeforeAndAfter
 import org.scalatest.flatspec.AsyncFlatSpec
-import org.scalatest.matchers.must.Matchers.convertToAnyMustWrapper
-import play.api.libs.json.{JsValue, Json}
+import play.api.libs.json.{JsValue, Json, Writes}
 import play.api.libs.ws._
 
 import java.time.LocalDate
@@ -56,13 +56,15 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
   trait CustomResponse extends StandaloneWSResponse { }
 
 
-  private def makeToken(tokenExpiration:Int):JsValue =
-    Json.obj(
-      "access_token" -> "babelub",
-      "expires_in" -> tokenExpiration,
-      "refresh_expires_in" -> tokenExpiration,
-      "scope" -> "monocle",
-      "token_type" -> "asdbest")
+  implicit val format: Writes[Token] =
+    Json.writes[Token]
+  private def makeToken(tokenExpiration:Int):Token =
+    Token(
+      "access_tokenVALUE",
+      tokenExpiration.toLong,
+      tokenExpiration,
+      "scopeVALUE",
+      "token_typeVALUE")
 
 
 
@@ -71,9 +73,9 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     val mockHttpClient:StandaloneWSClient = stub[StandaloneWSClient]
 
     //Auth mocks
-    val pseudoToken:JsValue = makeToken(tokenExpiration)
-    val mockAuthRequest = stub[CustomRequest]
-    val mockAuthResponse = stub[mockAuthRequest.Response]
+    val pseudoToken:Token = makeToken(tokenExpiration)
+    val mockAuthRequest:CustomRequest = stub[CustomRequest]
+    val mockAuthResponse:mockAuthRequest.Response = stub[mockAuthRequest.Response]
     (mockHttpClient.url _).when(authUrlAddress).returns(mockAuthRequest)
     (mockAuthRequest.withRequestTimeout _).when(*).returns(mockAuthRequest)
     (mockAuthRequest.post(_:Map[String,Seq[String]])(_:BodyWritable[Map[String,Seq[String]]]))
@@ -85,7 +87,7 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     (() => mockAuthResponse.status).when().returns(200)
     //point of this test: token should only be requested once
     (mockAuthResponse.body[JsValue](_:BodyReadable[JsValue]))
-      .when(*).returns(pseudoToken)
+      .when(*).returns(Json.toJson(pseudoToken))
 
     //Upload mocks
     private val mockUploadRequest = stub[CustomRequest]
@@ -113,9 +115,9 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
 
     for {
       _ <- Future.traverse(submissionReports)(fixture.toTest.upload)
-    } yield fixture.tokenFetchCounter.get mustBe 1
-    assert(fixture.tokenFetchCounter.get() == 1) //TODO redundant
+    } yield assert(fixture.tokenFetchCounter.get() == 1)
   }
+
 
   it must "fetch a new token for subsequent uploads if it expires during a series of uploads" in {
     val fixture = new TestFixture(ZeroTokenLifetime)
@@ -131,15 +133,24 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     } yield succeed
   }
 
+
   "Token" must "be deserializable from the JSON fields that sent from BfArM" in {
     //member names coincide with json fields and the object is built from them.
     // So we should ensure nobody changes field names
-
     import BfArMConnectorImpl.Token
-    val expectedTokenLifetime = 123465 //TODO have a series of values for this or randomize every time
-    val functioningToken = Json.fromJson[Token](makeToken(expectedTokenLifetime))
-    assert(functioningToken.isSuccess)
-    assert(functioningToken.get.access_token == "babelub")
-    assert(functioningToken.get.expires_in == expectedTokenLifetime)
+    val testToken:Token = Token(
+      "erztfuj",
+      123465,
+      9876,
+      "khzhftgre",
+      "bcvgfhjuz")
+    val backAndForth = Json.fromJson[Token](Json.toJson[Token](testToken))
+
+    assert(backAndForth.isSuccess)
+    assert(testToken.access_token == backAndForth.get.access_token)
+    assert(testToken.token_type == backAndForth.get.token_type)
+    assert(testToken.scope == backAndForth.get.scope)
+    assert(testToken.expires_in == backAndForth.get.expires_in)
+    assert(testToken.refresh_expires_in == backAndForth.get.refresh_expires_in)
   }
 }
