@@ -11,9 +11,6 @@ import play.api.libs.json.{
   Json,
   OWrites
 }
-//import play.api.libs.ws.{
-//  StandaloneWSClient => WSClient,
-//}
 import de.dnpm.dip.model.{
   HealthInsurance,
   Id,
@@ -76,10 +73,10 @@ class BfArMConnectorTests extends AsyncFlatSpec
       config.authURL -> {
         case "POST" =>
           tokenFetchCounter.incrementAndGet
-          (200,"OK",Some(Json.stringify(Json.toJson(token))))
+          HTTP.Ok -> Some(Json.stringify(Json.toJson(token)))
       },
       config.apiURL -> {
-        case "POST" => (200,"OK",None)
+        case "POST" => HTTP.Ok -> None
       }
     )
   }

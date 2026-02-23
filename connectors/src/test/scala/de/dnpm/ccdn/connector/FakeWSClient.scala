@@ -11,7 +11,6 @@ import play.api.libs.ws.{
   StandaloneWSResponse => WSResponse,
   EmptyBody,
   WSAuthScheme,
-  WSBody,
   BodyWritable,
   WSCookie,
   WSProxyServer,
@@ -19,8 +18,7 @@ import play.api.libs.ws.{
   WSSignatureCalculator
 }
 
-
-object FakeWSClient
+object HTTP
 {
 
   val DELETE  = "DELETE"
@@ -31,8 +29,34 @@ object FakeWSClient
   val PATCH   = "PATCH"
   val PUT     = "PUT"
 
+  val Ok                  = 200
+  val Created             = 201
+  val BadRequest          = 400
+  val Unauthorized        = 401
+  val Forbidden           = 403
+  val InternalServerError = 500
+  val BadGateway          = 502
+  //TODO
 
-  final case class Response(
+  val statusTexts: Function[Int,String] =
+    Map(
+      Ok                  -> "OK",
+      Created             -> "Created",
+      BadRequest          -> "Bad Request",
+      Unauthorized        -> "Unauthorized",
+      Forbidden           -> "Forbidden",
+      InternalServerError -> "Internal Server Error",
+      BadGateway          -> "Bad Gateway"
+      //TODO
+    )
+}
+
+
+object FakeWSClient
+{
+
+  private final case class Response
+  (
     uri: URI,
     optBody: Option[String],
     status: Int,
@@ -58,20 +82,24 @@ object FakeWSClient
   }
 
 
-  final case class Request(
+  private final case class Request
+  (
     url: String,
-    optBody: Option[WSBody],
     responses: PartialFunction[String,Response],
   )
   extends WSRequest
   {
 
+    import HTTP._
+
     type Self = FakeWSClient.Request
     type Response = FakeWSClient.Response
     
     
-    def auth: Option[(String, String, WSAuthScheme)] = None
-    
+    def auth: Option[(String,String,WSAuthScheme)] = None
+  
+    // Fake request is not supposed to tranfer an actual body,
+    // but is just a means to obtain a response
     def body = EmptyBody
     
     def calc: Option[WSSignatureCalculator] = None
@@ -146,8 +174,8 @@ object FakeWSClient
   
   }
 
-  
-  type RequestMapper = PartialFunction[String,PartialFunction[String,(Int,String,Option[String])]]
+  // Map a URL to a Method to a Response: URL => Method => Response 
+  type RequestMapper = PartialFunction[String,PartialFunction[String,(Int,Option[String])]]
   
   def apply(responses: RequestMapper): FakeWSClient =
     new FakeWSClient(responses)
@@ -168,14 +196,13 @@ extends WSClient
   override def url(url: String): WSRequest =
     FakeWSClient.Request(
       url,
-      None,
       responses(url).andThen {
-       case (status,statusText,body) => 
+       case (status,body) => 
          FakeWSClient.Response(
            URI.create(url),
            body,
            status,
-           statusText
+           HTTP.statusTexts(status)
          )
       }
     )
