@@ -3,12 +3,20 @@ package de.dnpm.ccdn.connector
 
 import java.net.URI
 import scala.concurrent.Future
+import scala.concurrent.duration.Duration
+import org.apache.pekko.util.ByteString
 import play.api.libs.ws.{
   StandaloneWSClient => WSClient,
   StandaloneWSRequest => WSRequest,
-  StandaloneWSResponse => WSResponse
+  StandaloneWSResponse => WSResponse,
+  WSAuthScheme,
+  WSBody,
+  BodyWritable,
+  WSCookie,
+  WSProxyServer,
+  WSRequestFilter,
+  WSSignatureCalculator
 }
-//import play.api.libs.ws.InMemoryBody
 
 
 object FakeWSClient
@@ -21,18 +29,19 @@ object FakeWSClient
     statusText: String
   )
   extends WSResponse
-  { 
+  {
+
     def body = optBody.getOrElse("")
 
-    def bodyAsBytes = org.apache.pekko.util.ByteString.fromString(body)
+    def bodyAsBytes = ByteString.fromString(body)
 
     def bodyAsSource = ???
 
-    def cookie(name: String): Option[play.api.libs.ws.WSCookie] = None
+    def cookie(name: String): Option[WSCookie] = None
 
-    def cookies: scala.collection.Seq[play.api.libs.ws.WSCookie] = Seq.empty
+    def cookies: Seq[WSCookie] = Seq.empty
 
-    def headers: Map[String,scala.collection.Seq[String]] = Map.empty
+    def headers: Map[String,Seq[String]] = Map.empty
 
     def underlying[T]: T = ???
 
@@ -41,8 +50,10 @@ object FakeWSClient
 
   final case class Request(
     url: String,
-    optBody: Option[play.api.libs.ws.WSBody],
-    response: Response
+    optBody: Option[WSBody],
+    response: Response,
+    headers: Map[String,Seq[String]] = Map.empty,
+    cookies: Seq[WSCookie] = Seq.empty
   )
   extends WSRequest
   {
@@ -51,15 +62,13 @@ object FakeWSClient
    type Response = FakeWSClient.Response
 
 
-   def auth: Option[(String, String, play.api.libs.ws.WSAuthScheme)] = None
+   def auth: Option[(String, String, WSAuthScheme)] = None
 
    def body = optBody.get
 
-   def calc: Option[play.api.libs.ws.WSSignatureCalculator] = None
+   def calc: Option[WSSignatureCalculator] = None
 
-   def contentType: Option[String] = ???
-
-   def cookies: Seq[play.api.libs.ws.WSCookie] = Seq.empty
+   def contentType: Option[String] = None
 
    def delete(): Future[Response] = Future.successful(response)
 
@@ -73,34 +82,23 @@ object FakeWSClient
 
    def head(): Future[Response] = Future.successful(response)
 
-   def headers: Map[String,Seq[String]] = Map.empty
-
-   def method: String = ???
+   def method: String = ""
 
    def options(): Future[Response] = Future.successful(response)
    
-   def patch[T](body: T)(
-     implicit bw: play.api.libs.ws.BodyWritable[T]
-   ): Future[Response] =
-     Future.successful(response)
+   def patch[T](body: T)(implicit bw: BodyWritable[T]): Future[Response] = Future.successful(response)
 
-   def post[T](body: T)(
-     implicit bw: play.api.libs.ws.BodyWritable[T]
-   ): Future[Response] =
-     Future.successful(response)
+   def post[T](body: T)(implicit bw: BodyWritable[T]): Future[Response] = Future.successful(response)
 
-   def proxyServer: Option[play.api.libs.ws.WSProxyServer] = None
+   def proxyServer: Option[WSProxyServer] = None
 
-   def put[T](body: T)(
-     implicit bw: play.api.libs.ws.BodyWritable[T]
-   ): Future[Response] =
-     Future.successful(response)
+   def put[T](body: T)(implicit bw: BodyWritable[T]): Future[Response] = Future.successful(response)
 
-   def queryString: Map[String,Seq[String]] = Map.empty //TODO
+   def queryString: Map[String,Seq[String]] = Map.empty
 
-   def requestTimeout: Option[scala.concurrent.duration.Duration] = None
+   def requestTimeout: Option[Duration] = None
 
-   def sign(calc: play.api.libs.ws.WSSignatureCalculator): Self = this
+   def sign(calc: WSSignatureCalculator): Self = this
 
    def stream(): Future[Response] = Future.successful(response)
 
@@ -109,34 +107,32 @@ object FakeWSClient
 
    def virtualHost: Option[String] = None
 
-   def withAuth(
-     username: String,
-     password: String,
-     scheme: play.api.libs.ws.WSAuthScheme
-   ): Self = this
+   def withAuth(username: String, password: String, scheme: WSAuthScheme): Self = this
    
-   def withBody[T](body: T)(implicit bw: play.api.libs.ws.BodyWritable[T]): Self = ???
-//     copy(optBody = Some(bw(body)))
+   def withBody[T](body: T)(implicit bw: BodyWritable[T]): Self = this 
    
-   def withCookies(cookies: play.api.libs.ws.WSCookie*): Self = this
+   def withCookies(cookies: WSCookie*): Self = copy(cookies = this.cookies ++ cookies)
 
    def withDisableUrlEncoding(disableUrlEncoding: Boolean): Self = this
 
    def withFollowRedirects(follow: Boolean): Self = this
 
-   def withHttpHeaders(headers: (String, String)*): Self = this
+   def withHttpHeaders(headers: (String, String)*): Self =
+     copy(
+       headers = headers.map { case (name,value) => name -> Seq(value) }.toMap
+     )
 
    def withMethod(method: String): Self = this
 
-   def withProxyServer(proxyServer: play.api.libs.ws.WSProxyServer): Self = this
+   def withProxyServer(proxyServer: WSProxyServer): Self = this
 
    def withQueryStringParameters(parameters: (String, String)*): Self = this
 
-   def withRequestFilter(filter: play.api.libs.ws.WSRequestFilter): Self = this
+   def withRequestFilter(filter: WSRequestFilter): Self = this
 
-   def withRequestTimeout(timeout: scala.concurrent.duration.Duration): Self = this
+   def withRequestTimeout(timeout: Duration): Self = this
 
-   def withUrl(url: String): Self = this
+   def withUrl(url: String): Self = copy(url = url)
 
    def withVirtualHost(vh: String): Self = this
    

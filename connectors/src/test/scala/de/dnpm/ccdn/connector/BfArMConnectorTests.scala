@@ -74,15 +74,13 @@ class BfArMConnectorTests extends AsyncFlatSpec
   val wsclient: WSClient =
     new FakeWSClient(
     {
-      case url if url == config.authURL => {
+      case url if url == config.authURL => 
         tokenFetchCounter.incrementAndGet
         (200,"OK",Some(Json.stringify(Json.toJson(token))))
-      }
 
       case url if url == config.apiURL => (200,"OK",None)
     }
   )
-
 
   val connector =
     new BfArMConnectorImpl(
