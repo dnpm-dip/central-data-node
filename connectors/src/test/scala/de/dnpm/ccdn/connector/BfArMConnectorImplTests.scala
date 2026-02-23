@@ -77,6 +77,7 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     val pseudoToken:Token = makeToken(tokenExpiration)
     val mockAuthRequest:CustomRequest = stub[CustomRequest]
     val mockAuthResponse:mockAuthRequest.Response = stub[mockAuthRequest.Response]
+
     (mockHttpClient.url _).when(authUrlAddress).returns(mockAuthRequest)
     (mockAuthRequest.withRequestTimeout _).when(*).returns(mockAuthRequest)
     (mockAuthRequest.post(_:Map[String,Seq[String]])(_:BodyWritable[Map[String,Seq[String]]]))
@@ -87,7 +88,7 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
           Future.successful(mockAuthResponse)
         else
           Future.failed(new CustomTestException())
-      })
+      }).anyNumberOfTimes()
     (() => mockAuthResponse.status).when().returns(200)
     //point of this test: token should only be requested once
     (mockAuthResponse.body[JsValue](_:BodyReadable[JsValue]))
@@ -126,7 +127,7 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
   it must "fetch a new token for subsequent uploads if it expires during a series of uploads" in {
     val fixture = new TestFixture(ZeroTokenLifetime,true)
 
-    for{
+    for {
       _ <- (assertResult(0, "Tokenfetchcounter should be initialized to zero before test")
               (fixture.tokenFetchCounter.get()))
       _ <- fixture.toTest.upload(makeFakeReport)
@@ -138,28 +139,28 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     } yield succeed
   }
 
-
-  it must "fetch a new token for subsequent uploads if the first fetch failed" in {
+  it must "fetch a new token in subsequent uploads if the previous fetch failed" in {
     val fixture = new TestFixture(LongTokenLifetime,false)
+    val exceptionMsg1 = "testFailure1"
+    val exceptionMsg2 = "testFailure2"
 
-    //TODO fails right now, probably should, but not sure
-
-    for{
+    for {
       _                   <- (assertResult(0, "Tokenfetchcounter should be initialized to zero before test")
                                           (fixture.tokenFetchCounter.get()))
       firstUploadAttempt  <- fixture.toTest.upload(makeFakeReport).recover[Either[String,Unit]](
-                                {case _:CustomTestException => Left("testFehler1")})
-      _                   <- assertResult(1, "Tokenfetch appearantly did not trigger")(fixture.tokenFetchCounter.get())
+                                {case _:CustomTestException => Left(exceptionMsg1)})
+      _                   <- assertResult(1, "Tokenfetch appearantly did not happen")(fixture.tokenFetchCounter.get())
       secondUploadAttempt <- fixture.toTest.upload(makeFakeReport).recover[Either[String,Unit]](
-                                {case _:CustomTestException => Left("testFehler2")})
+                                {case _:CustomTestException => Left(exceptionMsg2)})
       _                   <- assertResult(2)(fixture.tokenFetchCounter.get())
     } yield {
       assert(firstUploadAttempt.isLeft)
+      assertResult(exceptionMsg1)(firstUploadAttempt.left.getOrElse("no failure"))
       assert(secondUploadAttempt.isLeft)
+      assertResult(exceptionMsg2)(secondUploadAttempt.left.getOrElse("no failure"))
     }
 
   }
-
 
   it must "fail the upload when the fetch of the token fails" in {
     val fixture = new TestFixture(LongTokenLifetime,false)

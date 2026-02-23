@@ -99,7 +99,7 @@ object BfArMConnectorImpl
 }
 
 
-import BfArMConnectorImpl._    
+import BfArMConnectorImpl._
 
 
 final class BfArMConnectorImpl
@@ -120,10 +120,16 @@ with Logging
   private val executor =
     Executors.newSingleThreadScheduledExecutor
 
+  /**
+   * Contains the token to the BfArM until 5 seconds before it expires.
+   * Not a Promise because unsetting a promise needs external securing against unsecure access.
+   * Note that any kind of exception can be stored as reason for a failed future
+   */
   private val tokenCache:AtomicReference[Future[Token]] =
     new AtomicReference(Future.failed(new TokenExpiredException))
+
   /**
-   * Signals that a new fresh token should be fetched
+   * Signals that a new fresh token should be fetched.
    */
   private case class TokenExpiredException() extends Exception
 
@@ -166,7 +172,7 @@ with Logging
     implicit ec: ExecutionContext
   ): Future[WSRequest] = {
     tokenCache.updateAndGet(curVal => curVal.recoverWith{
-        case _:TokenExpiredException => fetchToken
+        case _:Exception => fetchToken
       })
       .map(tkn =>
         wsclient.url(url)
