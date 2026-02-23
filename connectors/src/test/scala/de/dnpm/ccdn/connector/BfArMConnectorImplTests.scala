@@ -57,8 +57,7 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
 
   class CustomTestException extends Exception("arsrtfhg")
 
-  implicit val format: Writes[Token] =
-    Json.writes[Token]
+
   private def makeToken(tokenExpiration:Int):Token =
     Token(
       "access_tokenVALUE",
@@ -68,8 +67,8 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
       "token_typeVALUE")
 
 
-
-  private class TestFixture(tokenExpiration:Int,tokenFetchSucceeds:Boolean) {
+  implicit val format: Writes[Token] = Json.writes[Token]
+  private class TestFixture(tokenExpiration:Int,tokenFetchSucceeds:Boolean, uploadSucceeds:Boolean = true) {
     val tokenFetchCounter = new AtomicInteger(0)
     val mockHttpClient:StandaloneWSClient = stub[StandaloneWSClient]
 
@@ -88,9 +87,10 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
           Future.successful(mockAuthResponse)
         else
           Future.failed(new CustomTestException())
-      }).anyNumberOfTimes()
+      })
     (() => mockAuthResponse.status).when().returns(200)
     //point of this test: token should only be requested once
+
     (mockAuthResponse.body[JsValue](_:BodyReadable[JsValue]))
       .when(*).returns(Json.toJson(pseudoToken))
 
@@ -102,8 +102,13 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     (mockUploadRequest.withRequestTimeout _).when(*).returns(mockUploadRequest)
     (mockUploadRequest.post(_:Map[String,Seq[String]])(_:BodyWritable[Map[String,Seq[String]]]))
       .when(*,*).returns(Future.successful(mockUploadResponse))
-    (() => mockUploadResponse.status).when().returns(200)
+    (() => mockUploadResponse.status).when().returns(
+      if (uploadSucceeds) 200 else 420)
 
+    implicit val errorWriter:Writes[BfArMConnectorImpl.Error] = Json.writes[BfArMConnectorImpl.Error]
+    (mockUploadResponse.body[JsValue](_:BodyReadable[JsValue])).when(*).returns(
+      //this mock only returns failures, you have to expand the mock if you plan to read JSON responses of successful uploads
+      Json.toJson(BfArMConnectorImpl.Error(420,"errorVal","420","msgVal")))
 
     val toTest = new BfArMConnectorImpl(
       bfarmConnectorConfig,
@@ -123,7 +128,6 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     } yield assert(fixture.tokenFetchCounter.get() == 1)
   }
 
-
   it must "fetch a new token for subsequent uploads if it expires during a series of uploads" in {
     val fixture = new TestFixture(ZeroTokenLifetime,true)
 
@@ -139,7 +143,8 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     } yield succeed
   }
 
-  it must "fetch a new token in subsequent uploads if the previous fetch failed" in {
+  it must "try again to fetch a new token in subsequent uploads if the previous fetch failed" in {
+    //simulating that both requests fail similarly is sufficient
     val fixture = new TestFixture(LongTokenLifetime,false)
     val exceptionMsg1 = "testFailure1"
     val exceptionMsg2 = "testFailure2"
@@ -169,6 +174,15 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     }
   }
 
+  it must "return a successful future even if the upload fails" in {
+    val fixture = new TestFixture(LongTokenLifetime,true,false)
+    for {
+      result <- fixture.toTest.upload(makeFakeReport)
+    } yield {
+      assert(result.isLeft)
+      assertResult("420 errorVal: msgVal")(result.left.getOrElse(""))
+    }
+  }
 
   "Token" must "be deserializable from the JSON fields that sent from BfArM" in {
     //member names coincide with json fields and the object is built from them.
