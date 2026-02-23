@@ -11,9 +11,9 @@ import play.api.libs.json.{
   Json,
   OWrites
 }
-import play.api.libs.ws.{
-  StandaloneWSClient => WSClient,
-}
+//import play.api.libs.ws.{
+//  StandaloneWSClient => WSClient,
+//}
 import de.dnpm.dip.model.{
   HealthInsurance,
   Id,
@@ -71,16 +71,19 @@ class BfArMConnectorTests extends AsyncFlatSpec
   // Test purpose: Ensure that the token fetch request is performed only once even on multiple uploads
   val tokenFetchCounter = new AtomicInteger(0)
 
-  val wsclient: WSClient =
-    new FakeWSClient(
-    {
-      case url if url == config.authURL => 
-        tokenFetchCounter.incrementAndGet
-        (200,"OK",Some(Json.stringify(Json.toJson(token))))
+  val wsclient = FakeWSClient {
+    Map(
+      config.authURL -> {
+        case "POST" =>
+          tokenFetchCounter.incrementAndGet
+          (200,"OK",Some(Json.stringify(Json.toJson(token))))
+      },
+      config.apiURL -> {
+        case "POST" => (200,"OK",None)
+      }
+    )
+  }
 
-      case url if url == config.apiURL => (200,"OK",None)
-    }
-  )
 
   val connector =
     new BfArMConnectorImpl(
