@@ -103,11 +103,12 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     (mockUploadRequest.post(_:Map[String,Seq[String]])(_:BodyWritable[Map[String,Seq[String]]]))
       .when(*,*).returns(Future.successful(mockUploadResponse))
     (() => mockUploadResponse.status).when().returns(
-      if (uploadSucceeds) 200 else 420)
+      if (uploadSucceeds) 200 else 420) //420 as failure response code for testing purposes
 
     implicit val errorWriter:Writes[BfArMConnectorImpl.Error] = Json.writes[BfArMConnectorImpl.Error]
     (mockUploadResponse.body[JsValue](_:BodyReadable[JsValue])).when(*).returns(
       //this mock only returns failures, you have to expand the mock if you plan to read JSON responses of successful uploads
+      //some randomly picked values that will end up in the error message of the uploadtest
       Json.toJson(BfArMConnectorImpl.Error(420,"errorVal","420","msgVal")))
 
     val toTest = new BfArMConnectorImpl(
@@ -120,12 +121,12 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
   it must "only fetch one token to make multiple uploads in short time" in {
     val fixture = new TestFixture(LongTokenLifetime,true)
 
-    assert(fixture.tokenFetchCounter.get() == 0)
+    assertResult(0)(fixture.tokenFetchCounter.get())
     val submissionReports = List.fill(nUploads)(makeFakeReport)
 
     for {
       _ <- Future.traverse(submissionReports)(fixture.toTest.upload)
-    } yield assert(fixture.tokenFetchCounter.get() == 1)
+    } yield assertResult(1)(fixture.tokenFetchCounter.get())
   }
 
   it must "fetch a new token for subsequent uploads if it expires during a series of uploads" in {
@@ -137,7 +138,7 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
       _ <- fixture.toTest.upload(makeFakeReport)
       _ <- assertResult(1, "Tokenfetch appearantly did not tirgger")(fixture.tokenFetchCounter.get())
       _ <- fixture.toTest.upload(makeFakeReport)
-      _ <- assertResult(2)(fixture.tokenFetchCounter.get()) //no clue why it failed
+      _ <- assertResult(2)(fixture.tokenFetchCounter.get())//last time this failed, there was a mismatch of exceptions, but could be anything
       _ <- fixture.toTest.upload(makeFakeReport)
       _ <- assertResult(3)(fixture.tokenFetchCounter.get())
     } yield succeed
@@ -151,18 +152,21 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
 
     for {
       _                   <- (assertResult(0, "Tokenfetchcounter should be initialized to zero before test")
-                                          (fixture.tokenFetchCounter.get()))
+                              (fixture.tokenFetchCounter.get()))
       firstUploadAttempt  <- fixture.toTest.upload(makeFakeReport).recover[Either[String,Unit]](
                                 {case _:CustomTestException => Left(exceptionMsg1)})
-      _                   <- assertResult(1, "Tokenfetch appearantly did not happen")(fixture.tokenFetchCounter.get())
+      _                   <- (assertResult(1, "Tokenfetch appearantly did not happen. It might be that the token" +
+                              " clearing which formally happens asynchronously might not have executed. Mocking would" +
+                              " need to be changed if should happen and be a problem.")
+                              (fixture.tokenFetchCounter.get()))
       secondUploadAttempt <- fixture.toTest.upload(makeFakeReport).recover[Either[String,Unit]](
                                 {case _:CustomTestException => Left(exceptionMsg2)})
       _                   <- assertResult(2)(fixture.tokenFetchCounter.get())
     } yield {
-      assert(firstUploadAttempt.isLeft)
-      assertResult(exceptionMsg1)(firstUploadAttempt.left.getOrElse("no failure"))
-      assert(secondUploadAttempt.isLeft)
-      assertResult(exceptionMsg2)(secondUploadAttempt.left.getOrElse("no failure"))
+      assert(firstUploadAttempt.isLeft,"If not left, the upload passed, which it shouldn't have")
+      assertResult(exceptionMsg1)(firstUploadAttempt.left.getOrElse("expected failure"))
+      assert(secondUploadAttempt.isLeft,"If not left, the upload passed, which it shouldn't have")
+      assertResult(exceptionMsg2)(secondUploadAttempt.left.getOrElse("expected failure"))
     }
 
   }
@@ -179,7 +183,7 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     for {
       result <- fixture.toTest.upload(makeFakeReport)
     } yield {
-      assert(result.isLeft)
+      assert(result.isLeft, "If not left, the upload passed, which it shouldn't have")
       assertResult("420 errorVal: msgVal")(result.left.getOrElse(""))
     }
   }
