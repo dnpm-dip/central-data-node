@@ -13,8 +13,9 @@ import play.api.libs.ws._
 
 import java.time.LocalDate
 import java.util.UUID.randomUUID
+import java.util.concurrent.{Executors, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
-import scala.concurrent.Future
+import scala.concurrent.{Future, Promise}
 
 class BfArMConnectorImplTests extends AsyncFlatSpec
   with AsyncMockFactory
@@ -66,8 +67,19 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
       "scopeVALUE",
       "token_typeVALUE")
 
+  private val waitScheduler = Executors.newSingleThreadScheduledExecutor()
+  /**
+   * Used to wait in a for comprehension. This resolves race conditions
+   * when trying to simulate an (immediately) expiring token
+   */
+  private def waitForTokenClear():Future[Unit] ={
+    val p=Promise[Unit]()
+    waitScheduler.schedule(() => p.success(()), 150,TimeUnit.MILLISECONDS)
+    p.future
+  }
 
   implicit val format: Writes[Token] = Json.writes[Token]
+
   private class TestFixture(tokenExpiration:Int,tokenFetchSucceeds:Boolean, uploadSucceeds:Boolean = true) {
     val tokenFetchCounter = new AtomicInteger(0)
     val mockHttpClient:StandaloneWSClient = stub[StandaloneWSClient]
@@ -132,20 +144,26 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
   it must "fetch a new token for subsequent uploads if it expires during a series of uploads" in {
     val fixture = new TestFixture(ZeroTokenLifetime,true)
 
+    //SchedulerService does NOT guarantee blocking immediate call, even if the delay is
+    // zero or less, so this test has a runcondition. Therefore strictly speaking this
+    // test has a race condition, but the waits should usually resolve it
     for {
       _ <- (assertResult(0, "Tokenfetchcounter should be initialized to zero before test")
               (fixture.tokenFetchCounter.get()))
       _ <- fixture.toTest.upload(makeFakeReport)
+      _ <- waitForTokenClear()
       _ <- assertResult(1, "Tokenfetch appearantly did not tirgger")(fixture.tokenFetchCounter.get())
       _ <- fixture.toTest.upload(makeFakeReport)
+      _ <- waitForTokenClear()
       _ <- assertResult(2)(fixture.tokenFetchCounter.get())//last time this failed, there was a mismatch of exceptions, but could be anything
       _ <- fixture.toTest.upload(makeFakeReport)
+      _ <- waitForTokenClear()
       _ <- assertResult(3)(fixture.tokenFetchCounter.get())
     } yield succeed
   }
 
   it must "try again to fetch a new token in subsequent uploads if the previous fetch failed" in {
-    //simulating that both requests fail similarly is sufficient
+    //simulating that both upload requests fail similarly is sufficient
     val fixture = new TestFixture(LongTokenLifetime,false)
     val exceptionMsg1 = "testFailure1"
     val exceptionMsg2 = "testFailure2"
@@ -168,7 +186,6 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
       assert(secondUploadAttempt.isLeft,"If not left, the upload passed, which it shouldn't have")
       assertResult(exceptionMsg2)(secondUploadAttempt.left.getOrElse("expected failure"))
     }
-
   }
 
   it must "fail the upload when the fetch of the token fails" in {
@@ -178,7 +195,7 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     }
   }
 
-  it must "return a successful future even if the upload fails" in {
+  it must "return a successful future with error description if the upload fails" in {
     val fixture = new TestFixture(LongTokenLifetime,true,false)
     for {
       result <- fixture.toTest.upload(makeFakeReport)

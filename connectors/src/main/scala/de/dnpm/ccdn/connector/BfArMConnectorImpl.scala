@@ -172,7 +172,7 @@ with Logging
     implicit ec: ExecutionContext
   ): Future[WSRequest] = {
     tokenCache.updateAndGet(curVal => curVal.recoverWith{
-        case _:Exception => fetchToken
+        case _ => fetchToken
       })
       .map(tkn =>
         wsclient.url(url)
