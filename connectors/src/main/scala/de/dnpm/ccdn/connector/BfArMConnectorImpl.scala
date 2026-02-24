@@ -18,7 +18,7 @@ import play.api.libs.json.{
 }
 import play.api.libs.ws.{
   StandaloneWSClient => WSClient,
-  StandaloneWSRequest => WSRequest,
+  StandaloneWSRequest => WSRequest
 }
 import play.api.libs.ws.DefaultBodyWritables._
 import play.api.libs.ws.JsonBodyReadables._
@@ -27,6 +27,7 @@ import de.dnpm.dip.util.Logging
 import de.dnpm.ccdn.core.bfarm
 import bfarm.SubmissionReport
 
+import java.util.concurrent.atomic.AtomicReference
 
 
 
@@ -98,7 +99,7 @@ object BfArMConnectorImpl
 }
 
 
-import BfArMConnectorImpl._    
+import BfArMConnectorImpl._
 
 
 final class BfArMConnectorImpl
@@ -112,28 +113,38 @@ with Logging
 
   import java.util.concurrent.Executors
   import java.util.concurrent.TimeUnit.SECONDS
-  import java.util.concurrent.atomic.AtomicReference
 
   private val timeout =
     config.timeout.getOrElse(10) seconds
 
-
   private val executor =
     Executors.newSingleThreadScheduledExecutor
 
-  private val token: AtomicReference[Option[Token]] =
-    new AtomicReference(None)
+  /**
+   * Contains the token to the BfArM until 5 seconds before it expires.
+   * Not a Promise because unsetting a promise needs external securing against unsecure access.
+   * Note that any kind of exception can be stored as reason for a failed future
+   */
+  private val tokenCache:AtomicReference[Future[Token]] =
+    new AtomicReference(Future.failed(new TokenExpiredException))
+
+  /**
+   * Signals that a new fresh token should be fetched.
+   */
+  private case class TokenExpiredException() extends Exception
+
+  /**
+   * Scheduled during token fetch to clear an expired token
+   */
+  private val clearToken: Runnable = () => {
+    log.debug("Clearing token")
+    tokenCache.set(Future.failed(new TokenExpiredException))
+  }
 
 
-  private val expire: Runnable =
-    () => token.set(None)
+  private def fetchToken(implicit ec:ExecutionContext): Future[Token] = {
 
-
-  private def getToken: Future[Token] = {
-
-    import scala.concurrent.ExecutionContext.Implicits.global
-
-    log.info("Getting API token")
+    log.info("Getting fresh API token")
 
     wsclient
       .url(config.authURL)
@@ -145,46 +156,30 @@ with Logging
           "client_secret" -> Seq(config.clientSecret)
         )
       )
-      .map(
-        resp => resp.status match {
-          case 200 => resp.body[JsValue].as[Token].asRight
-          case _   => resp.body[JsValue].as[Error].asLeft
-        }
-      )
+      .map(_.body[JsValue].as[Token])
       .andThen {
-        case Success(Right(tkn)) =>
-          log.info(s"Updating API token reference and scheduling expiration in ${tkn.expires_in} s")
-          token.set(Some(tkn))
-          executor.schedule(expire, tkn.expires_in - 5, SECONDS)
-
-        case Success(Left(err)) =>
-          log.error(s"Failed to get BfArM API token: ${err.statusCode} ${err.error}: ${err.message}")
-
+        case Success(tkn) =>
+          // Schedule token removal after its expiration
+          executor.schedule(clearToken, tkn.expires_in - 5, SECONDS)
         case Failure(t) =>
           log.error("Failed to get BfArM API token",t)
       }
-      .collect { 
-        case Right(tkn) => tkn
-      }
   }
-
 
   private def request(
     url: String
   )(
     implicit ec: ExecutionContext
-  ): Future[WSRequest] =
-    token.get
-      .fold(
-        getToken
-      )(
-        Future.successful
-      )
+  ): Future[WSRequest] = {
+    tokenCache.updateAndGet(curVal => curVal.recoverWith{
+        case _ => fetchToken
+      })
       .map(tkn =>
         wsclient.url(url)
           .withHttpHeaders("Authorization" -> s"${tkn.token_type} ${tkn.access_token}")
           .withRequestTimeout(timeout)
       )
+  }
 
 
   override def upload(
@@ -201,9 +196,9 @@ with Logging
 
       result <- resp.status match {
         case 200 => Future.successful(().asRight)
-        case 401 => upload(report)
         case _   =>
           val err = resp.body[JsValue].as[Error]
+          clearToken.run()
           Future.successful(s"${err.statusCode} ${err.error}: ${err.message}".asLeft)
       }
 

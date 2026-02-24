@@ -7,12 +7,15 @@ import de.dnpm.ccdn.core.dip
 import de.dnpm.ccdn.core.bfarm
 
 
-final class Tests extends AsyncFlatSpec
+final class MVHReportingServiceTests extends AsyncFlatSpec
 {
 
   val reportStore    = FakeReportRepository
+  //becomes instance of FakeDNPMConnector, through custom Service Provider config
   val dipConnector   = dip.Connector.getInstance.get
+  //becomes instance of FakeBfArMConnector
   val bfarmConnector = bfarm.Connector.getInstance.get
+  //actually setting to the actual object works just as well
 
   val service =
     new MVHReportingService(
