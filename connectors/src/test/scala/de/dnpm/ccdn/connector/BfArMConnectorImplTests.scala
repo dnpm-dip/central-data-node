@@ -159,6 +159,7 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
       _ <- fixture.toTest.upload(makeFakeReport)
       _ <- waitForTokenClear()
       _ <- assertResult(3)(fixture.tokenFetchCounter.get())
+      _ = waitScheduler.shutdownNow()
     } yield succeed
   }
 
