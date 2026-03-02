@@ -18,8 +18,6 @@ import scala.concurrent.{
 import scala.util.Success
 import cats.syntax.either._
 import de.dnpm.dip.util.Logging
-import de.dnpm.ccdn.core.dip
-import de.dnpm.ccdn.core.bfarm
 import de.dnpm.dip.model.NGSReport
 import de.dnpm.dip.service.mvh.Submission
 import Submission.Report.Status.{
@@ -30,8 +28,13 @@ import Submission.Report.Status.{
 
 object MVHReportingService
 {
-
-  import scala.concurrent.ExecutionContext.Implicits.global
+  /**
+   * Limiting the number of threads was necessary because the underlying application
+   * server only supports a limited number of sockets. Submissions are processed in
+   * parallel and can require more than one socket each, so without limiting the
+   * number of threads a deadlock can occur
+   */
+  private val nThreads = 32
 
   private lazy val service =
     new MVHReportingService(
@@ -39,7 +42,7 @@ object MVHReportingService
       ReportRepository.getInstance.get,
       dip.Connector.getInstance.get,
       bfarm.Connector.getInstance.get
-    )
+    )(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(nThreads)))
     
     
   def main(args: Array[String]): Unit = {
