@@ -18,6 +18,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
 
 
+
   it must "handle multiple uploads from every DIP node in one go" in {
     fakeDipConnector.nSubmissions = 4
     fakeDipConnector.confirmationsTakeTime = false

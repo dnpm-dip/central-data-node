@@ -12,6 +12,7 @@ import de.dnpm.dip.util.Logging
 import de.dnpm.dip.model.NGSReport
 import de.dnpm.dip.service.mvh.Submission
 import Submission.Report.Status.{Submitted, Unsubmitted}
+import de.dnpm.ccdn.core.MVHReportingService.nConfirmationThreads
 import de.dnpm.ccdn.core.bfarm.BfarmConnector
 import de.dnpm.ccdn.core.dip.DipConnector
 
@@ -241,8 +242,7 @@ extends Logging
       queue.entries(_.status == Unsubmitted)
     )(
       report =>
-        bfarmConnector
-          .upload(BfarmReport(report))
+        bfarmConnector.upload(BfarmReport(report))
           .map {
             case Right(_) =>
               log.info(s"SubmissionReport Uploaded: Site ${report.site.code}, TAN ${report.id}")
@@ -276,6 +276,7 @@ extends Logging
    * If a node is offline for some time, the accrued submissions can lead to a deadlock
    * without this limit
    *
+   * TODO merge javadoc with that of CHORE:javadoc branch
    */
   private[core] def confirmSubmissions: Future[Seq[Either[String,Unit]]] = {
 
