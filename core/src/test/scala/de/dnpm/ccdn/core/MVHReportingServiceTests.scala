@@ -5,6 +5,7 @@ import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.must.Matchers._
 import de.dnpm.ccdn.core.dip
 import de.dnpm.ccdn.core.bfarm
+import org.scalatest.Assertions
 
 
 final class MVHReportingServiceTests extends AsyncFlatSpec
@@ -39,6 +40,17 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       
     } yield reportStore.entries(_ => true) must be (empty)
 
+  }
+
+  "MVHReportingService" must "not process more than 32 submissions simultaneously" in {
+    //let n be the numThreads in MVHReportingService, let m be 8
+    //configure reportStore to have n+m submissions in it
+    //configure bfarmconnecteor to halt for 100 msec during upload
+    //verify that n submissions were transmitted at pretty much the same time (within 30 msec) and that m were at least 100 msec later
+
+    //TODO implement
+
+    Assertions.fail
   }
 
 }
