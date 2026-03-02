@@ -113,8 +113,22 @@ object OncologyPlan
   )
 
   object SystemicTherapyRecommendation
-  { 
-
+  {
+    /**
+     * The kind of therapy to be done, like chemotherapy(CH) or
+     * hormone therapy (HO). Does not include passive methods like
+     * "Wait and see", but also combined methods like CIZ which is
+     * a combination of chemo-, immuno- and therapy with other
+     * targeted substances.
+     *
+     * This is a superset of [[de.dnpm.dip.mtb.model.MTBMedicationRecommendation.Category]]
+     *
+     * CH, HO, IM, ZS, SZ are single specific methods
+     *
+     * CI, CZ, CIZ, IZ are combined methods
+     *
+     * SO means "other"
+     */
     object Strategy extends Enumeration
     {
       val CH, HO, IM, ZS, SZ, CI, CZ, CIZ, IZ, SO = Value

@@ -41,8 +41,15 @@ final case class FollowUp
 object FollowUp
 {
 
+  /**
+   * Response Evaluation Criteria in Solid Tumors
+   * CR: Complete Remission
+   * PR: Partial Remission
+   * SD: Stable Disease
+   * PD: Progressive Disease
+   */
   object RECIST extends Enumeration
-  { 
+  {
     val CR, PR, SD, PD = Value
 
     implicit val format: Format[Value] =

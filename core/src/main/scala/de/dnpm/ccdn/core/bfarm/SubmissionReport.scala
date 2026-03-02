@@ -27,7 +27,9 @@ import play.api.libs.json.{
  *
  */
 
-
+/**
+ * A DTO for the exact JSON object that is sent to BFArm (Anlage 2)
+ */
 final case class SubmissionReport
 (
   SubmittedCase: SubmissionReport.Case  // Not my idea to name the field CapitalizedCase as "SubmittedCase" (see disclaimer above)

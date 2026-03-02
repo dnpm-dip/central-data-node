@@ -85,7 +85,10 @@ object OncologyCase
 
   object PriorDiagnostics
   {
-
+    /**
+     * Description of a mutation. Name is based on specification from bfarm
+     * Subset of [[de.dnpm.ccdn.core.bfarm.onco.OncologyMolecular.SmallVariant]]
+     */
     final case class SimpleVariant
     (
       gene: Coding[HGNC],

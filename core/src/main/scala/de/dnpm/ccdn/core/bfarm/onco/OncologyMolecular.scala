@@ -29,6 +29,9 @@ import OncologyMolecular._
  * StructuralVariant, ExpressionVariant, SbsSignature not represented/relevant in MTB Core Data Set
  */
 
+/**
+ * Molecular information to an oncology case, including mutation information and other biomarkers
+ */
 final case class OncologyMolecular
 (
   smallVariants: Option[List[SmallVariant]],
@@ -39,18 +42,37 @@ final case class OncologyMolecular
 object OncologyMolecular
 {
 
+  /**
+   * Classification, from what was the genome recorded
+   */
   object GenomicSource extends Enumeration
-  { 
+  {
+    /**
+     * The patients own genetic code at some point at some cell in his body
+     */
     val Somatic  = Value("somatic")
+    /**
+     * From individuals parents
+     */
     val Germline = Value("germline")
 
     implicit val format: Format[Value] =
       Json.formatEnum(this)
   }
 
+  /**
+   * Classification of where a genetic change occured. Whether it is exactly on a gene,
+   * or in regulatory areas or neither.
+   */
   object Localization extends Enumeration
   {
+    /**
+     * Pointing at a specific gene, implying clear relation to a gene function, GOF or LOF
+     */
     val Coding     = Value("coding")
+    /**
+     * Pointing at area around and between genes, implying vague relation to gene expression
+     */
     val Regulatory = Value("inRegulatoryElements")
     val Neither    = Value("notInCodingAndNotInRegulatoryElements")
 

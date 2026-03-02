@@ -38,7 +38,9 @@ trait ConnectorOps[F[_],Env,Err]
 
 }
 
-
+/**
+ * Abstraction for a connector from ccdn to a DIP node
+ */
 trait Connector extends ConnectorOps[Future,ExecutionContext,String]
 
 trait ConnectorProvider extends SPI[Connector]
