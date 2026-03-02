@@ -343,6 +343,7 @@ trait MTBMappings extends Mappings[MTBPatientRecord]
            Set(CH,IM,ZS) -> SystemicTherapyRecommendation.Strategy.CIZ,
            Set(CH,IM)    -> SystemicTherapyRecommendation.Strategy.CI,
            Set(CH,ZS)    -> SystemicTherapyRecommendation.Strategy.CZ,
+           Set(IM,ZS)    -> SystemicTherapyRecommendation.Strategy.IZ,
            Set(CH)       -> SystemicTherapyRecommendation.Strategy.CH,
            Set(HO)       -> SystemicTherapyRecommendation.Strategy.HO,
            Set(IM)       -> SystemicTherapyRecommendation.Strategy.IM,
