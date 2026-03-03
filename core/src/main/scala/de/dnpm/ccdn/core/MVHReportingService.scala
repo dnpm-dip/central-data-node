@@ -34,7 +34,7 @@ object MVHReportingService
    * parallel and can require more than one socket each, so without limiting the
    * number of threads a deadlock can occur
    */
-  private val nThreads = 32
+  private[core] val nThreads = 32
 
   private lazy val service =
     new MVHReportingService(
