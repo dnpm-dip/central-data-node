@@ -36,9 +36,15 @@ import de.dnpm.dip.service.mvh.TransferTAN
  *
  */
 
+/**
+ * Genomic Data Center, GRZ in German nomenclature
+ */
+sealed trait GDC
 
-sealed trait GDC  // Genomic Data Center
-sealed trait CDN  // Clinical Data Node
+/**
+ * Clinical Data Node, KDK in German nomenclature
+ */
+sealed trait CDN
 
 
 final case class Metadata
@@ -59,7 +65,11 @@ final case class Metadata
 
 object Metadata
 {
-
+  /**
+   * The domain of the health issue that is being treated for the case to be
+   * submitted which justifies genome sequencing.
+   * Maps to [[de.dnpm.dip.service.mvh.UseCase]] in [[de.dnpm.ccdn.core.Mappings]]
+   */
   object DiseaseType extends Enumeration
   {
     val Oncological = Value("oncological")
@@ -69,7 +79,9 @@ object Metadata
       Json.formatEnum(this)
   }
 
-
+  /**
+   * Why sequencing of the patients genome was rejected
+   */
   object RejectionJustification extends Enumeration
   {
     val TargetDiagnosisRecommended   = Value("targetDiagnosisRecommended")
@@ -117,7 +129,10 @@ object Metadata
     )
 
     object Scope
-    { 
+    {
+      /**
+       * Whether something was permitted or denied
+       */
       object Type extends Enumeration 
       {
         val Permit = Value("permit")
@@ -127,6 +142,9 @@ object Metadata
           Json.formatEnum(this)
       }
 
+      /**
+       * To what the patient agreed that his data could be used for
+       */
       object Domain extends Enumeration 
       {
         val MvSequencing       = Value("mvSequencing")

@@ -3,29 +3,17 @@ package de.dnpm.ccdn.core
 
 import java.time.LocalTime
 import java.time.temporal.ChronoUnit
-import java.util.concurrent.{
-  Executors,
-  ScheduledExecutorService
-}
-import java.util.concurrent.{
-  Future => JavaFuture,
-  TimeUnit
-}
-import scala.concurrent.{
-  Future,
-  ExecutionContext
-}
+import java.util.concurrent.{Executors, ScheduledExecutorService}
+import java.util.concurrent.{TimeUnit, Future => JavaFuture}
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Success
 import cats.syntax.either._
 import de.dnpm.dip.util.Logging
-import de.dnpm.ccdn.core.dip
-import de.dnpm.ccdn.core.bfarm
 import de.dnpm.dip.model.NGSReport
 import de.dnpm.dip.service.mvh.Submission
-import Submission.Report.Status.{
-  Submitted,
-  Unsubmitted
-}
+import Submission.Report.Status.{Submitted, Unsubmitted}
+import de.dnpm.ccdn.core.bfarm.BfarmConnector
+import de.dnpm.ccdn.core.dip.DipConnector
 
 
 object MVHReportingService
@@ -37,8 +25,8 @@ object MVHReportingService
     new MVHReportingService(
       Config.instance,
       ReportRepository.getInstance.get,
-      dip.Connector.getInstance.get,
-      bfarm.Connector.getInstance.get
+      dip.DipConnector.getInstance.get,
+      bfarm.BfarmConnector.getInstance.get
     )
     
     
@@ -64,8 +52,8 @@ class MVHReportingService
 (
   config: Config,
   queue: ReportRepository,
-  dipConnector: dip.Connector,
-  bfarmConnector: bfarm.Connector
+  dipConnector: DipConnector,
+  bfarmConnector: BfarmConnector
 )(
   implicit ec: ExecutionContext
 )

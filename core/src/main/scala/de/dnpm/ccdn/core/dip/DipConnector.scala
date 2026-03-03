@@ -18,7 +18,7 @@ import de.dnpm.dip.service.mvh.{
 }
 
 
-trait ConnectorOps[F[_],Env,Err]
+trait DipConnectorOps[F[_],Env,Err]
 {
 
   def submissionReports(
@@ -38,12 +38,9 @@ trait ConnectorOps[F[_],Env,Err]
 
 }
 
-/**
- * Abstraction for a connector from ccdn to a DIP node
- */
-trait Connector extends ConnectorOps[Future,ExecutionContext,String]
+trait DipConnector extends DipConnectorOps[Future,ExecutionContext,String]
 
-trait ConnectorProvider extends SPI[Connector]
+trait DipConnectorProvider extends SPI[DipConnector]
 
-object Connector extends SPILoader[ConnectorProvider]
+object DipConnector extends SPILoader[DipConnectorProvider]
 

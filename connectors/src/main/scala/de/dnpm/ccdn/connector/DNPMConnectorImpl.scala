@@ -35,8 +35,8 @@ import de.dnpm.dip.service.mvh.{
   UseCase
 }
 import de.dnpm.ccdn.core.dip.{
-  Connector,
-  ConnectorProvider
+  DipConnector,
+  DipConnectorProvider
 }
 
 
@@ -49,9 +49,9 @@ object Collection
 }
 
 
-final class DIPConnectorProviderImpl extends ConnectorProvider
+final class DIPConnectorProviderImpl extends DipConnectorProvider
 {
-  override def getInstance: Connector =
+  override def getInstance: DipConnector =
     BrokerConnector.instance
 }
 
@@ -114,7 +114,7 @@ final class BrokerConnector
   private val wsclient: WSClient,
   private val config: Config
 )
-extends Connector
+extends DipConnector
 with Logging
 {
 

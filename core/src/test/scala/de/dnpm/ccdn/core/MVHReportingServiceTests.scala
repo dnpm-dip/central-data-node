@@ -3,18 +3,18 @@ package de.dnpm.ccdn.core
 
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.must.Matchers._
-import de.dnpm.ccdn.core.dip
-import de.dnpm.ccdn.core.bfarm
+import de.dnpm.ccdn.core.bfarm.BfarmConnector
+import de.dnpm.ccdn.core.dip.DipConnector
 
 
 final class MVHReportingServiceTests extends AsyncFlatSpec
 {
 
-  val reportStore    = FakeReportRepository
+  private val reportStore    = FakeReportRepository
   //becomes instance of FakeDNPMConnector, through custom Service Provider config
-  val dipConnector   = dip.Connector.getInstance.get
+  private val dipConnector   = DipConnector.getInstance.get
   //becomes instance of FakeBfArMConnector
-  val bfarmConnector = bfarm.Connector.getInstance.get
+  private val bfarmConnector = BfarmConnector.getInstance.get
   //actually setting to the actual object works just as well
 
   val service =

@@ -112,6 +112,10 @@ object RDCase
   {
 
     // Note: Not my idea to use two different Enums for the same concept (see above Diagnosis.Extent above),
+
+    /**
+     * How many sequencings of the genome were conducted, not only from the patient, but also from relatives.
+     */
     object Extent extends Enumeration
     {
       val Single = Value("single")

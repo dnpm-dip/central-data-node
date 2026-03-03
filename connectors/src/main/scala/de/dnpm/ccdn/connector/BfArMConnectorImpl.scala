@@ -31,9 +31,9 @@ import java.util.concurrent.atomic.AtomicReference
 
 
 
-final class BfArMConnectorProviderImpl extends bfarm.ConnectorProvider
+final class BfArMConnectorProviderImpl extends bfarm.BfarmConnectorProvider
 {
-  override def getInstance: bfarm.Connector =
+  override def getInstance: bfarm.BfarmConnector =
     BfArMConnectorImpl.instance
 }
 
@@ -107,7 +107,7 @@ final class BfArMConnectorImpl
   private val config: Config,
   private val wsclient: WSClient
 )
-extends bfarm.Connector
+extends bfarm.BfarmConnector
 with Logging
 {
 
