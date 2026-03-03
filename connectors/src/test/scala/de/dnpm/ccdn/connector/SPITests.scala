@@ -12,7 +12,7 @@ import de.dnpm.ccdn.core.dip.DipConnector
 final class SPITests extends AnyFlatSpec
 {
 
-  val queueDir =
+  private val queueDir =
     createTempDirectory("dnpm_ccdn_test_").toFile
 
   System.setProperty("ccdn.dnpm.broker.baseurl","http://localhost")
