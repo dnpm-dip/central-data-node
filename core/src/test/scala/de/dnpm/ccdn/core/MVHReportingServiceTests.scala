@@ -53,31 +53,33 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
   }
 
   it must "not process more submissions simultaneously than it has threads" in {
-    //let n be the numThreads in MVHReportingService, let m be 8
-    /*val n = MVHReportingService.nThreads
-    val m = 8
-*/
-    //m should stay below nThreads so that no more than 2 sets of threads are run and no more time is wasted on this test than necessary
-    //assert(n > m)
-
-    //configure reportStore to have n+m submissions in it (via dip connector)
     //configure bfarmconnecteor to halt for 100 msec during upload
+    //testing setup has 39 clinic-usecases, so there can be no less than 39 uploads to run
     val fixture = new TestFixture(1,true) //TODO tatsächlich gibts 40*39 uploads, weil es 39 Klinikusecases in der config.json
 
+    //have more reports overall than nThreads
     val expectedNumReports = Config.instance.sites.flatMap(it => it._2.useCases).size //39
     assert(expectedNumReports > MVHReportingService.nThreads)
+    //but no more than twice as many
+    assert(expectedNumReports <= MVHReportingService.nThreads*2)
+
     //run
+    val startTime = System.currentTimeMillis()
     Await.result(fixture.service.pollReports,Duration(5,SECONDS))
     Await.result(fixture.service.uploadReports,Duration(5,SECONDS))
 
-    for(t <- fixture.bfarmConnector.uploadFinishTimings.get().sorted){
-      println(t)
-    }
+    val allUploadTimings = fixture.bfarmConnector.uploadFinishTimings.get()
+    //expect that theres a contingent of uploads that all happened within 50msec, 100msec after the simulation started
+    def firstUploadPredicate:Long=>Boolean = _ - startTime - FakeBfArMConnector.uploadDelayMsec < 50
+    val firstUploads = allUploadTimings.filter(firstUploadPredicate)
+    val remainingUploads = allUploadTimings.filter(!firstUploadPredicate(_))
 
-    assertResult(expectedNumReports)(fixture.bfarmConnector.uploadFinishTimings.get.size)
+    //verifying basics
+    assertResult(expectedNumReports)(allUploadTimings.size)
+    assertResult(expectedNumReports)(firstUploads.size+remainingUploads.size)
 
-
-    //verify that n submissions were transmitted at pretty much the same time (within 30 msec) and that m were at least 100 msec later
+    //verify that <nThreads> submissions were transmitted at pretty much the same time (within 30 msec) and that m were at least 100 msec later
+    assertResult(MVHReportingService.nThreads)(firstUploads.size)
 
 
     //TODO implement
