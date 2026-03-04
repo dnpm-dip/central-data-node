@@ -27,14 +27,11 @@ import de.dnpm.dip.service.mvh.{
 import de.dnpm.ccdn.core.dip
 
 
-final class FakeDIPConnectorProvider extends dip.ConnectorProvider
-{
-  override def getInstance: dip.Connector =
-    FakeDIPConnector
-}
-
-
-object FakeDIPConnector extends dip.Connector
+/**
+ *
+ * @param nSubmissions note that this is returned to all sites for all their stored usecases (see resources/config.json). There will be this many times 39 uploads effectively in the test
+ */
+case class FakeDIPConnector(nSubmissions:Int) extends dip.Connector
 {
 
   private def rndReport(
@@ -65,7 +62,7 @@ object FakeDIPConnector extends dip.Connector
     implicit ec: ExecutionContext
   ): Future[Either[String,Seq[Submission.Report]]] =
     Future.successful(
-      Seq.fill(4)(rndReport(site,useCase)).asRight
+      Seq.fill(nSubmissions)(rndReport(site,useCase)).asRight
     )
 
   override def confirmSubmitted(
