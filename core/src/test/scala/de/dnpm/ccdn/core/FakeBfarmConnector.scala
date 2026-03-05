@@ -10,14 +10,14 @@ import cats.syntax.either._
 import de.dnpm.ccdn.core.bfarm
 
 
-final class FakeBfArMConnectorProvider extends bfarm.BfarmConnectorProvider
+final class FakeBfarmConnectorProvider extends bfarm.BfarmConnectorProvider
 {
   override def getInstance: bfarm.BfarmConnector =
-    FakeBfArMConnector
+    FakeBfarmConnector
 }
 
 
-object FakeBfArMConnector extends bfarm.BfarmConnector
+object FakeBfarmConnector extends bfarm.BfarmConnector
 {
   def upload(
     report: bfarm.SubmissionReport

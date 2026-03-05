@@ -38,7 +38,7 @@ final class SPITests extends AnyFlatSpec
       }
 
 
-  "SPI Loaders" must "have worked" in {
+  "SPI Loaders" must "load implementations" in {
     assert(dipConnector.isSuccess)
     assert(bfarmConnector.isSuccess)
     assert(reportQueue.isSuccess)

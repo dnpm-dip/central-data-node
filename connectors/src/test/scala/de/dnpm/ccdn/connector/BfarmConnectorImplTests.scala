@@ -1,6 +1,6 @@
 package de.dnpm.ccdn.connector
 
-import de.dnpm.ccdn.connector.BfArMConnectorImpl.Token
+import de.dnpm.ccdn.connector.BfarmConnectorImpl.Token
 import de.dnpm.ccdn.core.bfarm
 import de.dnpm.ccdn.core.bfarm.CDN
 import de.dnpm.dip.model.{HealthInsurance, Id, Site}
@@ -17,11 +17,11 @@ import java.util.concurrent.{Executors, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.{Future, Promise}
 
-class BfArMConnectorImplTests extends AsyncFlatSpec
+class BfarmConnectorImplTests extends AsyncFlatSpec
   with AsyncMockFactory
   with BeforeAndAfter
 {
-  behavior of "BfArMConnectorProviderImpl"
+  behavior of "BfarmConnectorProviderImpl"
 
 
   private def makeFakeReport: bfarm.SubmissionReport = {
@@ -46,7 +46,7 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
   val apiUrlAddress ="somewhere" //just random values
   val authUrlAddress ="someplaceelse"
   //increments every time a token is fetched, should increase once
-  val bfarmConnectorConfig = BfArMConnectorImpl.Config(
+  val bfarmConnectorConfig = BfarmConnectorImpl.Config(
     apiUrlAddress, authUrlAddress, "clientValue", "geh heim", Some(1)
   )
 
@@ -117,13 +117,13 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     (() => mockUploadResponse.status).when().returns(
       if (uploadSucceeds) 200 else 420) //420 as failure response code for testing purposes
 
-    implicit val errorWriter:Writes[BfArMConnectorImpl.Error] = Json.writes[BfArMConnectorImpl.Error]
+    implicit val errorWriter:Writes[BfarmConnectorImpl.Error] = Json.writes[BfarmConnectorImpl.Error]
     (mockUploadResponse.body[JsValue](_:BodyReadable[JsValue])).when(*).returns(
       //this mock only returns failures, you have to expand the mock if you plan to read JSON responses of successful uploads
       //some randomly picked values that will end up in the error message of the uploadtest
-      Json.toJson(BfArMConnectorImpl.Error(420,"errorVal","420","msgVal")))
+      Json.toJson(BfarmConnectorImpl.Error(420,"errorVal","420","msgVal")))
 
-    val toTest = new BfArMConnectorImpl(
+    val toTest = new BfarmConnectorImpl(
       bfarmConnectorConfig,
       mockHttpClient)
   }
@@ -206,10 +206,10 @@ class BfArMConnectorImplTests extends AsyncFlatSpec
     }
   }
 
-  "Token" must "be deserializable from the JSON fields that sent from BfArM" in {
+  "Token" must "be deserializable from the JSON fields that sent from BFarm" in {
     //member names coincide with json fields and the object is built from them.
     // So we should ensure nobody changes field names
-    import BfArMConnectorImpl.Token
+    import BfarmConnectorImpl.Token
     val testToken:Token = Token(
       "erztfuj",
       123465,
