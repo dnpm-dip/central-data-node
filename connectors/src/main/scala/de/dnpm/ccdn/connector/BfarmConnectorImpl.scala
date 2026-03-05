@@ -121,7 +121,7 @@ with Logging
     Executors.newSingleThreadScheduledExecutor
 
   /**
-   * Contains the token to the BfArM until 5 seconds before it expires.
+   * Contains the token to the Bfarm until 5 seconds before it expires.
    * Not a Promise because unsetting a promise needs external securing against unsecure access.
    * Note that any kind of exception can be stored as reason for a failed future
    */
@@ -168,7 +168,7 @@ with Logging
 
   /**
    * @return A basic HTTP request to the given url, with valid authentication
-   *         and 10 seconds request timeout
+   *         and request timeout (10 seconds if unconfigured)
    */
   private def request(
     url: String

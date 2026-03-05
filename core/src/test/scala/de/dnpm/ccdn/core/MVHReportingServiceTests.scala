@@ -13,7 +13,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
   private val reportStore    = FakeReportRepository
   //becomes instance of FakeDNPMConnector, through custom Service Provider config
   private val dipConnector   = DipConnector.getInstance.get
-  //becomes instance of FakeBfArMConnector
+  //becomes instance of FakeBfarmConnector
   private val bfarmConnector = BfarmConnector.getInstance.get
   //actually setting to the actual object works just as well
 

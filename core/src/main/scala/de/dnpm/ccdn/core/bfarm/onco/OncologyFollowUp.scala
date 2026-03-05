@@ -43,9 +43,13 @@ object FollowUp
 
   /**
    * Response Evaluation Criteria in Solid Tumors
-   * CR: Complete Remission
-   * PR: Partial Remission
+   *
+   * CR: Complete Response (response means, it's working)
+   *
+   * PR: Partial Response
+   *
    * SD: Stable Disease
+   *
    * PD: Progressive Disease
    */
   object RECIST extends Enumeration

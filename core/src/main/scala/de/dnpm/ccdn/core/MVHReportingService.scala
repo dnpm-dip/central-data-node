@@ -253,7 +253,7 @@ extends Logging
 
   /**
    * Communicates with the DIP sites to confirm to them that a submission has
-   * been sent to the BFarm. If successful the submission is removed from [[queue]]
+   * been sent to the BfArM. If successful the submission is removed from [[queue]]
    */
   private[core] def confirmSubmissions: Future[Seq[Either[String,Unit]]] = {
 

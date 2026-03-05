@@ -24,7 +24,7 @@ import play.api.libs.json.Json
 
 /**
  * Contains a handful of general implicit conversion functions but also a
- * way to extract submission metadata from the given typeparameter, which also depends on the useCase member
+ * way to extract submission metadata from the given typeparameter, which also depends on the [[useCase]] member
  */
 trait Mappings[RecordType <: PatientRecord]
 {

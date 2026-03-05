@@ -42,7 +42,7 @@ class BfarmConnectorImplTests extends AsyncFlatSpec
   //how many documents are uploaded
   val nUploads = 10
   val LongTokenLifetime = 133742 //random amount of seconds long enough to run the test
-  val ZeroTokenLifetime = 5 //BfArMConnectorImpl clears the token 5 seconds before formal expiration
+  val ZeroTokenLifetime = 5 //BfarmConnectorImpl clears the token 5 seconds before formal expiration
   val apiUrlAddress ="somewhere" //just random values
   val authUrlAddress ="someplaceelse"
   //increments every time a token is fetched, should increase once
@@ -206,7 +206,7 @@ class BfarmConnectorImplTests extends AsyncFlatSpec
     }
   }
 
-  "Token" must "be deserializable from the JSON fields that sent from BFarm" in {
+  "Token" must "be deserializable from the JSON fields that sent from BfArM" in {
     //member names coincide with json fields and the object is built from them.
     // So we should ensure nobody changes field names
     import BfarmConnectorImpl.Token
