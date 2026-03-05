@@ -180,7 +180,7 @@ extends Logging
    */
   private[core] def pollReports: Future[Any] = {
 
-    log.info("Polling Reports")
+    log.info(s"Polling Reports from ${config.sites.size} sites with up to ${config.activeUseCases.size} usecases")
     Future.traverse(
       config.sites.toList.sortBy(_._1.value)
     ){
