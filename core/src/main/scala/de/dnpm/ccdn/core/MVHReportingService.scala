@@ -3,28 +3,15 @@ package de.dnpm.ccdn.core
 
 import java.time.LocalTime
 import java.time.temporal.ChronoUnit
-import java.util.concurrent.{
-  Executors,
-  ScheduledExecutorService
-}
-import java.util.concurrent.{
-  Future => JavaFuture,
-  TimeUnit
-}
-import scala.concurrent.{
-  Future,
-  ExecutionContext
-}
+import java.util.concurrent.{Executors, ScheduledExecutorService}
+import java.util.concurrent.{TimeUnit, Future => JavaFuture}
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Success
 import cats.syntax.either._
 import de.dnpm.dip.util.Logging
 import de.dnpm.dip.model.NGSReport
 import de.dnpm.dip.service.mvh.Submission
-import Submission.Report.Status.{
-  Submitted,
-  Unsubmitted
-}
-
+import Submission.Report.Status.{Submitted, Unsubmitted}
 
 object MVHReportingService
 {
@@ -36,7 +23,7 @@ object MVHReportingService
    */
   private[core] val nThreads = 32
 
-  private lazy val service =
+  private[core] lazy val service =
     new MVHReportingService(
       Config.instance,
       ReportRepository.getInstance.get,
@@ -66,9 +53,9 @@ object MVHReportingService
 class MVHReportingService
 (
   config: Config,
-  queue: ReportRepository,
-  dipConnector: dip.Connector,
-  bfarmConnector: bfarm.Connector
+  private[core] val queue: ReportRepository,
+  private[core] val dipConnector: dip.Connector,
+  private[core] val bfarmConnector: bfarm.Connector
 )(
   implicit ec: ExecutionContext
 )
@@ -171,10 +158,6 @@ extends Logging
   }
 
 
-//  private def key(report: Submission.Report) =
-//    report.site.code -> report.id
-
-
   private[core] def pollReports: Future[Any] =
     Future.traverse(
       config.sites.toList.sortBy(_._1.value)
@@ -193,7 +176,7 @@ extends Logging
               Submission.Report.Filter(
                 status = Some(Set(Submission.Report.Status.Unsubmitted))
               )
-            )
+            ) //TODO check initial code whether implicit executioncontext was a parameter of this function
             .andThen { 
               case Success(Right(reports)) =>
                 log.debug(s"Enqueuing ${reports.size} $useCase SubmissionReport")
@@ -220,8 +203,7 @@ extends Logging
       queue.entries(_.status == Unsubmitted)
     )(
       report =>
-        bfarmConnector
-          .upload(BfarmReport(report))
+        bfarmConnector.upload(BfarmReport(report))
           .map {
             case Right(_) =>
               log.info(s"SubmissionReport Uploaded: Site ${report.site.code}, TAN ${report.id}")
@@ -243,7 +225,6 @@ extends Logging
 
 
   private[core] def confirmSubmissions: Future[Seq[Either[String,Unit]]] = {
-
     log.info("Confirming report submissions...")
    
     Future.traverse(

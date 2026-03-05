@@ -10,17 +10,17 @@ import java.util.concurrent.atomic.AtomicReference
 final class FakeBfArMConnectorProvider extends bfarm.ConnectorProvider
 {
   override def getInstance: bfarm.Connector = 
-    FakeBfArMConnector(false)
+    FakeBfArMConnector()
 }
 
 object FakeBfArMConnector {
   final val uploadDelayMsec = 100
 }
 
-case class FakeBfArMConnector(uploadsTakeTime:Boolean) extends bfarm.Connector
+case class FakeBfArMConnector() extends bfarm.Connector
 {
   val uploadFinishTimings = new AtomicReference(List[Long]())
-
+  var uploadsTakeTime:Boolean = false
 
   def upload(report: bfarm.SubmissionReport)(implicit ec: ExecutionContext): Future[Either[String,Unit]] =
   {
