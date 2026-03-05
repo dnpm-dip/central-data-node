@@ -100,6 +100,7 @@ extends Logging
       Some(
         executor.scheduleAtFixedRate(
           () => {
+            log.info(s"Conducting scheduled reporting workflow ${if(queue.exists(_ => true)) "with" else "without"} preexisting items in the queue")
             for {
               // Start by draining the report queue, if non-empty (in case the service had been interrupted) and
               // it thus contains reports whose upload hasn't been confirmed to the origin DIP), in order to avoid polling them again
@@ -160,7 +161,9 @@ extends Logging
 //    report.site.code -> report.id
 
 
-  private[core] def pollReports: Future[Any] =
+  private[core] def pollReports: Future[Any] = {
+
+    log.info("Polling Reports")
     Future.traverse(
       config.sites.toList.sortBy(_._1.value)
     ){
@@ -169,32 +172,33 @@ extends Logging
         Future.traverse(
           info.useCases intersect config.activeUseCases  // ensure only active use cases are polled
         ){
-          useCase => 
-        
-            log.info(s"Polling $useCase SubmissionReports of $site")
+          useCase =>
+
+            log.debug(s"Polling $useCase SubmissionReports of $site")
             dipConnector.submissionReports(
-              site,
-              useCase,
-              Submission.Report.Filter(
-                status = Some(Set(Submission.Report.Status.Unsubmitted))
+                site,
+                useCase,
+                Submission.Report.Filter(
+                  status = Some(Set(Submission.Report.Status.Unsubmitted))
+                )
               )
-            )
-            .andThen { 
-              case Success(Right(reports)) =>
-                log.debug(s"Enqueuing ${reports.size} $useCase SubmissionReport")
-                queue.saveIfAbsent(reports)
-            
-              case Success(Left(err)) =>
-                log.error(s"Problem polling $useCase SubmissionReports of site $site: $err")
-            }
-            // Recover lest the Future traversal be "short-circuited" into a failed Future 
-            .recover {
-              case t =>  
-                log.error(s"Error(s) occurred polling $useCase SubmissionReports of '$site",t)
-                t.getMessage.asLeft
-            }
+              .andThen {
+                case Success(Right(reports)) =>
+                  log.debug(s"Enqueuing ${reports.size} $useCase SubmissionReport")
+                  queue.saveIfAbsent(reports)
+
+                case Success(Left(err)) =>
+                  log.error(s"Problem polling $useCase SubmissionReports of site $site: $err")
+              }
+              // Recover lest the Future traversal be "short-circuited" into a failed Future
+              .recover {
+                case t =>
+                  log.error(s"Error(s) occurred polling $useCase SubmissionReports of '$site", t)
+                  t.getMessage.asLeft
+              }
         }
-    }  
+    }
+  }
 
 
   private[core] def uploadReports: Future[Seq[Either[String,Unit]]] = {
