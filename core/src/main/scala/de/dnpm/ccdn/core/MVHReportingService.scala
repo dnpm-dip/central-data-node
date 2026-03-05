@@ -28,8 +28,10 @@ object MVHReportingService
       dip.DipConnector.getInstance.get,
       bfarm.BfarmConnector.getInstance.get
     )
-    
-    
+
+  /**
+   * Entrypoint of the deployment for the JVM (see entrypoint.sh)
+   */
   def main(args: Array[String]): Unit = {
     
     Runtime.getRuntime.addShutdownHook(
@@ -40,11 +42,9 @@ object MVHReportingService
         }
       }
     )
-    
+
     service.start()
-
   }
-
 }
 
 
@@ -60,10 +60,23 @@ class MVHReportingService
 extends Logging
 {
 
+  /**
+   * Executes the runnable in [[scheduledTask]] every full hour (at zero minutes and seconds)
+   */
   private val executor: ScheduledExecutorService =
     Executors.newSingleThreadScheduledExecutor
 
 
+  /**
+   * Every hour queries DIP sites for new submissions ([[pollReports]]), uploads them to
+   * Bfarm ([[uploadReports]]) and sends a confirmation to dip sites ([[confirmSubmissions]])
+   *
+   * Before polling for new reports, the [[queue]] is checked for preexisting items,
+   * which are processed before polling for new items in [[pollReports]]
+   *
+   * The state of this process is stored in the [[queue]] and in the
+   * [[Submission.Report.status]] of it's items.
+   */
   private var scheduledTask: Option[JavaFuture[_]] = None
 
   private val toSeconds =
@@ -88,12 +101,12 @@ extends Logging
         .map(ChronoUnit.SECONDS.between(LocalTime.now,_))
         .collect {
           case delta if delta >= 0            => delta
-          case delta if (86400 % period == 0) => period - (math.abs(delta) % period) 
+          case delta if (86400 % period == 0) => period - (math.abs(delta) % period)
           case delta                          => delta + 86400
         }
         .getOrElse(0L)  
 
-    log.info(s"Scheduling report polling to start in $delay s with $period s period")   
+    log.info(s"Scheduling report polling to start in $delay s with $period s period")
 
 
     scheduledTask =
@@ -117,7 +130,6 @@ extends Logging
           TimeUnit.SECONDS
         )
       )
-   
   }
 
 
@@ -126,7 +138,11 @@ extends Logging
     scheduledTask.foreach(_ cancel false)
   }
 
-
+  /**
+   * Converts the submission report (reporting a genome sequencing and asking
+   * for reimbursement) as it comes from the DIP node (in [[pollReports]]) into
+   * a report that will be transmitted to the BfArM (in [[uploadReports]])
+   */
   private val BfarmReport: Submission.Report => bfarm.SubmissionReport = {
 
     import de.dnpm.dip.service.mvh.UseCase._
@@ -157,10 +173,11 @@ extends Logging
   }
 
 
-//  private def key(report: Submission.Report) =
-//    report.site.code -> report.id
-
-
+  /**
+   * Communicates with all the configured DIP installations, queries them for new
+   * [[Submission.Report]] and stores them in the [[queue]] with status
+   * [[Unsubmitted]]
+   */
   private[core] def pollReports: Future[Any] = {
 
     log.info("Polling Reports")
@@ -200,7 +217,11 @@ extends Logging
     }
   }
 
-
+  /**
+   * Communicates with the Bfarm, sends them [[BfarmReport]] entities, each based
+   * on one of all the [[Submission.Report]] entities in the [[queue]] that are
+   * in status [[Unsubmitted]]. After this upload their status is changed to [[Submitted]]
+   */
   private[core] def uploadReports: Future[Seq[Either[String,Unit]]] = {
 
     log.info("Uploading SubmissionReports...")
@@ -230,7 +251,10 @@ extends Logging
     
   }
 
-
+  /**
+   * Communicates with the DIP sites to confirm to them that a submission has
+   * been sent to the BFarm. If successful the submission is removed from [[queue]]
+   */
   private[core] def confirmSubmissions: Future[Seq[Either[String,Unit]]] = {
 
     log.info("Confirming report submissions...")
@@ -258,5 +282,4 @@ extends Logging
     )
 
   }
-
 }
