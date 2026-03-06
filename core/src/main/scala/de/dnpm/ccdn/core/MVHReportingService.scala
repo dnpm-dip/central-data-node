@@ -218,7 +218,7 @@ extends Logging
   }
 
   /**
-   * Communicates with the Bfarm, sends them [[BfarmReport]] entities, each based
+   * Communicates with the BfArM, sends them [[BfarmReport]] entities, each based
    * on one of all the [[Submission.Report]] entities in the [[queue]] that are
    * in status [[Unsubmitted]]. After this upload their status is changed to [[Submitted]]
    */
