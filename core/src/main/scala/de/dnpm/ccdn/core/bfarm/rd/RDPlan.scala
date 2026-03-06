@@ -1,21 +1,13 @@
 package de.dnpm.ccdn.core.bfarm.rd
 
 
+import de.dnpm.ccdn.core.bfarm.BfarmCarePlan
+
 import java.time.LocalDate
 import de.dnpm.dip.coding.Code
-import de.dnpm.dip.model.{
-  Id,
-  Study
-}
-import de.dnpm.dip.rd.model.{
-  RDTherapy,
-  Variant
-}
-import play.api.libs.json.{
-  Json,
-  Format,
-  OFormat,
-}
+import de.dnpm.dip.model.{Id, Study}
+import de.dnpm.dip.rd.model.{RDTherapy, Variant}
+import play.api.libs.json.{Format, Json, OFormat}
 
 
 /*
@@ -29,13 +21,15 @@ import play.api.libs.json.{
  *
  */
 
-
+/**
+ * Component of [[RDSubmission]]
+ */
 final case class RDPlan
 (
   carePlanOd: Option[RDPlan.CarePlan],
   recommendedStudies: Option[List[RDPlan.StudyRecommendation]],
   recommendedTherapies: Option[List[RDPlan.TherapyRecommendation]]
-)
+) extends BfarmCarePlan
 
 object RDPlan
 {

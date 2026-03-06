@@ -46,7 +46,10 @@ sealed trait GDC
  */
 sealed trait CDN
 
-
+/**
+ * Additional data in [[Submission]] instances that has nothing to do
+ * with the actual sickness and treatment
+ */
 final case class Metadata
 (
   submission: Metadata.Submission,

@@ -1,28 +1,14 @@
 package de.dnpm.ccdn.core.bfarm.onco
 
 
+import de.dnpm.ccdn.core.bfarm.BfarmCarePlan
+
 import java.time.LocalDate
-import de.dnpm.dip.coding.{
-  Code,
-  Coding,
-}
+import de.dnpm.dip.coding.{Code, Coding}
 import de.dnpm.dip.coding.ops.OPS
-import de.dnpm.dip.model.{
-  Id,
-//  Medications,
-  Recommendation,
-  Study
-}
-import de.dnpm.dip.mtb.model.{
-  LevelOfEvidence,
-  MTBProcedureRecommendation,
-  Variant
-}
-import play.api.libs.json.{
-  Json,
-  Format,
-  OFormat,
-}
+import de.dnpm.dip.model.{Id, Recommendation, Study}
+import de.dnpm.dip.mtb.model.{LevelOfEvidence, MTBProcedureRecommendation, Variant}
+import play.api.libs.json.{Format, Json, OFormat}
 
 /*
  * DISCLAIMER:
@@ -36,13 +22,15 @@ import play.api.libs.json.{
  */
 
 
-
+/**
+ * Component of [[OncologySubmission]]
+ */
 final case class OncologyPlan
 (
   carePlanOd: Option[OncologyPlan.CarePlan],
   recommendedSystemicTherapies: Option[List[OncologyPlan.SystemicTherapyRecommendation]],
   recommendedStudies: Option[List[OncologyPlan.StudyRecommendation]]
-)
+) extends BfarmCarePlan
 
 object OncologyPlan
 {

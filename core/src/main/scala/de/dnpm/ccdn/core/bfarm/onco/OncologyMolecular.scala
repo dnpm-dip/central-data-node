@@ -1,25 +1,13 @@
 package de.dnpm.ccdn.core.bfarm.onco
 
 
-import de.dnpm.dip.coding.{
-  Code,
-  Coding,
-  SequenceOntology
-}
+import de.dnpm.dip.coding.{Code, Coding, SequenceOntology}
 import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.hgvs.HGVS
-import de.dnpm.dip.mtb.model.{
-  Transcript
-}
-import de.dnpm.dip.model.{
-  Id
-}
-import de.dnpm.ccdn.core.bfarm.Chromosome
-import play.api.libs.json.{
-  Json,
-  Format,
-  OFormat
-}
+import de.dnpm.dip.mtb.model.Transcript
+import de.dnpm.dip.model.Id
+import de.dnpm.ccdn.core.bfarm.{BfarmMolecular, Chromosome}
+import play.api.libs.json.{Format, Json, OFormat}
 import OncologyMolecular._
 
 
@@ -31,13 +19,15 @@ import OncologyMolecular._
 
 /**
  * Molecular information to an oncology case, including mutation information and other biomarkers
+ *
+ * Component of [[OncologySubmission]]
  */
 final case class OncologyMolecular
 (
   smallVariants: Option[List[SmallVariant]],
   copyNumberVariants: Option[List[CopyNumberVariant]],
   complexBiomarkers: Option[List[ComplexBiomarker]]
-)
+)extends BfarmMolecular
 
 object OncologyMolecular
 {
