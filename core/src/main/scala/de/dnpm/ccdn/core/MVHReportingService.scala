@@ -210,7 +210,7 @@ extends Logging
               // Recover lest the Future traversal be "short-circuited" into a failed Future
               .recover {
                 case t =>
-                  log.error(s"Error(s) occurred polling $useCase SubmissionReports of '$site", t)
+                  log.error(s"Error(s) occurred polling $useCase SubmissionReports of $site", t)
                   t.getMessage.asLeft
               }
         }
