@@ -1,28 +1,14 @@
 package de.dnpm.ccdn.core.bfarm.onco
 
 
+import de.dnpm.ccdn.core.bfarm.BfarmCarePlan
+
 import java.time.LocalDate
-import de.dnpm.dip.coding.{
-  Code,
-  Coding,
-}
+import de.dnpm.dip.coding.{Code, Coding}
 import de.dnpm.dip.coding.ops.OPS
-import de.dnpm.dip.model.{
-  Id,
-//  Medications,
-  Recommendation,
-  Study
-}
-import de.dnpm.dip.mtb.model.{
-  LevelOfEvidence,
-  MTBProcedureRecommendation,
-  Variant
-}
-import play.api.libs.json.{
-  Json,
-  Format,
-  OFormat,
-}
+import de.dnpm.dip.model.{Id, Recommendation, Study}
+import de.dnpm.dip.mtb.model.{LevelOfEvidence, MTBProcedureRecommendation, Variant}
+import play.api.libs.json.{Format, Json, OFormat}
 
 /*
  * DISCLAIMER:
@@ -36,13 +22,15 @@ import play.api.libs.json.{
  */
 
 
-
+/**
+ * Component of [[OncologySubmission]]
+ */
 final case class OncologyPlan
 (
   carePlanOd: Option[OncologyPlan.CarePlan],
   recommendedSystemicTherapies: Option[List[OncologyPlan.SystemicTherapyRecommendation]],
   recommendedStudies: Option[List[OncologyPlan.StudyRecommendation]]
-)
+) extends BfarmCarePlan
 
 object OncologyPlan
 {
@@ -113,8 +101,22 @@ object OncologyPlan
   )
 
   object SystemicTherapyRecommendation
-  { 
-
+  {
+    /**
+     * The kind of therapy to be done, like chemotherapy(CH) or
+     * hormone therapy (HO). Does not include passive methods like
+     * "Wait and see", but also combined methods like CIZ which is
+     * a combination of chemo-, immuno- and therapy with other
+     * targeted substances.
+     *
+     * This is a superset of [[de.dnpm.dip.mtb.model.MTBMedicationRecommendation.Category]]
+     *
+     * CH, HO, IM, ZS, SZ are single specific methods
+     *
+     * CI, CZ, CIZ, IZ are combined methods
+     *
+     * SO means "other"
+     */
     object Strategy extends Enumeration
     {
       val CH, HO, IM, ZS, SZ, CI, CZ, CIZ, IZ, SO = Value

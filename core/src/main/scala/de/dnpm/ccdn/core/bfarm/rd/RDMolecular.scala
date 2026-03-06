@@ -2,30 +2,14 @@ package de.dnpm.ccdn.core.bfarm.rd
 
 
 
-import de.dnpm.dip.coding.{
-  Code,
-  CodedEnum,
-  Coding,
-  DefaultCodeSystem
-}
+import de.dnpm.dip.coding.{Code, CodedEnum, Coding, DefaultCodeSystem}
 import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.hgvs.HGVS
-import de.dnpm.dip.model.{
-  Id,
-  Publication
-}
-import de.dnpm.dip.rd.model.{
-  ACMG,
-  CopyNumberVariant => CNV,
-  ISCN
-}
+import de.dnpm.dip.model.{Id, Publication}
+import de.dnpm.dip.rd.model.{ACMG, ISCN, CopyNumberVariant => CNV}
 import de.dnpm.dip.rd.model.Variant.Significance
-import de.dnpm.ccdn.core.bfarm.Chromosome
-import play.api.libs.json.{
-  Json,
-  Format,
-  OFormat,
-}
+import de.dnpm.ccdn.core.bfarm.{BfarmMolecular, Chromosome}
+import play.api.libs.json.{Format, Json, OFormat}
 
 
 /*
@@ -39,13 +23,15 @@ import play.api.libs.json.{
  *
  */
 
-
+/**
+ * Component of [[RDSubmission]]
+ */
 final case class RDMolecular
 (
   smallVariants: Option[List[RDMolecular.SmallVariant]],
   structuralVariants: Option[List[RDMolecular.StructuralVariant]],
   copyNumberVariants: Option[List[RDMolecular.CopyNumberVariant]]
-)
+) extends BfarmMolecular
 
 object RDMolecular
 {

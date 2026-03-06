@@ -83,7 +83,7 @@ trait RDMappings extends Mappings[RDPatientRecord]
 
   import RDNGSReport.Conclusion._
 
-  implicit val disgnosticAssessment: RDNGSReport.Conclusion.Value => PriorRD.DiagnosticAssessment.Value =
+  implicit val diagnosticAssessment: RDNGSReport.Conclusion.Value => PriorRD.DiagnosticAssessment.Value =
     Map(
       PartialPhenotype                       -> PriorRD.DiagnosticAssessment.PhenotypeNotCompletelyClarified,
       StructuralVariantWithUnclearBreakpoint -> PriorRD.DiagnosticAssessment.StructuralVariantWithUnclearBreakpoint,

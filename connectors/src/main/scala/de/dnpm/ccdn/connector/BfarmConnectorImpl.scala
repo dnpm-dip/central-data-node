@@ -31,13 +31,13 @@ import java.util.concurrent.atomic.AtomicReference
 
 
 
-final class BfArMConnectorProviderImpl extends bfarm.ConnectorProvider
+final class BfarmConnectorProviderImpl extends bfarm.BfarmConnectorProvider
 {
-  override def getInstance: bfarm.Connector =
-    BfArMConnectorImpl.instance
+  override def getInstance: bfarm.BfarmConnector =
+    BfarmConnectorImpl.instance
 }
 
-object BfArMConnectorImpl
+object BfarmConnectorImpl
 {
 
   final case class Token
@@ -91,7 +91,7 @@ object BfArMConnectorImpl
 
 
   lazy val instance =
-    new BfArMConnectorImpl(
+    new BfarmConnectorImpl(
       Config.instance,
       HttpClient.instance
     )
@@ -99,15 +99,15 @@ object BfArMConnectorImpl
 }
 
 
-import BfArMConnectorImpl._
+import BfarmConnectorImpl._
 
 
-final class BfArMConnectorImpl
+final class BfarmConnectorImpl
 (
   private val config: Config,
   private val wsclient: WSClient
 )
-extends bfarm.Connector
+extends bfarm.BfarmConnector
 with Logging
 {
 
@@ -166,6 +166,10 @@ with Logging
       }
   }
 
+  /**
+   * @return A basic HTTP request to the given url, with valid authentication
+   *         and request timeout (10 seconds if unconfigured)
+   */
   private def request(
     url: String
   )(

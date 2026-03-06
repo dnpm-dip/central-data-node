@@ -5,14 +5,13 @@ import scala.concurrent.{
   Future,
   ExecutionContext
 }
-import scala.util.Either
 import de.dnpm.dip.util.{
   SPI,
   SPILoader
 }
 
 
-trait ConnectorOps[F[_],Env,Err]
+trait BfarmConnectorOps[F[_],Env,Err]
 {
   def upload(
     report: SubmissionReport
@@ -22,10 +21,9 @@ trait ConnectorOps[F[_],Env,Err]
 
 }
 
+trait BfarmConnector extends BfarmConnectorOps[Future,ExecutionContext,String]
 
-trait Connector extends ConnectorOps[Future,ExecutionContext,String]
+trait BfarmConnectorProvider extends SPI[BfarmConnector]
 
-trait ConnectorProvider extends SPI[Connector]
-
-object Connector extends SPILoader[ConnectorProvider]
+object BfarmConnector extends SPILoader[BfarmConnectorProvider]
 

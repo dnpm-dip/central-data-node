@@ -27,14 +27,14 @@ import de.dnpm.dip.service.mvh.{
 import de.dnpm.ccdn.core.dip
 
 
-final class FakeDIPConnectorProvider extends dip.ConnectorProvider
+final class FakeDIPConnectorProvider extends dip.DipConnectorProvider
 {
-  override def getInstance: dip.Connector =
+  override def getInstance: dip.DipConnector =
     FakeDIPConnector
 }
 
 
-object FakeDIPConnector extends dip.Connector
+object FakeDIPConnector extends dip.DipConnector
 {
 
   private def rndReport(

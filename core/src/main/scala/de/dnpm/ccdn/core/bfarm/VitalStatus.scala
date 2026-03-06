@@ -6,6 +6,9 @@ import play.api.libs.json.{
   Format
 }
 
+/**
+ * Whether a patient is alive or dead
+ */
 object VitalStatus extends Enumeration
 {
   val Living   = Value("living")

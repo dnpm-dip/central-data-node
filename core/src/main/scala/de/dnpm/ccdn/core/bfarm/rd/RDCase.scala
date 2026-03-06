@@ -1,35 +1,13 @@
 package de.dnpm.ccdn.core.bfarm.rd
 
 
-import java.time.{ 
-  LocalDate,
-  YearMonth
-}
+import java.time.{LocalDate, YearMonth}
 import cats.data.NonEmptyList
-import de.dnpm.dip.util.json.{
-  readsNel,
-  writesNel,
-  readsYearMonth,
-  writesYearMonth
-}
-import de.dnpm.dip.coding.{
-  Code,
-  Coding
-}
-import de.dnpm.dip.rd.model.{
-  GMFCS,
-  HPO,
-  RDDiagnosis
-}
-import de.dnpm.ccdn.core.bfarm.{
-  DiagnosticType,
-  LibraryType
-}
-import play.api.libs.json.{
-  Json,
-  Format,
-  OFormat
-}
+import de.dnpm.dip.util.json.{readsNel, readsYearMonth, writesNel, writesYearMonth}
+import de.dnpm.dip.coding.{Code, Coding}
+import de.dnpm.dip.rd.model.{GMFCS, HPO, RDDiagnosis}
+import de.dnpm.ccdn.core.bfarm.{BfarmCase, DiagnosticType, LibraryType}
+import play.api.libs.json.{Format, Json, OFormat}
 
 
 /*
@@ -43,12 +21,14 @@ import play.api.libs.json.{
  *
  */
 
-
+/**
+ * Component of [[RDSubmission]]
+ */
 final case class RDCase
 (
   diagnosisRd: RDCase.Diagnosis,
   priorRd: Option[RDCase.PriorRD]
-)
+)extends BfarmCase
 
 object RDCase
 {
@@ -112,6 +92,10 @@ object RDCase
   {
 
     // Note: Not my idea to use two different Enums for the same concept (see above Diagnosis.Extent above),
+
+    /**
+     * How many sequencings of the genome were conducted, not only from the patient, but also from relatives.
+     */
     object Extent extends Enumeration
     {
       val Single = Value("single")

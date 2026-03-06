@@ -27,7 +27,10 @@ import play.api.libs.json.{
  *
  */
 
-
+/**
+ * TODO nonsense, redo it, Anlage 2 has one line per this object.
+ * A DTO for the exact JSON object that is sent to BfArM (Anlage 2)
+ */
 final case class SubmissionReport
 (
   SubmittedCase: SubmissionReport.Case  // Not my idea to name the field CapitalizedCase as "SubmittedCase" (see disclaimer above)
@@ -77,7 +80,7 @@ object SubmissionReport
     submitterId: Id[Site],
     dataNodeId: Id[CDN],
     diseaseType: DiseaseType.Value,
-    dataCategory: DataCategory.Value,
+    dataCategory: DataCategory.Value, //Currently only has one possible value: clinical
     libraryType: LibraryType.Value,
     coverageType: HealthInsurance.Type.Value,
     dataQualityCheckPassed: Boolean
@@ -121,13 +124,36 @@ object SubmissionReport
 }
 
 
-
-trait Submission[Case,MolSeq,Plan,FU]
+/**
+ * Abstraction of submissions over disease type
+ *
+ * The subclasses are instantiated in the apply function in subclasses of
+ * [[de.dnpm.ccdn.core.Mappings]] from data in subclasses of
+ * [[de.dnpm.dip.model.PatientRecord]]
+ *
+ */
+trait Submission[Case <: BfarmCase,Molecular <: BfarmMolecular ,Plan <:BfarmCarePlan ,Followup <: BfarmFollowUps ]
 {
   val metadata: Metadata
   val `case`: Case
-  val molecular: Option[MolSeq]
+  val molecular: Option[Molecular]
   val plan: Option[Plan]
-  val followUp: Option[FU]
+  val followUp: Option[Followup]
 }
 
+/**
+ * Abstraction of case data for transmission to BfArM
+ */
+trait BfarmCase
+/**
+ * Abstraction of molecular data for transmission to BfArM
+ */
+trait BfarmMolecular
+/**
+ * Abstraction of care plan for transmission to BfArM
+ */
+trait BfarmCarePlan
+/**
+ * Abstraction of follow up sessions for transmission to BfArM
+ */
+trait BfarmFollowUps

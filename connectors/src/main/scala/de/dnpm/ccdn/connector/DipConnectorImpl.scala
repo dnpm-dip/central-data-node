@@ -35,8 +35,8 @@ import de.dnpm.dip.service.mvh.{
   UseCase
 }
 import de.dnpm.ccdn.core.dip.{
-  Connector,
-  ConnectorProvider
+  DipConnector,
+  DipConnectorProvider
 }
 
 
@@ -49,14 +49,14 @@ object Collection
 }
 
 
-final class DIPConnectorProviderImpl extends ConnectorProvider
+final class DIPConnectorProviderImpl extends DipConnectorProvider
 {
-  override def getInstance: Connector =
-    BrokerConnector.instance
+  override def getInstance: DipConnector =
+    BrokerDipConnectorImpl.instance
 }
 
 
-object BrokerConnector
+object BrokerDipConnectorImpl
 {
 
   final case class Config
@@ -99,7 +99,7 @@ object BrokerConnector
   }
 
   lazy val instance =
-    new BrokerConnector(
+    new BrokerDipConnectorImpl(
       HttpClient.instance,
       Config.instance
     )
@@ -107,14 +107,14 @@ object BrokerConnector
 }
 
 
-import BrokerConnector._
+import BrokerDipConnectorImpl._
 
-final class BrokerConnector
+final class BrokerDipConnectorImpl
 (
   private val wsclient: WSClient,
   private val config: Config
 )
-extends Connector
+extends DipConnector
 with Logging
 {
 

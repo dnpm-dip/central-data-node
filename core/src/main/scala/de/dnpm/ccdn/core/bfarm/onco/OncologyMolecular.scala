@@ -1,25 +1,13 @@
 package de.dnpm.ccdn.core.bfarm.onco
 
 
-import de.dnpm.dip.coding.{
-  Code,
-  Coding,
-  SequenceOntology
-}
+import de.dnpm.dip.coding.{Code, Coding, SequenceOntology}
 import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.hgvs.HGVS
-import de.dnpm.dip.mtb.model.{
-  Transcript
-}
-import de.dnpm.dip.model.{
-  Id
-}
-import de.dnpm.ccdn.core.bfarm.Chromosome
-import play.api.libs.json.{
-  Json,
-  Format,
-  OFormat
-}
+import de.dnpm.dip.mtb.model.Transcript
+import de.dnpm.dip.model.Id
+import de.dnpm.ccdn.core.bfarm.{BfarmMolecular, Chromosome}
+import play.api.libs.json.{Format, Json, OFormat}
 import OncologyMolecular._
 
 
@@ -29,28 +17,52 @@ import OncologyMolecular._
  * StructuralVariant, ExpressionVariant, SbsSignature not represented/relevant in MTB Core Data Set
  */
 
+/**
+ * Molecular information to an oncology case, including mutation information and other biomarkers
+ *
+ * Component of [[OncologySubmission]]
+ */
 final case class OncologyMolecular
 (
   smallVariants: Option[List[SmallVariant]],
   copyNumberVariants: Option[List[CopyNumberVariant]],
   complexBiomarkers: Option[List[ComplexBiomarker]]
-)
+)extends BfarmMolecular
 
 object OncologyMolecular
 {
 
+  /**
+   * Classification, from what was the genome recorded
+   */
   object GenomicSource extends Enumeration
-  { 
+  {
+    /**
+     * The patients own genetic code at some point at some cell in his body
+     */
     val Somatic  = Value("somatic")
+    /**
+     * From individuals parents
+     */
     val Germline = Value("germline")
 
     implicit val format: Format[Value] =
       Json.formatEnum(this)
   }
 
+  /**
+   * Classification of where a genetic change occured. Whether it is exactly on a gene,
+   * or in regulatory areas or neither.
+   */
   object Localization extends Enumeration
   {
+    /**
+     * Pointing at a specific gene, implying clear relation to a gene function, GOF or LOF
+     */
     val Coding     = Value("coding")
+    /**
+     * Pointing at area around and between genes, implying vague relation to gene expression
+     */
     val Regulatory = Value("inRegulatoryElements")
     val Neither    = Value("notInCodingAndNotInRegulatoryElements")
 

@@ -4,27 +4,16 @@ package de.dnpm.ccdn.test.uploader
 import java.io.FileInputStream
 import java.time.LocalDate
 import java.util.UUID.randomUUID
-import scala.util.{
-  Success,
-  Failure
-}
+import scala.util.{Failure, Success}
 import de.dnpm.dip.util.Logging
-import de.dnpm.dip.model.{
-  HealthInsurance,
-  Id,
-  Site
-}
+import de.dnpm.dip.model.{HealthInsurance, Id, Site}
 import de.dnpm.dip.service.mvh.Submission
 import de.dnpm.dip.service.mvh.TransferTAN
-import de.dnpm.ccdn.core.bfarm.{
-  CDN,
-  LibraryType,
-  SubmissionReport
-}
-import de.dnpm.ccdn.connector.BfArMConnectorImpl
+import de.dnpm.ccdn.core.bfarm.{CDN, LibraryType, SubmissionReport}
+import de.dnpm.ccdn.connector.BfarmConnectorImpl
 import play.api.libs.json.Json
 
-
+@deprecated("intended for manual execution and replaced by MVHReportingService","v0.5") //don't know from which version on
 object Uploader extends Logging
 {
 
@@ -43,7 +32,7 @@ object Uploader extends Logging
     )
 
   private val connector =
-    BfArMConnectorImpl.instance
+    BfarmConnectorImpl.instance
 
 
   def main(args: Array[String]) : Unit = {
