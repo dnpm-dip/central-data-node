@@ -19,7 +19,7 @@ object MVHReportingService
 {
   import scala.concurrent.ExecutionContext.Implicits.global
 
-  private[core] lazy val service =
+  private lazy val service =
     new MVHReportingService(
       Config.instance,
       ReportRepository.getInstance.get,
@@ -199,7 +199,8 @@ extends Logging
       queue.entries(_.status == Unsubmitted)
     )(
       report =>
-        bfarmConnector.upload(BfarmReport(report))
+        bfarmConnector
+          .upload(BfarmReport(report))
           .map {
             case Right(_) =>
               log.info(s"SubmissionReport Uploaded: Site ${report.site.code}, TAN ${report.id}")

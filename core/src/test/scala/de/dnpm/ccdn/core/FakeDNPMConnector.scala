@@ -26,14 +26,16 @@ import de.dnpm.dip.service.mvh.{
 }
 import de.dnpm.ccdn.core.dip
 
+
 final class FakeDIPConnectorProvider extends dip.ConnectorProvider
 {
   override def getInstance: dip.Connector =
-    FakeDIPConnector()
+    FakeDIPConnector
 }
-case class FakeDIPConnector() extends dip.Connector
+
+
+object FakeDIPConnector extends dip.Connector
 {
-  val nSubmissionsPerSite:Int = 4
 
   private def rndReport(
     site: Code[Site],
@@ -63,7 +65,7 @@ case class FakeDIPConnector() extends dip.Connector
     implicit ec: ExecutionContext
   ): Future[Either[String,Seq[Submission.Report]]] =
     Future.successful(
-      Seq.fill(nSubmissionsPerSite)(rndReport(site,useCase)).asRight
+      Seq.fill(4)(rndReport(site,useCase)).asRight
     )
 
   override def confirmSubmitted(
