@@ -118,7 +118,6 @@ extends Connector
 with Logging
 {
 
-
   private val timeout =
     config.timeout.getOrElse(10) seconds
 
@@ -221,7 +220,7 @@ with Logging
         filter.period match {
           case Some(period) =>
             req.addQueryStringParameters("created-after" -> period.start.format(ISO_LOCAL_DATE_TIME))
-              .pipe[WSRequest#Self](
+              .pipe(
                 r => period.endOption match {
                   case Some(end) => r.addQueryStringParameters("created-before" -> end.format(ISO_LOCAL_DATE_TIME))
                   case None      => r
@@ -246,7 +245,7 @@ with Logging
     report: Submission.Report
   )(
     implicit env: ExecutionContext
-  ): Future[Either[String,Submission.Report]] =
+  ): Future[Either[String,Unit]] =
     request(
       report.site.code,
       s"/api/${report.useCase.toString.toLowerCase}/peer2peer/mvh/submission-reports/${report.id.value}:submitted"
@@ -254,7 +253,7 @@ with Logging
     .execute("POST")
     .map(
       resp => resp.status match {
-        case 200 => report.asRight
+        case 200 => ().asRight
         case _   => s"Submission confirmation of report ${report.id.value} failed with status ${resp.status} ${resp.statusText}".asLeft
       } 
     )
