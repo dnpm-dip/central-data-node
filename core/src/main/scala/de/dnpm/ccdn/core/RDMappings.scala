@@ -83,7 +83,7 @@ trait RDMappings extends Mappings[RDPatientRecord]
 
   import RDNGSReport.Conclusion._
 
-  implicit val disgnosticAssessment: RDNGSReport.Conclusion.Value => PriorRD.DiagnosticAssessment.Value =
+  implicit val diagnosticAssessment: RDNGSReport.Conclusion.Value => PriorRD.DiagnosticAssessment.Value =
     Map(
       PartialPhenotype                       -> PriorRD.DiagnosticAssessment.PhenotypeNotCompletelyClarified,
       StructuralVariantWithUnclearBreakpoint -> PriorRD.DiagnosticAssessment.StructuralVariantWithUnclearBreakpoint,
@@ -154,7 +154,7 @@ trait RDMappings extends Mappings[RDPatientRecord]
         priorDiagnostics
           .map(_.`type`.code.enumValue.mapTo[DiagnosticType.Value])
           .getOrElse(DiagnosticType.NonePerformed),
-        RDDiagnosis.FamilyControlLevel.Single.mapTo[PriorRD.Extent.Value],  //TODO!!!!!!
+        RDDiagnosis.FamilyControlLevel.Single.mapTo[PriorRD.Extent.Value],  //something remained to be done here, but it was forgotten
         priorDiagnostics.map(_.issuedOn),
         priorDiagnostics
           .flatMap(_.conclusion)

@@ -3,24 +3,11 @@ package de.dnpm.ccdn.core.bfarm.rd
 
 import java.time.LocalDate
 import cats.data.NonEmptyList
-import de.dnpm.dip.util.json.{
-  readsNel,
-  writesNel
-}
-import de.dnpm.dip.coding.{
-  Code,
-  Coding
-}
-import de.dnpm.ccdn.core.bfarm.VitalStatus
-import de.dnpm.dip.rd.model.{
-  GMFCS,
-  HPO
-}
-import play.api.libs.json.{
-  Json,
-  Format,
-  OFormat,
-}
+import de.dnpm.dip.util.json.{readsNel, writesNel}
+import de.dnpm.dip.coding.{Code, Coding}
+import de.dnpm.ccdn.core.bfarm.{BfarmFollowUps, VitalStatus}
+import de.dnpm.dip.rd.model.{GMFCS, HPO}
+import play.api.libs.json.{Format, Json, OFormat}
 
 
 /*
@@ -34,7 +21,9 @@ import play.api.libs.json.{
  *
  */
 
-
+/**
+ * Component of [[RDSubmission]]
+ */
 final case class RDFollowUp
 (
   followUpDate: LocalDate,
@@ -79,7 +68,7 @@ object RDFollowUp
 final case class RDFollowUps
 (
   followUpOds: NonEmptyList[RDFollowUp]
-)
+)extends BfarmFollowUps
 
 object RDFollowUps
 {

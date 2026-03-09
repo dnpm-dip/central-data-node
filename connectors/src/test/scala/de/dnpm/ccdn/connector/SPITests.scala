@@ -5,14 +5,14 @@ import java.nio.file.Files.createTempDirectory
 import scala.util.Failure
 import org.scalatest.flatspec.AnyFlatSpec
 import de.dnpm.ccdn.core.ReportRepository
-import de.dnpm.ccdn.core.bfarm
-import de.dnpm.ccdn.core.dip
+import de.dnpm.ccdn.core.bfarm.BfarmConnector
+import de.dnpm.ccdn.core.dip.DipConnector
 
 
 final class SPITests extends AnyFlatSpec
 {
 
-  val queueDir =
+  private val queueDir =
     createTempDirectory("dnpm_ccdn_test_").toFile
 
   System.setProperty("ccdn.dnpm.broker.baseurl","http://localhost")
@@ -23,13 +23,13 @@ final class SPITests extends AnyFlatSpec
   System.setProperty("ccdn.queue.dir",queueDir.getAbsolutePath)
 
 
-  val dipConnector =
-    dip.Connector.getInstance
+  private val dipConnector =
+    DipConnector.getInstance
 
-  val bfarmConnector =
-    bfarm.Connector.getInstance
+  private val bfarmConnector =
+    BfarmConnector.getInstance
 
-  val reportQueue =
+  private val reportQueue =
     ReportRepository.getInstance
       .recoverWith { 
         case t =>
@@ -38,7 +38,7 @@ final class SPITests extends AnyFlatSpec
       }
 
 
-  "SPI Loaders" must "have worked" in {
+  "SPI Loaders" must "load implementations" in {
     assert(dipConnector.isSuccess)
     assert(bfarmConnector.isSuccess)
     assert(reportQueue.isSuccess)
