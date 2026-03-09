@@ -154,7 +154,7 @@ trait RDMappings extends Mappings[RDPatientRecord]
         priorDiagnostics
           .map(_.`type`.code.enumValue.mapTo[DiagnosticType.Value])
           .getOrElse(DiagnosticType.NonePerformed),
-        RDDiagnosis.FamilyControlLevel.Single.mapTo[PriorRD.Extent.Value],  //TODO!!!!!!
+        RDDiagnosis.FamilyControlLevel.Single.mapTo[PriorRD.Extent.Value],  //something remained to be done here, but it was forgotten
         priorDiagnostics.map(_.issuedOn),
         priorDiagnostics
           .flatMap(_.conclusion)

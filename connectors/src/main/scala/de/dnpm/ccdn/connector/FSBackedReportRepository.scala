@@ -66,9 +66,9 @@ object FSBackedReportRepository extends Logging
 }
 
 /**
- * Reads a folderpath from either environment variables or JVM properties and keeps it
- * 's set of reports synchronized in that folder. Initializes itself with these reports,
- * if the folder already exists and contains files
+ * Reads a folderpath from either environment variables or JVM properties and
+ * keeps it's set of reports synchronized in that folder. Initializes itself
+ * with these reports if the folder already exists and contains files
  */
 final class FSBackedReportRepository(
   val dir: File

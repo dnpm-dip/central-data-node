@@ -39,7 +39,9 @@ final class BfarmConnectorProviderImpl extends bfarm.BfarmConnectorProvider
 
 object BfarmConnectorImpl
 {
-
+  /**
+   * Deserialization of the authentication to the BfArM
+   */
   final case class Token
   (
     access_token: String,
@@ -67,7 +69,10 @@ object BfarmConnectorImpl
   implicit val reads: Reads[Error] =
     Json.reads[Error]
 
-
+  /**
+   * Configuration container which is automatically loaded from ENV variables
+   * or if not available from system properties
+   */
   final case class Config
   (
     apiURL: String,
@@ -185,7 +190,12 @@ with Logging
       )
   }
 
-
+  /**
+   * Makes a postrequest to BfArM, sending the serialization of the given report
+   * @return an eventually successful [[Future]] containing [[Unit]] if
+   *         the upload worked, or a successful [[Future]] containing an error
+   *         message with HTTP status code if the upload failed or was rejected
+   */
   override def upload(
     report: SubmissionReport
   )(
