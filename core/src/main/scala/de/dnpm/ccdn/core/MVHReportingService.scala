@@ -235,6 +235,66 @@ extends Logging
   }
 
 
+  private[core] def confirmSubmissions: Future[Unit] = {
+
+    log.info("Confirming report submissions...")
+   
+    for {
+      
+      results <- dipConnector.batchConfirmSubmitted(queue.entries(_.status == Submitted).toList)
+
+      _ = results.map {
+        case Right(report) =>
+          log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
+          queue.remove(report)
+      
+        case err @ Left(msg) =>
+          log.error(s"Problem confirming submission: $msg")
+          err
+      }
+
+     } yield ()
+   
+  }
+
+
+/*
+  private[core] def confirmSubmissions: Future[Unit] = {
+
+    log.info("Confirming report submissions...")
+   
+    Future.sequence(
+      queue.entries(_.status == Submitted)
+        .grouped(50)
+        .toSeq
+        .map(
+          Future.traverse(_)(
+            report =>
+              dipConnector.confirmSubmitted(report)
+                .map {
+                  case Right(_) =>
+                    log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
+                    queue.remove(report)
+            
+                  case err @ Left(msg) =>
+                    log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - $msg")
+                    err
+                }
+                // Recover lest the Future traversal be "short-circuited" into a failed Future 
+                .recover {
+                  case t =>
+                    log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - ${t.getMessage}")
+                    t.getMessage.asLeft
+                }
+          )
+        )
+    )
+    .map(_ => ())
+   
+  }
+*/
+
+/*
   private[core] def confirmSubmissions: Future[Seq[Either[String,Unit]]] = {
 
     log.info("Confirming report submissions...")
@@ -262,5 +322,5 @@ extends Logging
     )
 
   }
-
+*/
 }

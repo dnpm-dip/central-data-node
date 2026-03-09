@@ -245,7 +245,7 @@ with Logging
     report: Submission.Report
   )(
     implicit env: ExecutionContext
-  ): Future[Either[String,Unit]] =
+  ): Future[Either[String,Submission.Report]] =
     request(
       report.site.code,
       s"/api/${report.useCase.toString.toLowerCase}/peer2peer/mvh/submission-reports/${report.id.value}:submitted"
@@ -253,7 +253,7 @@ with Logging
     .execute("POST")
     .map(
       resp => resp.status match {
-        case 200 => ().asRight
+        case 200 => report.asRight
         case _   => s"Submission confirmation of report ${report.id.value} failed with status ${resp.status} ${resp.statusText}".asLeft
       } 
     )
