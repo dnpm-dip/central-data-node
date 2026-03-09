@@ -25,7 +25,8 @@ object FakeDIPConnector {
 case class FakeDIPConnector() extends dip.Connector
 {
   /**
-   * Describes how many submissions will be created for each request site and usecase (see resources/config.json), so the actual number of submissions is 39 times this
+   * Describes how many submissions will be created for each request site and usecase
+   * (see resources/config.json), so the actual number of submissions is 39 times this
    */
   var nSubmissions:Int = 4
 

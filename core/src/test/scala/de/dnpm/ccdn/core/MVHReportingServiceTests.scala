@@ -11,37 +11,35 @@ final class MVHReportingServiceTests extends AsyncFlatSpec with BeforeAndAfterEa
 {
   behavior of "MVHReportingService"
 
-
-  private case class TestFixture() {
+    //cant instantiate proper fixtures, because MVHReportingService is a singleton
+    // and I don't want to copypaste from the companion object into testcode
     val service = MVHReportingService.service
     val fakeDipConnector:FakeDIPConnector = service.dipConnector.asInstanceOf[FakeDIPConnector]
     val fakeBfarmConnector:FakeBfArMConnector = service.bfarmConnector.asInstanceOf[FakeBfArMConnector]
-  }
-  private val fixture = TestFixture()
 
 
 
   it must "handle multiple uploads from every DIP node in one go" in {
-    fixture.fakeDipConnector.nSubmissions = 4
-    fixture.fakeDipConnector.confirmationsTakeTime = false
+    fakeDipConnector.nSubmissions = 4
+    fakeDipConnector.confirmationsTakeTime = false
 
     for {
       
-      _ <- fixture.service.pollReports
+      _ <- service.pollReports
       
-      _ = fixture.service.queue.entries(_ => true) must not be (empty)
+      _ = service.queue.entries(_ => true) must not be (empty)
 
-      _ <- fixture.service.uploadReports
+      _ <- service.uploadReports
 
-      _ <- fixture.service.confirmSubmissions
+      _ <- service.confirmSubmissions
       
-    } yield fixture.service.queue.entries(_ => true) must be (empty)
+    } yield service.queue.entries(_ => true) must be (empty)
   }
 
   it must " not process more submissions simultaneously than it has threads (non-deterministic)" in {
     //configure bfarmconnecteor to halt for 100 msec during upload
-    fixture.fakeDipConnector.nSubmissions = 1
-    fixture.fakeDipConnector.confirmationsTakeTime = true
+    fakeDipConnector.nSubmissions = 1
+    fakeDipConnector.confirmationsTakeTime = true
 
     // testing setup has 39 clinic-usecases, so there can be no less than 39 uploads to run
     val expectedNumReports = Config.instance.sites.flatMap(it => it._2.useCases).size
@@ -53,14 +51,14 @@ final class MVHReportingServiceTests extends AsyncFlatSpec with BeforeAndAfterEa
     //run
     for{
 
-      _ <- fixture.service.pollReports
+      _ <- service.pollReports
 
-      _ <- fixture.service.uploadReports
+      _ <- service.uploadReports
 
-      _ <- fixture.service.confirmSubmissions
+      _ <- service.confirmSubmissions
 
     } yield{
-      val allUploadTimings = fixture.fakeDipConnector.confirmationFinishTimings.get()
+      val allUploadTimings = fakeDipConnector.confirmationFinishTimings.get()
       //expect that theres a contingent of uploads that all happened within 25msec of the first
       val minTiming = allUploadTimings.min
       val maxTimeDifference = 25 //generous
@@ -81,7 +79,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec with BeforeAndAfterEa
   }
 
   override def afterEach() = {
-    fixture.fakeDipConnector.confirmationFinishTimings.set(List[Long]())
+    //clear time recordings
+    fakeDipConnector.confirmationFinishTimings.set(List[Long]())
   }
 
 }

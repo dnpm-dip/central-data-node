@@ -124,6 +124,7 @@ extends Logging
 
   def stop(): Unit = {
     log.info("Stopping MVH Reporting service")
+    this.confirmationExecutor.shutdown() //TODO necessary?
     scheduledTask.foreach(_ cancel false)
   }
 
@@ -223,6 +224,10 @@ extends Logging
     
   }
 
+  private val confirmationExecutor = Executors.newFixedThreadPool(nConfirmationThreads)
+
+  private val confirmationExecutionContext = ExecutionContext.fromExecutor(confirmationExecutor)
+
   /**
    * Runs with an overridden threadpool to limit simultaneous executions. Apache Tomcats
    * which deploy the DIP nodes only handle up to 200 sockets simultaneously by default.
@@ -233,7 +238,7 @@ extends Logging
    */
   private[core] def confirmSubmissions: Future[Seq[Either[String,Unit]]] = {
 
-    implicit val ec:ExecutionContext = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(nConfirmationThreads))
+    implicit val ec:ExecutionContext = confirmationExecutionContext
     log.info("Confirming report submissions...")
     Future.traverse(
       queue.entries(_.status == Submitted)
