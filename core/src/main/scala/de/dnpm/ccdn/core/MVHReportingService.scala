@@ -12,16 +12,16 @@ import de.dnpm.dip.util.Logging
 import de.dnpm.dip.model.NGSReport
 import de.dnpm.dip.service.mvh.Submission
 import Submission.Report.Status.{Submitted, Unsubmitted}
+import de.dnpm.ccdn.core.MVHReportingService.nConfirmationThreads
+
 
 object MVHReportingService
 {
-  /**
-   * Limiting the number of threads was necessary because the underlying application
-   * server only supports a limited number of sockets. Submissions are processed in
-   * parallel and can require more than one socket each, so without limiting the
-   * number of threads a deadlock can occur
+  import scala.concurrent.ExecutionContext.Implicits.global
+
+  /** See [[MVHReportingService.confirmSubmissions]]
    */
-  private[core] val nThreads = 32
+  private[core] val nConfirmationThreads = 32
 
   private[core] lazy val service =
     new MVHReportingService(
@@ -29,7 +29,7 @@ object MVHReportingService
       ReportRepository.getInstance.get,
       dip.Connector.getInstance.get,
       bfarm.Connector.getInstance.get
-    )(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(nThreads)))
+    )
     
     
   def main(args: Array[String]): Unit = {
@@ -176,7 +176,7 @@ extends Logging
               Submission.Report.Filter(
                 status = Some(Set(Submission.Report.Status.Unsubmitted))
               )
-            ) //TODO check initial code whether implicit executioncontext was a parameter of this function
+            )
             .andThen { 
               case Success(Right(reports)) =>
                 log.debug(s"Enqueuing ${reports.size} $useCase SubmissionReport")
@@ -223,30 +223,39 @@ extends Logging
     
   }
 
-
+  /**
+   * Runs with an overridden threadpool to limit simultaneous executions. Apache Tomcats
+   * which deploy the DIP nodes only handle up to 200 sockets simultaneously by default.
+   * If a node is offline for some time, the accrued submissions can lead to a deadlock
+   * without this limit
+   *
+   * TODO merge javadoc with that of CHORE:javadoc branch
+   */
   private[core] def confirmSubmissions: Future[Seq[Either[String,Unit]]] = {
+
+    implicit val ec:ExecutionContext = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(nConfirmationThreads))
     log.info("Confirming report submissions...")
-   
     Future.traverse(
       queue.entries(_.status == Submitted)
     )(
       report =>
-        dipConnector.confirmSubmitted(report)
-          .map {
-            case Right(_) =>
-              log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
-              queue.remove(report)
+      dipConnector.confirmSubmitted(report)
+        .map {
+          case Right(_) =>
+            log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
+            queue.remove(report)
 
-            case err @ Left(msg) =>
-              log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - $msg")
-              err
-          }
-          // Recover lest the Future traversal be "short-circuited" into a failed Future 
-          .recover {
-            case t =>
-              log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - ${t.getMessage}")
-              t.getMessage.asLeft
-          }
+          case err@Left(msg) =>
+            log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - $msg")
+            err
+        }
+        // Recover lest the Future traversal be "short-circuited" into a failed Future
+        .recover {
+          case t =>
+            log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - ${t.getMessage}")
+            t.getMessage.asLeft
+        }
+
     )
 
   }

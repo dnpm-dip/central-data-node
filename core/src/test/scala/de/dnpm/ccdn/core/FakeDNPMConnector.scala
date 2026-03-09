@@ -3,41 +3,38 @@ package de.dnpm.ccdn.core
 
 import java.time.LocalDateTime
 import java.util.UUID.randomUUID
-import scala.concurrent.{
-  Future,
-  ExecutionContext
-}
+import scala.concurrent.{ExecutionContext, Future}
 import cats.syntax.either._
-import de.dnpm.dip.coding.{
-  Code,
-  Coding
-}
-import de.dnpm.dip.model.{
-  Id,
-  NGSReport,
-  Patient,
-  HealthInsurance,
-  Site
-}
-import de.dnpm.dip.service.mvh.{
-  Submission,
-  TransferTAN,
-  UseCase
-}
+import de.dnpm.dip.coding.{Code, Coding}
+import de.dnpm.dip.model.{HealthInsurance, Id, NGSReport, Patient, Site}
+import de.dnpm.dip.service.mvh.{Submission, TransferTAN, UseCase}
 import de.dnpm.ccdn.core.dip
+
+import java.util.concurrent.atomic.AtomicReference
 
 final class FakeDIPConnectorProvider extends dip.ConnectorProvider
 {
   override def getInstance: dip.Connector =
     FakeDIPConnector()
 }
-/**
- *
- * @param nSubmissions note that this is returned to all sites for all their stored usecases (see resources/config.json). There will be this many times 39 uploads effectively in the test
- */
+
+object FakeDIPConnector {
+  final val uploadDelayMsec = 100
+}
+
 case class FakeDIPConnector() extends dip.Connector
 {
+  /**
+   * Describes how many submissions will be created for each request site and usecase (see resources/config.json), so the actual number of submissions is 39 times this
+   */
   var nSubmissions:Int = 4
+
+  val confirmationFinishTimings = new AtomicReference(List[Long]())
+  /**
+   * If true, every call to confirmSubmitted will wait [[FakeDIPConnector.uploadDelayMsec]] milliseconds until it
+   */
+  var confirmationsTakeTime:Boolean = false
+
 
   private def rndReport(
     site: Code[Site],
@@ -75,6 +72,15 @@ case class FakeDIPConnector() extends dip.Connector
   )(
     implicit ec: ExecutionContext
   ): Future[Either[String,Unit]] =
-    Future.successful(().asRight)
+    if (confirmationsTakeTime) {
+      Future{
+        Thread.sleep(FakeDIPConnector.uploadDelayMsec)
+        confirmationFinishTimings.updateAndGet(old => System.currentTimeMillis()::old)
+        ().asRight
+      }
+    } else {
+      confirmationFinishTimings.updateAndGet(old => System.currentTimeMillis()::old)
+      Future.successful(().asRight)
+    }
 
 }
