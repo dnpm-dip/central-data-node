@@ -12,10 +12,10 @@ import de.dnpm.dip.service.mvh.Submission
 final class FakeReportRepositoryProvider extends ReportRepositoryProvider
 {
   override def getInstance: ReportRepository =
-    FakeReportRepository()
+    FakeReportRepository
 }
 
-case class FakeReportRepository() extends ReportRepository
+object FakeReportRepository extends ReportRepository
 {
 
   private val cache: Map[Key,Submission.Report] =

@@ -31,13 +31,9 @@ final class FakeDIPConnectorProvider extends dip.ConnectorProvider
   override def getInstance: dip.Connector =
     FakeDIPConnector()
 }
-/**
- *
- * @param nSubmissions note that this is returned to all sites for all their stored usecases (see resources/config.json). There will be this many times 39 uploads effectively in the test
- */
 case class FakeDIPConnector() extends dip.Connector
 {
-  var nSubmissions:Int = 4
+  val nSubmissionsPerSite:Int = 4
 
   private def rndReport(
     site: Code[Site],
@@ -67,14 +63,14 @@ case class FakeDIPConnector() extends dip.Connector
     implicit ec: ExecutionContext
   ): Future[Either[String,Seq[Submission.Report]]] =
     Future.successful(
-      Seq.fill(nSubmissions)(rndReport(site,useCase)).asRight
+      Seq.fill(nSubmissionsPerSite)(rndReport(site,useCase)).asRight
     )
 
   override def confirmSubmitted(
     report: Submission.Report
   )(
     implicit ec: ExecutionContext
-  ): Future[Either[String,Unit]] =
-    Future.successful(().asRight)
+  ): Future[Either[String,Submission.Report]] =
+    Future.successful(report.asRight)
 
 }

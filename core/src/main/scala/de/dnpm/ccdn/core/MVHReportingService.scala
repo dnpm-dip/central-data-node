@@ -7,21 +7,17 @@ import java.util.concurrent.{Executors, ScheduledExecutorService}
 import java.util.concurrent.{TimeUnit, Future => JavaFuture}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Success
+
 import cats.syntax.either._
 import de.dnpm.dip.util.Logging
 import de.dnpm.dip.model.NGSReport
 import de.dnpm.dip.service.mvh.Submission
 import Submission.Report.Status.{Submitted, Unsubmitted}
 
+
 object MVHReportingService
 {
-  /**
-   * Limiting the number of threads was necessary because the underlying application
-   * server only supports a limited number of sockets. Submissions are processed in
-   * parallel and can require more than one socket each, so without limiting the
-   * number of threads a deadlock can occur
-   */
-  private[core] val nThreads = 32
+  import scala.concurrent.ExecutionContext.Implicits.global
 
   private[core] lazy val service =
     new MVHReportingService(
@@ -29,7 +25,7 @@ object MVHReportingService
       ReportRepository.getInstance.get,
       dip.Connector.getInstance.get,
       bfarm.Connector.getInstance.get
-    )(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(nThreads)))
+    )
     
     
   def main(args: Array[String]): Unit = {
@@ -53,9 +49,9 @@ object MVHReportingService
 class MVHReportingService
 (
   config: Config,
-  private[core] val queue: ReportRepository,
-  private[core] val dipConnector: dip.Connector,
-  private[core] val bfarmConnector: bfarm.Connector
+  queue: ReportRepository,
+  dipConnector: dip.Connector,
+  bfarmConnector: bfarm.Connector
 )(
   implicit ec: ExecutionContext
 )
@@ -176,7 +172,7 @@ extends Logging
               Submission.Report.Filter(
                 status = Some(Set(Submission.Report.Status.Unsubmitted))
               )
-            ) //TODO check initial code whether implicit executioncontext was a parameter of this function
+            )
             .andThen { 
               case Success(Right(reports)) =>
                 log.debug(s"Enqueuing ${reports.size} $useCase SubmissionReport")
@@ -224,30 +220,25 @@ extends Logging
   }
 
 
-  private[core] def confirmSubmissions: Future[Seq[Either[String,Unit]]] = {
-    log.info("Confirming report submissions...")
-   
-    Future.traverse(
-      queue.entries(_.status == Submitted)
-    )(
-      report =>
-        dipConnector.confirmSubmitted(report)
-          .map {
-            case Right(_) =>
-              log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
-              queue.remove(report)
+  private[core] def confirmSubmissions: Future[Unit] = {
 
-            case err @ Left(msg) =>
-              log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - $msg")
-              err
-          }
-          // Recover lest the Future traversal be "short-circuited" into a failed Future 
-          .recover {
-            case t =>
-              log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - ${t.getMessage}")
-              t.getMessage.asLeft
-          }
-    )
+    log.info("Confirming report submissions...")
+
+    for {
+
+      results <- dipConnector.batchConfirmSubmitted(queue.entries(_.status == Submitted).toList)
+
+      _ = results.map {
+        case Right(report) =>
+          log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
+          queue.remove(report)
+
+        case err @ Left(msg) =>
+          log.error(s"Problem confirming submission: $msg")
+          err
+      }
+
+    } yield ()
 
   }
 
