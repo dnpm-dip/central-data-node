@@ -124,7 +124,7 @@ extends Logging
 
   def stop(): Unit = {
     log.info("Stopping MVH Reporting service")
-    this.confirmationExecutor.shutdown() //TODO necessary?
+    this.confirmationExecutor.shutdown()
     scheduledTask.foreach(_ cancel false)
   }
 
@@ -224,8 +224,10 @@ extends Logging
     
   }
 
+  /**
+   * Used to gracefully end calls to [[confirmSubmissions]]
+   */
   private val confirmationExecutor = Executors.newFixedThreadPool(nConfirmationThreads)
-
   private val confirmationExecutionContext = ExecutionContext.fromExecutor(confirmationExecutor)
 
   /**

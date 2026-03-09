@@ -1,13 +1,12 @@
 package de.dnpm.ccdn.core
 
 
-import org.scalatest.BeforeAndAfterEach
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.must.Matchers._
 
 
 
-final class MVHReportingServiceTests extends AsyncFlatSpec with BeforeAndAfterEach
+final class MVHReportingServiceTests extends AsyncFlatSpec
 {
   behavior of "MVHReportingService"
 
@@ -40,6 +39,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec with BeforeAndAfterEa
     //configure bfarmconnecteor to halt for 100 msec during upload
     fakeDipConnector.nSubmissions = 1
     fakeDipConnector.confirmationsTakeTime = true
+    fakeDipConnector.maxSimultaneousConfirmationWaits.set(0)
 
     // testing setup has 39 clinic-usecases, so there can be no less than 39 uploads to run
     val expectedNumReports = Config.instance.sites.flatMap(it => it._2.useCases).size
@@ -58,29 +58,9 @@ final class MVHReportingServiceTests extends AsyncFlatSpec with BeforeAndAfterEa
       _ <- service.confirmSubmissions
 
     } yield{
-      val allUploadTimings = fakeDipConnector.confirmationFinishTimings.get()
-      //expect that theres a contingent of uploads that all happened within 25msec of the first
-      val minTiming = allUploadTimings.min
-      val maxTimeDifference = 25 //generous
-      def firstUploadBatchPredicate:Long=>Boolean = _ - minTiming < maxTimeDifference
-      val firstUploadBatch = allUploadTimings.filter(firstUploadBatchPredicate)
-      val remainingUploads = allUploadTimings.filter(!firstUploadBatchPredicate(_))
+      assertResult(MVHReportingService.nConfirmationThreads)(fakeDipConnector.maxSimultaneousConfirmationWaits.get())
 
-      //verifying basics
-      assertResult(expectedNumReports)(allUploadTimings.size)
-      assertResult(expectedNumReports)(firstUploadBatch.size+remainingUploads.size)
-
-      //verify that the first contingent has exactly <nThreads> items
-      assertResult(MVHReportingService.nConfirmationThreads)(firstUploadBatch.size)
-      //verify that the rest is equally close
-      val minRemainderTiming = remainingUploads.min
-      assert(remainingUploads.forall(_ - minRemainderTiming < maxTimeDifference))
     }
-  }
-
-  override def afterEach() = {
-    //clear time recordings
-    fakeDipConnector.confirmationFinishTimings.set(List[Long]())
   }
 
 }

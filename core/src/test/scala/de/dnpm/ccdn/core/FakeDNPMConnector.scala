@@ -8,9 +8,8 @@ import cats.syntax.either._
 import de.dnpm.dip.coding.{Code, Coding}
 import de.dnpm.dip.model.{HealthInsurance, Id, NGSReport, Patient, Site}
 import de.dnpm.dip.service.mvh.{Submission, TransferTAN, UseCase}
-import de.dnpm.ccdn.core.dip
 
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicInteger
 
 final class FakeDIPConnectorProvider extends dip.ConnectorProvider
 {
@@ -30,7 +29,10 @@ case class FakeDIPConnector() extends dip.Connector
    */
   var nSubmissions:Int = 4
 
-  val confirmationFinishTimings = new AtomicReference(List[Long]())
+  val nActiveConfirmationWaits = new AtomicInteger(0)
+  val maxSimultaneousConfirmationWaits = new AtomicInteger(0)
+
+  //val confirmationFinishTimings = new AtomicReference(List[Long]())
   /**
    * If true, every call to confirmSubmitted will wait [[FakeDIPConnector.uploadDelayMsec]] milliseconds until it
    */
@@ -75,12 +77,15 @@ case class FakeDIPConnector() extends dip.Connector
   ): Future[Either[String,Unit]] =
     if (confirmationsTakeTime) {
       Future{
+        nActiveConfirmationWaits.updateAndGet(oldCount => {
+          maxSimultaneousConfirmationWaits.updateAndGet(oldMax => Math.max(oldMax,oldCount+1))
+          oldCount+1
+        })
         Thread.sleep(FakeDIPConnector.uploadDelayMsec)
-        confirmationFinishTimings.updateAndGet(old => System.currentTimeMillis()::old)
+        nActiveConfirmationWaits.updateAndGet(old => old-1)
         ().asRight
       }
     } else {
-      confirmationFinishTimings.updateAndGet(old => System.currentTimeMillis()::old)
       Future.successful(().asRight)
     }
 
