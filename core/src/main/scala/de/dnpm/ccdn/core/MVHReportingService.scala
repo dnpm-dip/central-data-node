@@ -225,7 +225,7 @@ extends Logging
   }
 
   /**
-   * Used to gracefully end calls to [[confirmSubmissions]]
+   * Used to gracefully end calls to [[confirmSubmissions]] on shutdown
    */
   private val confirmationExecutor = Executors.newFixedThreadPool(nConfirmationThreads)
   private val confirmationExecutionContext = ExecutionContext.fromExecutor(confirmationExecutor)
