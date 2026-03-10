@@ -1,11 +1,7 @@
 package de.dnpm.ccdn.core
 
 
-import scala.concurrent.{
-  Future,
-  ExecutionContext
-}
-import scala.util.Either
+import scala.concurrent.{ExecutionContext, Future}
 import cats.syntax.either._
 import de.dnpm.ccdn.core.bfarm
 
@@ -13,18 +9,13 @@ import de.dnpm.ccdn.core.bfarm
 final class FakeBfarmConnectorProvider extends bfarm.BfarmConnectorProvider
 {
   override def getInstance: bfarm.BfarmConnector =
-    FakeBfarmConnector
+    FakeBfarmConnector()
 }
 
-
-object FakeBfarmConnector extends bfarm.BfarmConnector
+case class FakeBfarmConnector() extends bfarm.BfarmConnector
 {
-  def upload(
-    report: bfarm.SubmissionReport
-  )(
-    implicit ec: ExecutionContext
-  ): Future[Either[String,Unit]] =
-    Future.successful(
-      ().asRight
-    )
+  def upload(report: bfarm.SubmissionReport)
+            (implicit ec: ExecutionContext)
+            : Future[Either[String,Unit]] =
+    Future.successful(().asRight)
 }

@@ -18,10 +18,13 @@ import de.dnpm.ccdn.core.dip.DipConnector
 
 object MVHReportingService
 {
-
   import scala.concurrent.ExecutionContext.Implicits.global
 
-  private lazy val service =
+  /** See [[MVHReportingService.confirmSubmissions]]
+   */
+  private[core] val nConfirmationThreads = 32
+
+  private[core] lazy val service =
     new MVHReportingService(
       Config.instance,
       ReportRepository.getInstance.get,
@@ -51,9 +54,9 @@ object MVHReportingService
 class MVHReportingService
 (
   config: Config,
-  queue: ReportRepository,
-  dipConnector: DipConnector,
-  bfarmConnector: BfarmConnector
+  private[core] val queue: ReportRepository,
+  private[core] val dipConnector: DipConnector,
+  private[core] val bfarmConnector: BfarmConnector
 )(
   implicit ec: ExecutionContext
 )
@@ -135,7 +138,15 @@ extends Logging
 
   def stop(): Unit = {
     log.info("Stopping MVH Reporting service")
+
+    //first stop higher order thread which would use threads in
+    // confirmationExecutor, then stop the latter
     scheduledTask.foreach(_ cancel false)
+    this.confirmationExecutor.shutdown()
+    if(! this.confirmationExecutor.awaitTermination(5,TimeUnit.SECONDS)){
+      this.confirmationExecutor.shutdownNow()
+    }
+    log.debug("Finished stopping MVH Reporting service")
   }
 
   /**
@@ -252,33 +263,45 @@ extends Logging
   }
 
   /**
+   * Used to gracefully end calls to [[confirmSubmissions]] on shutdown
+   */
+  private val confirmationExecutor = Executors.newFixedThreadPool(nConfirmationThreads)
+  private val confirmationExecutionContext = ExecutionContext.fromExecutor(confirmationExecutor)
+
+  /**
    * Communicates with the DIP sites to confirm to them that a submission has
    * been sent to the BfArM. If successful the submission is removed from [[queue]]
+   * Runs with an overridden threadpool to limit simultaneous executions. Apache Tomcats
+   * which deploy the DIP nodes only handle up to 200 sockets simultaneously by default.
+   * If a node is offline for some time, the accrued submissions can lead to a deadlock
+   * without this limit
+   *
    */
   private[core] def confirmSubmissions: Future[Seq[Either[String,Unit]]] = {
 
+    implicit val ec:ExecutionContext = confirmationExecutionContext
     log.info("Confirming report submissions...")
-   
     Future.traverse(
       queue.entries(_.status == Submitted)
     )(
       report =>
-        dipConnector.confirmSubmitted(report)
-          .map {
-            case Right(_) =>
-              log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
-              queue.remove(report)
+      dipConnector.confirmSubmitted(report)
+        .map {
+          case Right(_) =>
+            log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
+            queue.remove(report)
 
-            case err @ Left(msg) =>
-              log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - $msg")
-              err
-          }
-          // Recover lest the Future traversal be "short-circuited" into a failed Future 
-          .recover {
-            case t =>
-              log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - ${t.getMessage}")
-              t.getMessage.asLeft
-          }
+          case err@Left(msg) =>
+            log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - $msg")
+            err
+        }
+        // Recover lest the Future traversal be "short-circuited" into a failed Future
+        .recover {
+          case t =>
+            log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - ${t.getMessage}")
+            t.getMessage.asLeft
+        }
+
     )
 
   }
