@@ -18,15 +18,14 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
 
 
-
   it must "handle multiple uploads from every DIP node in one go" in {
     fakeDipConnector.nSubmissions = 4
     fakeDipConnector.confirmationsTakeTime = false
 
     for {
-      
+
       _ <- service.pollReports
-      
+
       _ = service.queue.entries(_ => true) must not be (empty)
 
       _ <- service.uploadReports

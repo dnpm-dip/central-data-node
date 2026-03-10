@@ -13,6 +13,8 @@ import de.dnpm.dip.model.NGSReport
 import de.dnpm.dip.service.mvh.Submission
 import Submission.Report.Status.{Submitted, Unsubmitted}
 import de.dnpm.ccdn.core.MVHReportingService.nConfirmationThreads
+import Submission.Report.Status.{Submitted, Unsubmitted}
+import de.dnpm.ccdn.core.MVHReportingService.nConfirmationThreads
 import de.dnpm.ccdn.core.bfarm.BfarmConnector
 import de.dnpm.ccdn.core.dip.DipConnector
 
@@ -105,12 +107,12 @@ extends Logging
         .map(ChronoUnit.SECONDS.between(LocalTime.now,_))
         .collect {
           case delta if delta >= 0            => delta
-          case delta if (86400 % period == 0) => period - (math.abs(delta) % period)
+          case delta if (86400 % period == 0) => period - (math.abs(delta) % period) 
           case delta                          => delta + 86400
         }
         .getOrElse(0L)  
 
-    log.info(s"Scheduling report polling to start in $delay s with $period s period")
+    log.info(s"Scheduling report polling to start in $delay s with $period s period")   
 
 
     scheduledTask =
@@ -275,8 +277,6 @@ extends Logging
    * which deploy the DIP nodes only handle up to 200 sockets simultaneously by default.
    * If a node is offline for some time, the accrued submissions can lead to a deadlock
    * without this limit
-   *
-   * TODO merge javadoc with that of CHORE:javadoc branch
    */
   private[core] def confirmSubmissions: Future[Seq[Either[String,Unit]]] = {
 
