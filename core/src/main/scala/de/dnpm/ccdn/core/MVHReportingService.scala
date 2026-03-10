@@ -123,10 +123,16 @@ extends Logging
 
 
   def stop(): Unit = {
-    log.info("Stopping MVH Reporting service, can wait up to 5 seconds")
-    this.confirmationExecutor.shutdown()
+    log.info("Stopping MVH Reporting service")
+
+    //first stop higher order thread which would use threads in
+    // confirmationExecutor, then stop the latter
     scheduledTask.foreach(_ cancel false)
-    val _ = this.confirmationExecutor.awaitTermination(5,TimeUnit.SECONDS)
+    this.confirmationExecutor.shutdown()
+    if(! this.confirmationExecutor.awaitTermination(5,TimeUnit.SECONDS)){
+      this.confirmationExecutor.shutdownNow()
+    }
+    log.debug("Finished stopping MVH Reporting service")
   }
 
 
