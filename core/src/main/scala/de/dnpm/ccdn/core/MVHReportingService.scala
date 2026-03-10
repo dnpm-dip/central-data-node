@@ -3,37 +3,27 @@ package de.dnpm.ccdn.core
 
 import java.time.LocalTime
 import java.time.temporal.ChronoUnit
-import java.util.concurrent.{
-  Executors,
-  ScheduledExecutorService
-}
-import java.util.concurrent.{
-  Future => JavaFuture,
-  TimeUnit
-}
-import scala.concurrent.{
-  Future,
-  ExecutionContext
-}
+import java.util.concurrent.{Executors, ScheduledExecutorService}
+import java.util.concurrent.{TimeUnit, Future => JavaFuture}
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Success
 import cats.syntax.either._
 import de.dnpm.dip.util.Logging
-import de.dnpm.ccdn.core.dip
-import de.dnpm.ccdn.core.bfarm
 import de.dnpm.dip.model.NGSReport
 import de.dnpm.dip.service.mvh.Submission
-import Submission.Report.Status.{
-  Submitted,
-  Unsubmitted
-}
+import Submission.Report.Status.{Submitted, Unsubmitted}
+import de.dnpm.ccdn.core.MVHReportingService.nConfirmationThreads
 
 
 object MVHReportingService
 {
-
   import scala.concurrent.ExecutionContext.Implicits.global
 
-  private lazy val service =
+  /** See [[MVHReportingService.confirmSubmissions]]
+   */
+  private[core] val nConfirmationThreads = 32
+
+  private[core] lazy val service =
     new MVHReportingService(
       Config.instance,
       ReportRepository.getInstance.get,
@@ -63,9 +53,9 @@ object MVHReportingService
 class MVHReportingService
 (
   config: Config,
-  queue: ReportRepository,
-  dipConnector: dip.Connector,
-  bfarmConnector: bfarm.Connector
+  private[core] val queue: ReportRepository,
+  private[core] val dipConnector: dip.Connector,
+  private[core] val bfarmConnector: bfarm.Connector
 )(
   implicit ec: ExecutionContext
 )
@@ -134,7 +124,15 @@ extends Logging
 
   def stop(): Unit = {
     log.info("Stopping MVH Reporting service")
+
+    //first stop higher order thread which would use threads in
+    // confirmationExecutor, then stop the latter
     scheduledTask.foreach(_ cancel false)
+    this.confirmationExecutor.shutdown()
+    if(! this.confirmationExecutor.awaitTermination(5,TimeUnit.SECONDS)){
+      this.confirmationExecutor.shutdownNow()
+    }
+    log.debug("Finished stopping MVH Reporting service")
   }
 
 
@@ -166,10 +164,6 @@ extends Logging
         report.healthInsuranceType
       )
   }
-
-
-//  private def key(report: Submission.Report) =
-//    report.site.code -> report.id
 
 
   private[core] def pollReports: Future[Any] =
@@ -217,8 +211,7 @@ extends Logging
       queue.entries(_.status == Unsubmitted)
     )(
       report =>
-        bfarmConnector
-          .upload(BfarmReport(report))
+        bfarmConnector.upload(BfarmReport(report))
           .map {
             case Right(_) =>
               log.info(s"SubmissionReport Uploaded: Site ${report.site.code}, TAN ${report.id}")
@@ -238,31 +231,45 @@ extends Logging
     
   }
 
+  /**
+   * Used to gracefully end calls to [[confirmSubmissions]] on shutdown
+   */
+  private val confirmationExecutor = Executors.newFixedThreadPool(nConfirmationThreads)
+  private val confirmationExecutionContext = ExecutionContext.fromExecutor(confirmationExecutor)
 
+  /**
+   * Runs with an overridden threadpool to limit simultaneous executions. Apache Tomcats
+   * which deploy the DIP nodes only handle up to 200 sockets simultaneously by default.
+   * If a node is offline for some time, the accrued submissions can lead to a deadlock
+   * without this limit
+   *
+   * TODO merge javadoc with that of CHORE:javadoc branch
+   */
   private[core] def confirmSubmissions: Future[Seq[Either[String,Unit]]] = {
 
+    implicit val ec:ExecutionContext = confirmationExecutionContext
     log.info("Confirming report submissions...")
-   
     Future.traverse(
       queue.entries(_.status == Submitted)
     )(
       report =>
-        dipConnector.confirmSubmitted(report)
-          .map {
-            case Right(_) =>
-              log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
-              queue.remove(report)
+      dipConnector.confirmSubmitted(report)
+        .map {
+          case Right(_) =>
+            log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
+            queue.remove(report)
 
-            case err @ Left(msg) =>
-              log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - $msg")
-              err
-          }
-          // Recover lest the Future traversal be "short-circuited" into a failed Future 
-          .recover {
-            case t =>
-              log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - ${t.getMessage}")
-              t.getMessage.asLeft
-          }
+          case err@Left(msg) =>
+            log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - $msg")
+            err
+        }
+        // Recover lest the Future traversal be "short-circuited" into a failed Future
+        .recover {
+          case t =>
+            log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - ${t.getMessage}")
+            t.getMessage.asLeft
+        }
+
     )
 
   }
