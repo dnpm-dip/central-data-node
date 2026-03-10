@@ -123,9 +123,10 @@ extends Logging
 
 
   def stop(): Unit = {
-    log.info("Stopping MVH Reporting service")
+    log.info("Stopping MVH Reporting service, can wait up to 5 seconds")
     this.confirmationExecutor.shutdown()
     scheduledTask.foreach(_ cancel false)
+    val _ = this.confirmationExecutor.awaitTermination(5,TimeUnit.SECONDS)
   }
 
 
