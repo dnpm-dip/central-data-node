@@ -7,7 +7,7 @@ import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.hgvs.HGVS
 import de.dnpm.dip.coding.icd.{ICD10GM, ICDO3}
 import de.dnpm.dip.mtb.model.{ECOG, MTBSystemicTherapy, MTBTherapy, OBDSGrading, RECIST, TumorStaging}
-import de.dnpm.ccdn.core.bfarm.{BfarmCase, DiagnosticType, LibraryType}
+import de.dnpm.ccdn.core.bfarm.{ DiagnosticType, LibraryType}
 import play.api.libs.json.{Json, OFormat}
 
 
@@ -29,7 +29,7 @@ final case class OncologyCase
   diagnosisOd: OncologyCase.Diagnosis,
   priorDiagnostic: Option[OncologyCase.PriorDiagnostics],
   priorProcedures: Option[List[OncologyCase.PriorTherapy]]
-) extends BfarmCase
+)
 
 
 object OncologyCase

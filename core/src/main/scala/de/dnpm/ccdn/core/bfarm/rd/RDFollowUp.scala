@@ -5,7 +5,7 @@ import java.time.LocalDate
 import cats.data.NonEmptyList
 import de.dnpm.dip.util.json.{readsNel, writesNel}
 import de.dnpm.dip.coding.{Code, Coding}
-import de.dnpm.ccdn.core.bfarm.{BfarmFollowUps, VitalStatus}
+import de.dnpm.ccdn.core.bfarm.VitalStatus
 import de.dnpm.dip.rd.model.{GMFCS, HPO}
 import play.api.libs.json.{Format, Json, OFormat}
 
@@ -68,7 +68,7 @@ object RDFollowUp
 final case class RDFollowUps
 (
   followUpOds: NonEmptyList[RDFollowUp]
-)extends BfarmFollowUps
+)
 
 object RDFollowUps
 {

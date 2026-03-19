@@ -47,7 +47,7 @@ sealed trait GDC
 sealed trait CDN
 
 /**
- * Additional data in [[Submission]] instances that has nothing to do
+ * Additional data in [[AbstractBfarmSubmission]] instances that has nothing to do
  * with the actual sickness and treatment
  */
 final case class Metadata
@@ -98,6 +98,9 @@ object Metadata
   }
 
 
+  /**
+   * Information about the transmission of a submission
+   */
   final case class Submission
   (
     date: LocalDate,
@@ -107,13 +110,19 @@ object Metadata
     genomicDataCenterId: Option[Id[GDC]],
     diseaseType: DiseaseType.Value, 
   )
-
+  /**
+   * Information about the transmission of a submission
+   */
   object Submission
   {
     implicit val format: OFormat[Submission] =
       Json.format[Submission]
   }
 
+  /**
+   * Covers three types/domains of patients consent to management of his data,
+   * see [[MVConsent.Scope.Domain]]
+   */
   final case class MVConsent
   (
     presentationDate: Option[LocalDate],
@@ -166,6 +175,10 @@ object Metadata
       Json.format[MVConsent]
   }
 
+  /**
+   * Additionally to [[MVConsent]], this describes how the patient has
+   * consented for his data to be used for scientific purposes
+   */
   final case class ResearchConsent
   (
     schemaVersion: String,

@@ -6,7 +6,7 @@ import cats.data.NonEmptyList
 import de.dnpm.dip.util.json.{readsNel, readsYearMonth, writesNel, writesYearMonth}
 import de.dnpm.dip.coding.{Code, Coding}
 import de.dnpm.dip.rd.model.{GMFCS, HPO, RDDiagnosis}
-import de.dnpm.ccdn.core.bfarm.{BfarmCase, DiagnosticType, LibraryType}
+import de.dnpm.ccdn.core.bfarm.{DiagnosticType, LibraryType}
 import play.api.libs.json.{Format, Json, OFormat}
 
 
@@ -28,7 +28,7 @@ final case class RDCase
 (
   diagnosisRd: RDCase.Diagnosis,
   priorRd: Option[RDCase.PriorRD]
-)extends BfarmCase
+)
 
 object RDCase
 {

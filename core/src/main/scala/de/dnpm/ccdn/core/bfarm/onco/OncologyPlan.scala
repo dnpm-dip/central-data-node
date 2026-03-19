@@ -1,8 +1,6 @@
 package de.dnpm.ccdn.core.bfarm.onco
 
 
-import de.dnpm.ccdn.core.bfarm.BfarmCarePlan
-
 import java.time.LocalDate
 import de.dnpm.dip.coding.{Code, Coding}
 import de.dnpm.dip.coding.ops.OPS
@@ -30,7 +28,7 @@ final case class OncologyPlan
   carePlanOd: Option[OncologyPlan.CarePlan],
   recommendedSystemicTherapies: Option[List[OncologyPlan.SystemicTherapyRecommendation]],
   recommendedStudies: Option[List[OncologyPlan.StudyRecommendation]]
-) extends BfarmCarePlan
+)
 
 object OncologyPlan
 {

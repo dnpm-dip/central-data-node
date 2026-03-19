@@ -72,7 +72,7 @@ extends Logging
 
 
   /**
-   * Every hour queries DIP sites for new submissions ([[pollReports]]), uploads them to
+   * Every hour (by default) queries DIP sites for new submissions ([[pollReports]]), uploads them to
    * BfArM ([[uploadReports]]) and sends a confirmation to dip sites ([[confirmSubmissions]])
    *
    * Before polling for new reports, the [[queue]] is checked for preexisting items,

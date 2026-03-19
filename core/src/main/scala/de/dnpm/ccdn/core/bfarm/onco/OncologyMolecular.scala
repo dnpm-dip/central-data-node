@@ -6,7 +6,7 @@ import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.hgvs.HGVS
 import de.dnpm.dip.mtb.model.Transcript
 import de.dnpm.dip.model.Id
-import de.dnpm.ccdn.core.bfarm.{BfarmMolecular, Chromosome}
+import de.dnpm.ccdn.core.bfarm.Chromosome
 import play.api.libs.json.{Format, Json, OFormat}
 import OncologyMolecular._
 
@@ -27,7 +27,7 @@ final case class OncologyMolecular
   smallVariants: Option[List[SmallVariant]],
   copyNumberVariants: Option[List[CopyNumberVariant]],
   complexBiomarkers: Option[List[ComplexBiomarker]]
-)extends BfarmMolecular
+)
 
 object OncologyMolecular
 {

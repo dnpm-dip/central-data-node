@@ -8,7 +8,7 @@ import de.dnpm.dip.coding.hgvs.HGVS
 import de.dnpm.dip.model.{Id, Publication}
 import de.dnpm.dip.rd.model.{ACMG, ISCN, CopyNumberVariant => CNV}
 import de.dnpm.dip.rd.model.Variant.Significance
-import de.dnpm.ccdn.core.bfarm.{BfarmMolecular, Chromosome}
+import de.dnpm.ccdn.core.bfarm.Chromosome
 import play.api.libs.json.{Format, Json, OFormat}
 
 
@@ -31,7 +31,7 @@ final case class RDMolecular
   smallVariants: Option[List[RDMolecular.SmallVariant]],
   structuralVariants: Option[List[RDMolecular.StructuralVariant]],
   copyNumberVariants: Option[List[RDMolecular.CopyNumberVariant]]
-) extends BfarmMolecular
+)
 
 object RDMolecular
 {

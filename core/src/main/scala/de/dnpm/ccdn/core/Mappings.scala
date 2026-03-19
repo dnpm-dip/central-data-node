@@ -25,6 +25,9 @@ import play.api.libs.json.Json
 /**
  * Contains a handful of general implicit conversion functions but also a
  * way to extract submission metadata from the given type parameter, which also depends on the [[useCase]] member
+ *
+ * Subclasses are applicable to convert a general [[mvh.Submission]] into either
+ * [[de.dnpm.ccdn.core.bfarm.rd.RDSubmission]] or [[de.dnpm.ccdn.core.bfarm.onco.OncologySubmission]]
  */
 trait Mappings[RecordType <: PatientRecord]
 {

@@ -6,7 +6,7 @@ import cats.data.NonEmptyList
 import de.dnpm.dip.coding.{Code, Coding}
 import de.dnpm.dip.coding.icd.ICD10GM
 import de.dnpm.dip.util.json.{readsNel, writesNel}
-import de.dnpm.ccdn.core.bfarm.{BfarmFollowUps, VitalStatus}
+import de.dnpm.ccdn.core.bfarm.VitalStatus
 import de.dnpm.dip.model.{Id, Medications}
 import de.dnpm.dip.mtb.model.ECOG
 import play.api.libs.json.{Format, Json, OFormat}
@@ -78,7 +78,7 @@ object FollowUp
 final case class OncologyFollowUps
 (
   followUpOds: NonEmptyList[FollowUp]
-) extends BfarmFollowUps
+)
 
 object OncologyFollowUps
 {

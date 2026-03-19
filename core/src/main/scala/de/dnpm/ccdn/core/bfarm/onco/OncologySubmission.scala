@@ -3,13 +3,12 @@ package de.dnpm.ccdn.core.bfarm.onco
 
 import de.dnpm.ccdn.core.bfarm.{
   Metadata,
-  Submission
+  AbstractBfarmSubmission
 }
 import play.api.libs.json.{
   Json,
   OWrites
 }
-
 
 final case class OncologySubmission
 (
@@ -19,7 +18,7 @@ final case class OncologySubmission
   plan: Option[OncologyPlan],
   followUp: Option[OncologyFollowUps]
 )
-extends Submission[
+extends AbstractBfarmSubmission[
   OncologyCase,
   OncologyMolecular,
   OncologyPlan,

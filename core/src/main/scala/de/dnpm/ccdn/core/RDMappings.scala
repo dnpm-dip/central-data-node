@@ -26,7 +26,6 @@ import RDCase.{
 import mvh.extensions._
 
 
-
 trait RDMappings extends Mappings[RDPatientRecord]
 {
 

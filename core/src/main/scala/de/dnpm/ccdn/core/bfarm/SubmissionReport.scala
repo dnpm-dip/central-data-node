@@ -28,8 +28,9 @@ import play.api.libs.json.{
  */
 
 /**
- * TODO nonsense, redo it, Anlage 2 has one line per this object.
- * A DTO for the exact JSON object that is sent to BfArM (Anlage 2)
+ * A DTO for the exact JSON object that is sent to BfArM in [[de.dnpm.ccdn.core.MVHReportingService.uploadReports]]
+ *
+ * Per one of these submitted, a line is to be added to the Quarter-report to the BfArM
  */
 final case class SubmissionReport
 (
@@ -132,28 +133,11 @@ object SubmissionReport
  * [[de.dnpm.dip.model.PatientRecord]]
  *
  */
-trait Submission[Case <: BfarmCase,Molecular <: BfarmMolecular ,Plan <:BfarmCarePlan ,Followup <: BfarmFollowUps ]
+trait AbstractBfarmSubmission[Case,MolSeq,Plan,FU]
 {
   val metadata: Metadata
   val `case`: Case
-  val molecular: Option[Molecular]
+  val molecular: Option[MolSeq]
   val plan: Option[Plan]
-  val followUp: Option[Followup]
+  val followUp: Option[FU]
 }
-
-/**
- * Abstraction of case data for transmission to BfArM
- */
-trait BfarmCase
-/**
- * Abstraction of molecular data for transmission to BfArM
- */
-trait BfarmMolecular
-/**
- * Abstraction of care plan for transmission to BfArM
- */
-trait BfarmCarePlan
-/**
- * Abstraction of follow up sessions for transmission to BfArM
- */
-trait BfarmFollowUps
