@@ -32,7 +32,6 @@ case class FakeDIPConnector() extends dip.DipConnector
   val nActiveConfirmationWaits = new AtomicInteger(0)
   val maxSimultaneousConfirmationWaits = new AtomicInteger(0)
 
-  //val confirmationFinishTimings = new AtomicReference(List[Long]())
   /**
    * If true, every call to confirmSubmitted will wait [[FakeDIPConnector.uploadDelayMsec]]
    * milliseconds before setting it's returned future to something. Also activates counting active threads

@@ -13,8 +13,6 @@ import de.dnpm.dip.model.NGSReport
 import de.dnpm.dip.service.mvh.Submission
 import Submission.Report.Status.{Submitted, Unsubmitted}
 import de.dnpm.ccdn.core.MVHReportingService.nConfirmationThreads
-import Submission.Report.Status.{Submitted, Unsubmitted}
-import de.dnpm.ccdn.core.MVHReportingService.nConfirmationThreads
 import de.dnpm.ccdn.core.bfarm.BfarmConnector
 import de.dnpm.ccdn.core.dip.DipConnector
 
