@@ -16,16 +16,29 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     val fakeDipConnector:FakeDIPConnector = service.dipConnector.asInstanceOf[FakeDIPConnector]
     val fakeBfarmConnector:FakeBfarmConnector = service.bfarmConnector.asInstanceOf[FakeBfarmConnector]
 
+  val reportStore    = FakeReportRepository
+  //becomes instance of FakeDNPMConnector, through custom Service Provider config
+  val dipConnector   = dip.Connector.getInstance.get
+  //becomes instance of FakeBfArMConnector
+  val bfarmConnector = bfarm.Connector.getInstance.get
+  //actually setting to the actual object works just as well
 
+  val service =
+    new MVHReportingService(
+      Config.instance,
+      reportStore,
+      dipConnector, 
+      bfarmConnector
+    )
 
   it must "handle multiple uploads from every DIP node in one go" in {
     fakeDipConnector.nSubmissions = 4
     fakeDipConnector.confirmationsTakeTime = false
 
     for {
-
+      
       _ <- service.pollReports
-
+      
       _ = service.queue.entries(_ => true) must not be (empty)
 
       _ <- service.uploadReports
