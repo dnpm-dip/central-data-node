@@ -1,13 +1,35 @@
 package de.dnpm.ccdn.core.bfarm.rd
 
 
-import java.time.{LocalDate, YearMonth}
+import java.time.{
+  LocalDate,
+  YearMonth
+}
 import cats.data.NonEmptyList
-import de.dnpm.dip.util.json.{readsNel, readsYearMonth, writesNel, writesYearMonth}
-import de.dnpm.dip.coding.{Code, Coding}
-import de.dnpm.dip.rd.model.{GMFCS, HPO, RDDiagnosis}
-import de.dnpm.ccdn.core.bfarm.{DiagnosticType, LibraryType}
-import play.api.libs.json.{Format, Json, OFormat}
+import de.dnpm.dip.util.json.{
+  readsNel,
+  writesNel,
+  readsYearMonth,
+  writesYearMonth
+}
+import de.dnpm.dip.coding.{
+  Code,
+  Coding
+}
+import de.dnpm.dip.rd.model.{
+  GMFCS,
+  HPO,
+  RDDiagnosis
+}
+import de.dnpm.ccdn.core.bfarm.{
+  DiagnosticType,
+  LibraryType
+}
+import play.api.libs.json.{
+  Json,
+  Format,
+  OFormat
+}
 
 
 /*

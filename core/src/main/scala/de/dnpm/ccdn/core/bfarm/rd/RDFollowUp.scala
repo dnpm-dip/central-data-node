@@ -3,11 +3,24 @@ package de.dnpm.ccdn.core.bfarm.rd
 
 import java.time.LocalDate
 import cats.data.NonEmptyList
-import de.dnpm.dip.util.json.{readsNel, writesNel}
-import de.dnpm.dip.coding.{Code, Coding}
+import de.dnpm.dip.util.json.{
+  readsNel,
+  writesNel
+}
+import de.dnpm.dip.coding.{
+  Code,
+  Coding
+}
 import de.dnpm.ccdn.core.bfarm.VitalStatus
-import de.dnpm.dip.rd.model.{GMFCS, HPO}
-import play.api.libs.json.{Format, Json, OFormat}
+import de.dnpm.dip.rd.model.{
+  GMFCS,
+  HPO
+}
+import play.api.libs.json.{
+  Json,
+  Format,
+  OFormat,
+}
 
 
 /*

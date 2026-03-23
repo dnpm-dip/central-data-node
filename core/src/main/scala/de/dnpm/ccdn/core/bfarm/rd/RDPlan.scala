@@ -4,9 +4,19 @@ package de.dnpm.ccdn.core.bfarm.rd
 
 import java.time.LocalDate
 import de.dnpm.dip.coding.Code
-import de.dnpm.dip.model.{Id, Study}
-import de.dnpm.dip.rd.model.{RDTherapy, Variant}
-import play.api.libs.json.{Format, Json, OFormat}
+import de.dnpm.dip.model.{
+  Id,
+  Study
+}
+import de.dnpm.dip.rd.model.{
+  RDTherapy,
+  Variant
+}
+import play.api.libs.json.{
+  Json,
+  Format,
+  OFormat,
+}
 
 
 /*

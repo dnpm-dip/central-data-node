@@ -2,13 +2,33 @@ package de.dnpm.ccdn.core.bfarm.onco
 
 
 import java.time.LocalDate
-import de.dnpm.dip.coding.{Code, Coding, SequenceOntology}
+import de.dnpm.dip.coding.{
+  Code,
+  Coding,
+  SequenceOntology
+}
 import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.hgvs.HGVS
-import de.dnpm.dip.coding.icd.{ICD10GM, ICDO3}
-import de.dnpm.dip.mtb.model.{ECOG, MTBSystemicTherapy, MTBTherapy, OBDSGrading, RECIST, TumorStaging}
-import de.dnpm.ccdn.core.bfarm.{ DiagnosticType, LibraryType}
-import play.api.libs.json.{Json, OFormat}
+import de.dnpm.dip.coding.icd.{
+  ICD10GM,
+  ICDO3
+}
+import de.dnpm.dip.mtb.model.{
+  ECOG,
+  OBDSGrading,
+  MTBTherapy,
+  MTBSystemicTherapy,
+  RECIST,
+  TumorStaging
+}
+import de.dnpm.ccdn.core.bfarm.{
+  DiagnosticType,
+  LibraryType
+}
+import play.api.libs.json.{
+  Json,
+  OFormat
+}
 
 
 /*

@@ -2,11 +2,27 @@ package de.dnpm.ccdn.core.bfarm.onco
 
 
 import java.time.LocalDate
-import de.dnpm.dip.coding.{Code, Coding}
+import de.dnpm.dip.coding.{
+  Code,
+  Coding,
+}
 import de.dnpm.dip.coding.ops.OPS
-import de.dnpm.dip.model.{Id, Recommendation, Study}
-import de.dnpm.dip.mtb.model.{LevelOfEvidence, MTBProcedureRecommendation, Variant}
-import play.api.libs.json.{Format, Json, OFormat}
+import de.dnpm.dip.model.{
+  Id,
+  //  Medications,
+  Recommendation,
+  Study
+}
+import de.dnpm.dip.mtb.model.{
+  LevelOfEvidence,
+  MTBProcedureRecommendation,
+  Variant
+}
+import play.api.libs.json.{
+  Json,
+  Format,
+  OFormat,
+}
 
 /*
  * DISCLAIMER:

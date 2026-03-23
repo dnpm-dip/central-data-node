@@ -1,13 +1,25 @@
 package de.dnpm.ccdn.core.bfarm.onco
 
 
-import de.dnpm.dip.coding.{Code, Coding, SequenceOntology}
+import de.dnpm.dip.coding.{
+  Code,
+  Coding,
+  SequenceOntology
+}
 import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.hgvs.HGVS
-import de.dnpm.dip.mtb.model.Transcript
-import de.dnpm.dip.model.Id
+import de.dnpm.dip.mtb.model.{
+  Transcript
+}
+import de.dnpm.dip.model.{
+  Id
+}
 import de.dnpm.ccdn.core.bfarm.Chromosome
-import play.api.libs.json.{Format, Json, OFormat}
+import play.api.libs.json.{
+  Json,
+  Format,
+  OFormat
+}
 import OncologyMolecular._
 
 
