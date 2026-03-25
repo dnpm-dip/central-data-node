@@ -53,13 +53,13 @@ object FSBackedReportRepository extends Logging
   private val PROP = "ccdn.queue.dir"
   private val ENV = "CCDN_QUEUE_DIR"
 
-  lazy val instance =
+  lazy val instance: FSBackedReportRepository =
     Try(envOrNone(ENV).orElse(propOrNone(PROP)).get)
       .map(new File(_))
       .map(new FSBackedReportRepository(_))
-      .recoverWith { 
+      .recoverWith {
         case t =>
-          log.error(s"Couldn't set up Report Repository, most likely due to undefined environment variable '$ENV' or system property '$PROP'",t)
+          log.error(s"Couldn't set up Report Repository, most likely due to undefined environment variable '$ENV' or system property '$PROP'", t)
           Failure(t)
       }
       .get
@@ -70,9 +70,7 @@ object FSBackedReportRepository extends Logging
  * keeps it's set of reports synchronized in that folder. Initializes itself
  * with these reports if the folder already exists and contains files
  */
-final class FSBackedReportRepository(
-  val dir: File
-)
+class FSBackedReportRepository(val queueDir: File)
 extends ReportRepository
 with Logging
 {
@@ -80,11 +78,11 @@ with Logging
   private val filePrefix = "Report"
 
   //ensure that the folder hierarchy for the FS cache exists
-  dir.mkdirs
+  queueDir.mkdirs
 
   private val cache: Map[Key,Submission.Report] =
     TrieMap.from(
-      dir.listFiles(
+      queueDir.listFiles(
         (_,name) => name.startsWith(filePrefix) && name.endsWith(".json")
       )
       .to(LazyList)
@@ -97,11 +95,12 @@ with Logging
       )
     )
 
-
-  private def file(report: Submission.Report): File = {
+  protected def filenameOf(report:Submission.Report):String = {
     val (site,tan) = key(report)
-
-    new File(dir,s"${filePrefix}_${site}_${tan}.json")
+    s"${filePrefix}_${site}_${tan}.json"
+  }
+  protected def queueFile(report: Submission.Report): File = {
+    new File(queueDir, filenameOf(report))
   }
     
     
@@ -146,7 +145,7 @@ with Logging
   override def replace(
     report: Submission.Report
   ): Either[String,Unit] =
-    Try(saveToFile(report,file(report)))
+    Try(saveToFile(report,queueFile(report)))
       .map(_ => cache += key(report) -> report)
       .fold(
         _.getMessage.asLeft,
@@ -160,10 +159,13 @@ with Logging
       .toSeq
 
 
+  protected def reportDisposer(report:Submission.Report):Try[Boolean] =
+    Try(queueFile(report).delete)
+
   override def remove(
     report: Submission.Report
   ): Either[String,Unit] =
-    Try(file(report).delete)
+    this.reportDisposer(report)
       .collect {
         case true => cache -= key(report)
       }
@@ -171,5 +173,4 @@ with Logging
         _.getMessage.asLeft,
         _ => ().asRight
       )
-
 }
