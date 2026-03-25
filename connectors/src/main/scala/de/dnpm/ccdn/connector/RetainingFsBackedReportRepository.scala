@@ -64,11 +64,20 @@ class RetainingFsBackedReportRepository(queueDir:File, val quarterRepoDir:File)
   override protected def reportDisposer(report: Submission.Report):Try[Boolean] ={
     val toMove = this.queueFile(report)
     val into = getBackupFolder(report.createdAt)
-    val nuPlace = new File(into,filenameOf(report))
-    if(nuPlace.exists()) {
+    val reportFileName = filenameOf(report)
+    val moveTarget = new File(into,reportFileName)
+
+    if(moveTarget.exists()) {
+      log.error(s"Failed to back up report file ${reportFileName}")
       Try(false)
     }else{
-      Try(toMove.renameTo(nuPlace))
+      val retu = Try(toMove.renameTo(moveTarget))
+      if(retu.get) {
+        log.debug(s"Moved ${reportFileName} into backup folder ${into}")
+      }else{
+        log.error(s"Failed to move ${reportFileName} into backup folder ${into}")
+      }
+      retu
     }
   }
 
