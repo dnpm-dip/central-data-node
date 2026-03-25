@@ -27,7 +27,11 @@ import play.api.libs.json.{
  *
  */
 
-
+/**
+ * A DTO for the exact JSON object that is sent to BfArM in [[de.dnpm.ccdn.core.MVHReportingService.uploadReports]]
+ *
+ * Per one of these submitted, a line is to be added to the Quarter-report to the BfArM ("Anlage 2")
+ */
 final case class SubmissionReport
 (
   SubmittedCase: SubmissionReport.Case  // Not my idea to name the field CapitalizedCase as "SubmittedCase" (see disclaimer above)
@@ -55,19 +59,6 @@ object SubmissionReport
       Json.formatEnum(this)
   }
 
-/*
-  object LibraryType extends Enumeration
-  {
-    val Panel     = Value("panel")
-    val WES       = Value("wes")
-    val WGS       = Value("wgs")
-    val WGSLr     = Value("wgs_lr")
-    val Undefined = Value("none")
-    
-    implicit val format: Format[LibraryType.Value] =
-      Json.formatEnum(this)
-  }
-*/
 
   final case class Case
   (
@@ -77,7 +68,7 @@ object SubmissionReport
     submitterId: Id[Site],
     dataNodeId: Id[CDN],
     diseaseType: DiseaseType.Value,
-    dataCategory: DataCategory.Value,
+    dataCategory: DataCategory.Value, //Currently only has one possible value: clinical
     libraryType: LibraryType.Value,
     coverageType: HealthInsurance.Type.Value,
     dataQualityCheckPassed: Boolean
@@ -121,8 +112,15 @@ object SubmissionReport
 }
 
 
-
-trait Submission[Case,MolSeq,Plan,FU]
+/**
+ * Abstraction of submissions over disease type
+ *
+ * The subclasses are instantiated in the apply function in subclasses of
+ * [[de.dnpm.ccdn.core.Mappings]] from data in subclasses of
+ * [[de.dnpm.dip.model.PatientRecord]]
+ *
+ */
+trait AbstractBfarmSubmission[Case,MolSeq,Plan,FU]
 {
   val metadata: Metadata
   val `case`: Case
@@ -130,4 +128,3 @@ trait Submission[Case,MolSeq,Plan,FU]
   val plan: Option[Plan]
   val followUp: Option[FU]
 }
-

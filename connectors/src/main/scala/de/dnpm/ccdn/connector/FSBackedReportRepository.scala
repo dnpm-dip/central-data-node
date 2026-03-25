@@ -44,7 +44,9 @@ final class ReportRepositoryProviderImpl extends ReportRepositoryProvider
     FSBackedReportRepository.instance
 }
 
-
+/**
+ * See [[FSBackedReportRepository]] (the class)
+ */
 object FSBackedReportRepository extends Logging
 {
 
@@ -61,9 +63,13 @@ object FSBackedReportRepository extends Logging
           Failure(t)
       }
       .get
-}   
+}
 
-
+/**
+ * Reads a folderpath from either environment variables or JVM properties and
+ * keeps it's set of reports synchronized in that folder. Initializes itself
+ * with these reports if the folder already exists and contains files
+ */
 final class FSBackedReportRepository(
   val dir: File
 )
@@ -73,6 +79,7 @@ with Logging
 
   private val filePrefix = "Report"
 
+  //ensure that the folder hierarchy for the FS cache exists
   dir.mkdirs
 
   private val cache: Map[Key,Submission.Report] =

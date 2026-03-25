@@ -13,6 +13,8 @@ import de.dnpm.dip.model.NGSReport
 import de.dnpm.dip.service.mvh.Submission
 import Submission.Report.Status.{Submitted, Unsubmitted}
 import de.dnpm.ccdn.core.MVHReportingService.nConfirmationThreads
+import de.dnpm.ccdn.core.bfarm.BfarmConnector
+import de.dnpm.ccdn.core.dip.DipConnector
 
 
 object MVHReportingService
@@ -27,11 +29,13 @@ object MVHReportingService
     new MVHReportingService(
       Config.instance,
       ReportRepository.getInstance.get,
-      dip.Connector.getInstance.get,
-      bfarm.Connector.getInstance.get
+      dip.DipConnector.getInstance.get,
+      bfarm.BfarmConnector.getInstance.get
     )
-    
-    
+
+  /**
+   * Entrypoint of the deployment for the JVM (see entrypoint.sh)
+   */
   def main(args: Array[String]): Unit = {
     
     Runtime.getRuntime.addShutdownHook(
@@ -42,11 +46,9 @@ object MVHReportingService
         }
       }
     )
-    
+
     service.start()
-
   }
-
 }
 
 
@@ -54,18 +56,31 @@ class MVHReportingService
 (
   config: Config,
   private[core] val queue: ReportRepository,
-  private[core] val dipConnector: dip.Connector,
-  private[core] val bfarmConnector: bfarm.Connector
+  private[core] val dipConnector: DipConnector,
+  private[core] val bfarmConnector: BfarmConnector
 )(
   implicit ec: ExecutionContext
 )
 extends Logging
 {
 
+  /**
+   * Executes the runnable in [[scheduledTask]] every full hour (at zero minutes and seconds)
+   */
   private val executor: ScheduledExecutorService =
     Executors.newSingleThreadScheduledExecutor
 
 
+  /**
+   * Every hour (by default) queries DIP sites for new submissions ([[pollReports]]), uploads them to
+   * BfArM ([[uploadReports]]) and sends a confirmation to dip sites ([[confirmSubmissions]])
+   *
+   * Before polling for new reports, the [[queue]] is checked for preexisting items,
+   * which are processed before polling for new items in [[pollReports]]
+   *
+   * The state of this process is stored in the [[queue]] and in the
+   * [[Submission.Report.status]] of it's items.
+   */
   private var scheduledTask: Option[JavaFuture[_]] = None
 
   private val toSeconds =
@@ -102,6 +117,7 @@ extends Logging
       Some(
         executor.scheduleAtFixedRate(
           () => {
+            log.info(s"Conducting scheduled reporting workflow ${if(queue.exists(_ => true)) "with" else "without"} preexisting items in the queue")
             for {
               // Start by draining the report queue, if non-empty (in case the service had been interrupted) and
               // it thus contains reports whose upload hasn't been confirmed to the origin DIP), in order to avoid polling them again
@@ -118,7 +134,6 @@ extends Logging
           TimeUnit.SECONDS
         )
       )
-   
   }
 
 
@@ -135,7 +150,11 @@ extends Logging
     log.debug("Finished stopping MVH Reporting service")
   }
 
-
+  /**
+   * Converts the submission report (reporting a genome sequencing and asking
+   * for reimbursement) as it comes from the DIP node (in [[pollReports]]) into
+   * a report that will be transmitted to the BfArM (in [[uploadReports]])
+   */
   private val BfarmReport: Submission.Report => bfarm.SubmissionReport = {
 
     import de.dnpm.dip.service.mvh.UseCase._
@@ -166,7 +185,14 @@ extends Logging
   }
 
 
-  private[core] def pollReports: Future[Any] =
+  /**
+   * Communicates with all the configured DIP installations, queries them for new
+   * [[Submission.Report]] and stores them in the [[queue]] with status
+   * [[Unsubmitted]]
+   */
+  private[core] def pollReports: Future[Any] = {
+
+    log.info(s"Polling Reports from ${config.sites.size} sites with up to ${config.activeUseCases.size} usecases")
     Future.traverse(
       config.sites.toList.sortBy(_._1.value)
     ){
@@ -175,34 +201,39 @@ extends Logging
         Future.traverse(
           info.useCases intersect config.activeUseCases  // ensure only active use cases are polled
         ){
-          useCase => 
-        
-            log.info(s"Polling $useCase SubmissionReports of $site")
+          useCase =>
+
+            log.debug(s"Polling $useCase SubmissionReports of $site")
             dipConnector.submissionReports(
-              site,
-              useCase,
-              Submission.Report.Filter(
-                status = Some(Set(Submission.Report.Status.Unsubmitted))
+                site,
+                useCase,
+                Submission.Report.Filter(
+                  status = Some(Set(Submission.Report.Status.Unsubmitted))
+                )
               )
-            )
-            .andThen { 
-              case Success(Right(reports)) =>
-                log.debug(s"Enqueuing ${reports.size} $useCase SubmissionReport")
-                queue.saveIfAbsent(reports)
-            
-              case Success(Left(err)) =>
-                log.error(s"Problem polling $useCase SubmissionReports of site $site: $err")
-            }
-            // Recover lest the Future traversal be "short-circuited" into a failed Future 
-            .recover {
-              case t =>  
-                log.error(s"Error(s) occurred polling $useCase SubmissionReports of '$site",t)
-                t.getMessage.asLeft
-            }
+              .andThen {
+                case Success(Right(reports)) =>
+                  log.debug(s"Enqueuing ${reports.size} $useCase SubmissionReport")
+                  queue.saveIfAbsent(reports)
+
+                case Success(Left(err)) =>
+                  log.error(s"Problem polling $useCase SubmissionReports of site $site: $err")
+              }
+              // Recover lest the Future traversal be "short-circuited" into a failed Future
+              .recover {
+                case t =>
+                  log.error(s"Error(s) occurred polling $useCase SubmissionReports of $site", t)
+                  t.getMessage.asLeft
+              }
         }
-    }  
+    }
+  }
 
-
+  /**
+   * Communicates with the BfArM, sends them [[BfarmReport]] entities, each based
+   * on one of all the [[Submission.Report]] entities in the [[queue]] that are
+   * in status [[Unsubmitted]]. After this upload their status is changed to [[Submitted]]
+   */
   private[core] def uploadReports: Future[Seq[Either[String,Unit]]] = {
 
     log.info("Uploading SubmissionReports...")
@@ -238,12 +269,12 @@ extends Logging
   private val confirmationExecutionContext = ExecutionContext.fromExecutor(confirmationExecutor)
 
   /**
+   * Communicates with the DIP sites to confirm to them that a submission has
+   * been sent to the BfArM. If successful the submission is removed from [[queue]]
    * Runs with an overridden threadpool to limit simultaneous executions. Apache Tomcats
    * which deploy the DIP nodes only handle up to 200 sockets simultaneously by default.
    * If a node is offline for some time, the accrued submissions can lead to a deadlock
    * without this limit
-   *
-   * TODO merge javadoc with that of CHORE:javadoc branch
    */
   private[core] def confirmSubmissions: Future[Seq[Either[String,Unit]]] = {
 
@@ -273,5 +304,4 @@ extends Logging
     )
 
   }
-
 }

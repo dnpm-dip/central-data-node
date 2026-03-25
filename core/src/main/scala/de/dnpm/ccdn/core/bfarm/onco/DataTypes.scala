@@ -153,7 +153,12 @@ object CodingWithText
 }
 
 
-
+/**
+ * Why a patient stopped his oncological therapy.
+ * Deduced from {@link de.dnpm.dip.mtb.model.MTBTherapy.StatusReason StatusReason}
+ *
+ * Fallback value (unknown reason) is 'S'
+ */
 object TerminationReason extends Enumeration
 {
   val E, R, W, A, P, S, V, T, U = Value

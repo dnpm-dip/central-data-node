@@ -31,15 +31,17 @@ import java.util.concurrent.atomic.AtomicReference
 
 
 
-final class BfArMConnectorProviderImpl extends bfarm.ConnectorProvider
+final class BfarmConnectorProviderImpl extends bfarm.BfarmConnectorProvider
 {
-  override def getInstance: bfarm.Connector =
-    BfArMConnectorImpl.instance
+  override def getInstance: bfarm.BfarmConnector =
+    BfarmConnectorImpl.instance
 }
 
-object BfArMConnectorImpl
+object BfarmConnectorImpl
 {
-
+  /**
+   * Deserialization of the authentication to the BfArM
+   */
   final case class Token
   (
     access_token: String,
@@ -67,7 +69,10 @@ object BfArMConnectorImpl
   implicit val reads: Reads[Error] =
     Json.reads[Error]
 
-
+  /**
+   * Configuration container which is automatically loaded from ENV variables
+   * or if not available from system properties
+   */
   final case class Config
   (
     apiURL: String,
@@ -91,7 +96,7 @@ object BfArMConnectorImpl
 
 
   lazy val instance =
-    new BfArMConnectorImpl(
+    new BfarmConnectorImpl(
       Config.instance,
       HttpClient.instance
     )
@@ -99,15 +104,15 @@ object BfArMConnectorImpl
 }
 
 
-import BfArMConnectorImpl._
+import BfarmConnectorImpl._
 
 
-final class BfArMConnectorImpl
+final class BfarmConnectorImpl
 (
   private val config: Config,
   private val wsclient: WSClient
 )
-extends bfarm.Connector
+extends bfarm.BfarmConnector
 with Logging
 {
 
@@ -166,6 +171,10 @@ with Logging
       }
   }
 
+  /**
+   * @return A basic HTTP request to the given url, with valid authentication
+   *         and request timeout (10 seconds if unconfigured)
+   */
   private def request(
     url: String
   )(
@@ -181,7 +190,12 @@ with Logging
       )
   }
 
-
+  /**
+   * Makes a postrequest to BfArM, sending the serialization of the given report
+   * @return an eventually successful [[Future]] containing [[Unit]] if
+   *         the upload worked, or a successful [[Future]] containing an error
+   *         message with HTTP status code if the upload failed or was rejected
+   */
   override def upload(
     report: SubmissionReport
   )(

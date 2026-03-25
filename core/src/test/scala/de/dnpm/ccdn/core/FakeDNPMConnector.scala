@@ -11,9 +11,9 @@ import de.dnpm.dip.service.mvh.{Submission, TransferTAN, UseCase}
 
 import java.util.concurrent.atomic.AtomicInteger
 
-final class FakeDIPConnectorProvider extends dip.ConnectorProvider
+final class FakeDIPConnectorProvider extends dip.DipConnectorProvider
 {
-  override def getInstance: dip.Connector =
+  override def getInstance: dip.DipConnector =
     FakeDIPConnector()
 }
 
@@ -21,7 +21,7 @@ object FakeDIPConnector {
   final val uploadDelayMsec = 100
 }
 
-case class FakeDIPConnector() extends dip.Connector
+case class FakeDIPConnector() extends dip.DipConnector
 {
   /**
    * Describes how many submissions will be created for each request site and usecase
@@ -32,7 +32,6 @@ case class FakeDIPConnector() extends dip.Connector
   val nActiveConfirmationWaits = new AtomicInteger(0)
   val maxSimultaneousConfirmationWaits = new AtomicInteger(0)
 
-  //val confirmationFinishTimings = new AtomicReference(List[Long]())
   /**
    * If true, every call to confirmSubmitted will wait [[FakeDIPConnector.uploadDelayMsec]]
    * milliseconds before setting it's returned future to something. Also activates counting active threads

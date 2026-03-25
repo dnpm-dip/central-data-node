@@ -14,8 +14,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     // and I don't want to copypaste from the companion object into testcode
     val service = MVHReportingService.service
     val fakeDipConnector:FakeDIPConnector = service.dipConnector.asInstanceOf[FakeDIPConnector]
-    val fakeBfarmConnector:FakeBfArMConnector = service.bfarmConnector.asInstanceOf[FakeBfArMConnector]
-
+    val fakeBfarmConnector:FakeBfarmConnector = service.bfarmConnector.asInstanceOf[FakeBfarmConnector]
 
 
   it must "handle multiple uploads from every DIP node in one go" in {
@@ -31,7 +30,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       _ <- service.uploadReports
 
       _ <- service.confirmSubmissions
-      
+
     } yield service.queue.entries(_ => true) must be (empty)
   }
 

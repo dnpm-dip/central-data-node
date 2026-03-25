@@ -39,7 +39,9 @@ import play.api.libs.json.{
  *
  */
 
-
+/**
+ * Component of [[RDSubmission]]
+ */
 final case class RDMolecular
 (
   smallVariants: Option[List[RDMolecular.SmallVariant]],

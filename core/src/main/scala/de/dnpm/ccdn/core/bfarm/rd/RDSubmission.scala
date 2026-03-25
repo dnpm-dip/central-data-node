@@ -3,7 +3,7 @@ package de.dnpm.ccdn.core.bfarm.rd
 
 import de.dnpm.ccdn.core.bfarm.{
   Metadata,
-  Submission
+  AbstractBfarmSubmission
 }
 import play.api.libs.json.{
   Json,
@@ -18,7 +18,7 @@ final case class RDSubmission
   plan: Option[RDPlan],
   followUp: Option[RDFollowUps]
 )
-extends Submission[
+extends AbstractBfarmSubmission[
   RDCase,
   RDMolecular,
   RDPlan,

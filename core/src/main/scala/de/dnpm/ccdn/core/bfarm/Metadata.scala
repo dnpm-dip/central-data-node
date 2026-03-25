@@ -36,11 +36,20 @@ import de.dnpm.dip.service.mvh.TransferTAN
  *
  */
 
+/**
+ * Genomic Data Center, GRZ in German nomenclature
+ */
+sealed trait GDC
 
-sealed trait GDC  // Genomic Data Center
-sealed trait CDN  // Clinical Data Node
+/**
+ * Clinical Data Node, KDK in German nomenclature
+ */
+sealed trait CDN
 
-
+/**
+ * Additional data in [[AbstractBfarmSubmission]] instances that has nothing to do
+ * with the actual sickness and treatment
+ */
 final case class Metadata
 (
   submission: Metadata.Submission,
@@ -59,7 +68,11 @@ final case class Metadata
 
 object Metadata
 {
-
+  /**
+   * The domain of the health issue that is being treated for the case to be
+   * submitted which justifies genome sequencing.
+   * Maps to [[de.dnpm.dip.service.mvh.UseCase]] in [[de.dnpm.ccdn.core.Mappings]]
+   */
   object DiseaseType extends Enumeration
   {
     val Oncological = Value("oncological")
@@ -69,7 +82,9 @@ object Metadata
       Json.formatEnum(this)
   }
 
-
+  /**
+   * Why sequencing of the patients genome was rejected
+   */
   object RejectionJustification extends Enumeration
   {
     val TargetDiagnosisRecommended   = Value("targetDiagnosisRecommended")
@@ -83,6 +98,9 @@ object Metadata
   }
 
 
+  /**
+   * Information about the transmission of a submission
+   */
   final case class Submission
   (
     date: LocalDate,
@@ -92,13 +110,19 @@ object Metadata
     genomicDataCenterId: Option[Id[GDC]],
     diseaseType: DiseaseType.Value, 
   )
-
+  /**
+   * Information about the transmission of a submission
+   */
   object Submission
   {
     implicit val format: OFormat[Submission] =
       Json.format[Submission]
   }
 
+  /**
+   * Covers three types/domains of patients consent to management of his data,
+   * see [[MVConsent.Scope.Domain]]
+   */
   final case class MVConsent
   (
     presentationDate: Option[LocalDate],
@@ -117,7 +141,10 @@ object Metadata
     )
 
     object Scope
-    { 
+    {
+      /**
+       * Whether something was permitted or denied
+       */
       object Type extends Enumeration 
       {
         val Permit = Value("permit")
@@ -127,6 +154,9 @@ object Metadata
           Json.formatEnum(this)
       }
 
+      /**
+       * To what the patient agreed that his data could be used for
+       */
       object Domain extends Enumeration 
       {
         val MvSequencing       = Value("mvSequencing")
@@ -145,6 +175,10 @@ object Metadata
       Json.format[MVConsent]
   }
 
+  /**
+   * Additionally to [[MVConsent]], this describes how the patient has
+   * consented for his data to be used for scientific purposes
+   */
   final case class ResearchConsent
   (
     schemaVersion: String,

@@ -9,7 +9,7 @@ import de.dnpm.dip.coding.{
 }
 import de.dnpm.dip.coding.icd.ICD10GM
 import de.dnpm.dip.util.json.{
-  readsNel, 
+  readsNel,
   writesNel
 }
 import de.dnpm.ccdn.core.bfarm.VitalStatus
@@ -41,8 +41,19 @@ final case class FollowUp
 object FollowUp
 {
 
+  /**
+   * Response Evaluation Criteria in Solid Tumors
+   *
+   * CR: Complete Response (response means, it's working)
+   *
+   * PR: Partial Response
+   *
+   * SD: Stable Disease
+   *
+   * PD: Progressive Disease
+   */
   object RECIST extends Enumeration
-  { 
+  {
     val CR, PR, SD, PD = Value
 
     implicit val format: Format[Value] =
@@ -74,7 +85,9 @@ object FollowUp
 
 }
 
-
+/**
+ * Component of [[[OncologySubmission]]]
+ */
 final case class OncologyFollowUps
 (
   followUpOds: NonEmptyList[FollowUp]

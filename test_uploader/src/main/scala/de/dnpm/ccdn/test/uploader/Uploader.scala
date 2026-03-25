@@ -21,10 +21,10 @@ import de.dnpm.ccdn.core.bfarm.{
   LibraryType,
   SubmissionReport
 }
-import de.dnpm.ccdn.connector.BfArMConnectorImpl
+import de.dnpm.ccdn.connector.BfarmConnectorImpl
 import play.api.libs.json.Json
 
-
+@deprecated("intended for manual execution and replaced by MVHReportingService","v0.5") //don't know from which version on
 object Uploader extends Logging
 {
 
@@ -43,7 +43,7 @@ object Uploader extends Logging
     )
 
   private val connector =
-    BfArMConnectorImpl.instance
+    BfarmConnectorImpl.instance
 
 
   def main(args: Array[String]) : Unit = {

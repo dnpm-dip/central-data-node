@@ -34,7 +34,9 @@ import play.api.libs.json.{
  *
  */
 
-
+/**
+ * Component of [[RDSubmission]]
+ */
 final case class RDFollowUp
 (
   followUpDate: LocalDate,

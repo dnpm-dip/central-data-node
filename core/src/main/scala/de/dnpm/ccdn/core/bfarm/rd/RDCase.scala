@@ -1,7 +1,7 @@
 package de.dnpm.ccdn.core.bfarm.rd
 
 
-import java.time.{ 
+import java.time.{
   LocalDate,
   YearMonth
 }
@@ -43,7 +43,9 @@ import play.api.libs.json.{
  *
  */
 
-
+/**
+ * Component of [[RDSubmission]]
+ */
 final case class RDCase
 (
   diagnosisRd: RDCase.Diagnosis,
@@ -112,6 +114,10 @@ object RDCase
   {
 
     // Note: Not my idea to use two different Enums for the same concept (see above Diagnosis.Extent above),
+
+    /**
+     * How many sequencings of the genome were conducted, not only from the patient, but also from relatives.
+     */
     object Extent extends Enumeration
     {
       val Single = Value("single")

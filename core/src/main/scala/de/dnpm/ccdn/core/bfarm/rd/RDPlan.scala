@@ -1,6 +1,7 @@
 package de.dnpm.ccdn.core.bfarm.rd
 
 
+
 import java.time.LocalDate
 import de.dnpm.dip.coding.Code
 import de.dnpm.dip.model.{
@@ -29,7 +30,9 @@ import play.api.libs.json.{
  *
  */
 
-
+/**
+ * Component of [[RDSubmission]]
+ */
 final case class RDPlan
 (
   carePlanOd: Option[RDPlan.CarePlan],
