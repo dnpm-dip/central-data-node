@@ -54,15 +54,24 @@ object RetainingFsBackedReportRepository extends Logging {
  *
  * The backup folder organizes stored submissions into year quarters,
  * based on the creation date of the submission.
+ *
+ * Should there be file collisions in the backup folder, an error message logged
+ * and the deletion is rejected. Manual intervention would be required.
  * @param queueDir a handle for storing reports that are being processed
  *                 (received from DIP node, to be sent to BfArM and subsequently
  *                 confirmed as submitted back to it's DIP node). This is directly
  *                 passed to the superclass and only used there
- * @param quarterRepoDir a handle
+ * @param quarterRepoDir a handle to the folder where report files are backed up.
+ *                       They are not stored there directly, but organized into
+ *                       subfolders, see [[getBackupFolder]]
  */
 class RetainingFsBackedReportRepository(queueDir:File, val quarterRepoDir:File)
   extends FSBackedReportRepository(queueDir) {
 
+  /**
+   * A representation of a quarter of any year. It can be created from the
+   * creationDate of a [[Submission.Report]]
+   */
   private object Quarter extends Enumeration {
     val Q1,Q2,Q3,Q4 = Value
     def fromDate(date:LocalDateTime):Quarter.Value = {
@@ -94,6 +103,10 @@ class RetainingFsBackedReportRepository(queueDir:File, val quarterRepoDir:File)
     }
   }
 
+  /**
+   * @return a filehandle to the folder where a report with the given time
+   *         should be placed into. The returned folders are labeled like "Q4_2026"
+   */
   private def getBackupFolder(creationDate:LocalDateTime): File = {
     val creationYear = creationDate.getYear
     val creationQuarter:Quarter.Value = Quarter.fromDate(creationDate)

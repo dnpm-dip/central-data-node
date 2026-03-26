@@ -158,7 +158,10 @@ with Logging
       .filter(f)
       .toSeq
 
-
+  /**
+   * Abstracts what happens to files when they are "deleted". This is allows
+   * [[RetainingFsBackedReportRepository]] to retain these files in a backup
+   */
   protected def reportDisposer(report:Submission.Report):Try[Boolean] =
     Try(queueFile(report).delete)
 
