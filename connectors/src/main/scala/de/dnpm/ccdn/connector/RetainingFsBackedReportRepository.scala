@@ -46,7 +46,20 @@ object RetainingFsBackedReportRepository extends Logging {
 
 }
 
-
+/**
+ * Extends the behavior of the superclass by not deleting completely processed
+ * submissions, but moving them into a different folder. This serves the purpose of
+ * holding these submissions so that they can be combined into a quarter year
+ * report to the BfArM later.
+ *
+ * The backup folder organizes stored submissions into year quarters,
+ * based on the creation date of the submission.
+ * @param queueDir a handle for storing reports that are being processed
+ *                 (received from DIP node, to be sent to BfArM and subsequently
+ *                 confirmed as submitted back to it's DIP node). This is directly
+ *                 passed to the superclass and only used there
+ * @param quarterRepoDir a handle
+ */
 class RetainingFsBackedReportRepository(queueDir:File, val quarterRepoDir:File)
   extends FSBackedReportRepository(queueDir) {
 
@@ -68,7 +81,7 @@ class RetainingFsBackedReportRepository(queueDir:File, val quarterRepoDir:File)
     val moveTarget = new File(into,reportFileName)
 
     if(moveTarget.exists()) {
-      log.error(s"Failed to back up report file ${reportFileName}")
+      log.error(s"File ${reportFileName} already exists in backup folder")
       Try(false)
     }else{
       val retu = Try(toMove.renameTo(moveTarget))
