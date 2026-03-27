@@ -7,9 +7,10 @@ import de.dnpm.dip.service.mvh.{Submission, UseCase}
 import org.scalatest.BeforeAndAfter
 import org.scalatest.flatspec.AnyFlatSpec
 import org.slf4j.LoggerFactory
-import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.{Level, Logger}
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
+import ch.qos.logback.core.spi.FilterReply
 
 import java.io.{File, IOException}
 import java.time.LocalDateTime
@@ -44,8 +45,8 @@ class ArchivingReportRepositoryTests extends AnyFlatSpec
   }
   private def makeThreeReports:Seq[Submission.Report] = List(
     makeFakeReport(transferTan = 12),
-    makeFakeReport(transferTan = 3, creationDate=LocalDateTime.now().plusDays(120), Status.Unsubmitted),
-    makeFakeReport(transferTan= 54,status=Status.Submitted))
+    makeFakeReport(transferTan = 3, creationDate = LocalDateTime.now().plusDays(120), status = Status.Unsubmitted),
+    makeFakeReport(transferTan = 54, status = Status.Submitted))
 
   /**
    * For teardown
@@ -138,9 +139,17 @@ class ArchivingReportRepositoryTests extends AnyFlatSpec
 
   it should "warn on file name collision" in {
     val logger = LoggerFactory.getLogger(classOf[ArchivingReportRepository]).asInstanceOf[Logger]
-    val appender = new ListAppender[ILoggingEvent]()
-    appender.start()
-    logger.addAppender(appender)
+    val logAppender = new ListAppender[ILoggingEvent]()
+    logAppender.addFilter((event: ILoggingEvent) =>
+      if (event.getLevel == Level.ERROR) {
+        FilterReply.ACCEPT
+      }
+      else {
+        FilterReply.DENY
+      }
+    )
+    logAppender.start()
+    logger.addAppender(logAppender)
 
     putOneIntoBackup()
 
@@ -154,6 +163,7 @@ class ArchivingReportRepositoryTests extends AnyFlatSpec
     val removalResult = toTest.removeFromQueue(collidingSubmission)
 
     assert(removalResult.isLeft)
+    assert(! logAppender.list.isEmpty) //given filter, some error must have happened
     assertResult(1)(toTest.entries(_ => true).length)
     assert(! queueDir.listFiles().isEmpty,
       "Since the removal was aborted, the file should still be in the queue directory")

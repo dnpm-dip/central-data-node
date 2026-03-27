@@ -94,19 +94,22 @@ class ArchivingReportRepository(queueDir:File, val quarterRepoDir:File)
     val reportFileName = filenameOf(report)
     val moveTarget = new File(into,reportFileName)
 
-    if(moveTarget.exists()) {
-      log.error(s"File ${reportFileName} already exists in backup folder")
-      Try(false)
-    }else{
-
-      val success = Files.move(toMove.toPath,moveTarget.toPath).toFile.exists
-      if(success) {
-        log.debug(s"Moved ${reportFileName} into backup folder ${into}")
+    Try{
+      if(moveTarget.exists()) {
+        log.error(s"File ${reportFileName} already exists in backup folder")
+        false
       }else{
-        log.error(s"Failed to move ${reportFileName} into backup folder ${into}")
+
+        val success = Files.move(toMove.toPath,moveTarget.toPath).toFile.exists
+        if(success) {
+          log.debug(s"Moved ${reportFileName} into backup folder ${into}")
+        }else{
+          log.error(s"Failed to move ${reportFileName} into backup folder ${into}")
+        }
+        success
       }
-      Try(success)
     }
+
   }
 
   /**
