@@ -24,6 +24,7 @@ class RetainingFsBackedReportRepositoryTests extends AnyFlatSpec
   //the two folders used by the report repository
   val queueDir:File = new File(".","queue")
   val backupDir:File = new File(".","quarterReportBackup")
+  private def dateIn(year:Int,month:Int) = LocalDateTime.of(year,month,15,12,0)
 
   private def makeFakeReport(transferTan:Int = Random.nextInt(),
                              creationDate:LocalDateTime = LocalDateTime.now,
@@ -86,10 +87,10 @@ class RetainingFsBackedReportRepositoryTests extends AnyFlatSpec
 
     val toTest = makeFixture()
     val someReports = List(
-      makeFakeReport(creationDate=LocalDateTime.of(2026,1,30,15,0)),
-      makeFakeReport(creationDate=LocalDateTime.of(2026,2,15,7,15)),
-      makeFakeReport(creationDate=LocalDateTime.of(2025,4,5,8,30)),
-      makeFakeReport(creationDate=LocalDateTime.of(2026,7,10,23,45)))
+      makeFakeReport(creationDate=dateIn(2026,1)),
+      makeFakeReport(creationDate=dateIn(2026,2)),
+      makeFakeReport(creationDate=dateIn(2025,4)),
+      makeFakeReport(creationDate=dateIn(2026,7)))
     toTest.saveIfAbsent(someReports)
     assertResult(0)(backupDir.listFiles().length)
     assertResult(4)(queueDir.listFiles().length)
@@ -115,7 +116,7 @@ class RetainingFsBackedReportRepositoryTests extends AnyFlatSpec
 
   private def putOneIntoBackup() = {
     val prepInstance = makeFixture()
-    val testReport = makeFakeReport(transferTan=1)
+    val testReport = makeFakeReport(transferTan=1, creationDate=dateIn(2028,3))
     prepInstance.saveIfAbsent(testReport)
     prepInstance.remove(testReport)
   }
@@ -125,7 +126,7 @@ class RetainingFsBackedReportRepositoryTests extends AnyFlatSpec
 
     assert(queueDir.listFiles().isEmpty)
     assert(!backupDir.listFiles().isEmpty)
-    new File(backupDir,"Q1_2026").tap {it =>
+    new File(backupDir,"Q1_2028").tap {it =>
       assert(it.exists())
       assertResult(1)(it.listFiles().length)
     }
@@ -146,7 +147,7 @@ class RetainingFsBackedReportRepositoryTests extends AnyFlatSpec
 
     val toTest = makeFixture()
     //recreate the submission created during putOneIntoBackup()
-    val collidingSubmission = makeFakeReport(1)
+    val collidingSubmission = makeFakeReport(1, creationDate=dateIn(2028,3))
     toTest.saveIfAbsent(collidingSubmission)
 
     //file is already present. Should not take it out of the queue

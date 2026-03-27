@@ -5,6 +5,7 @@ import de.dnpm.dip.service.mvh.Submission
 import de.dnpm.dip.util.Logging
 
 import java.io.File
+import java.nio.file.Files
 import java.time.LocalDateTime
 import scala.util.Properties.{envOrNone, propOrNone}
 import scala.util.{Failure, Try}
@@ -25,7 +26,13 @@ object RetainingFsBackedReportRepository extends Logging {
 
   private def findFolder(env:String,prop:String,errorMsg:String):Try[File] = {
     Try(envOrNone(env).filter(_.nonEmpty).orElse(propOrNone(prop).filter(_.nonEmpty)).get)
-      .map(new File(_))
+      .map[File](path => {
+        val fileHandle = new File(path)
+        if(! fileHandle.exists) {
+          fileHandle.mkdirs
+        }
+        fileHandle
+      })
       .filter(it => it.isDirectory)
       .recoverWith {
         case t => log.error(errorMsg)
@@ -91,13 +98,14 @@ class RetainingFsBackedReportRepository(queueDir:File, val quarterRepoDir:File)
       log.error(s"File ${reportFileName} already exists in backup folder")
       Try(false)
     }else{
-      val retu = Try(toMove.renameTo(moveTarget))
-      if(retu.get) {
+
+      val success = Files.move(toMove.toPath,moveTarget.toPath).toFile.exists
+      if(success) {
         log.debug(s"Moved ${reportFileName} into backup folder ${into}")
       }else{
         log.error(s"Failed to move ${reportFileName} into backup folder ${into}")
       }
-      retu
+      Try(success)
     }
   }
 
