@@ -16,7 +16,7 @@ import java.time.LocalDateTime
 import scala.util.Random
 import scala.util.chaining.scalaUtilChainingOps
 
-class ArchivingFsBackedReportRepositoryTests extends AnyFlatSpec
+class ArchivingReportRepositoryTests extends AnyFlatSpec
   with BeforeAndAfter
 {
   behavior of "ArchivingFsBackedReportRepository"
@@ -151,8 +151,9 @@ class ArchivingFsBackedReportRepositoryTests extends AnyFlatSpec
     toTest.saveIfAbsent(collidingSubmission)
 
     //file is already present. Should not take it out of the queue
-    toTest.removeFromQueue(collidingSubmission)
+    val removalResult = toTest.removeFromQueue(collidingSubmission)
 
+    assert(removalResult.isLeft)
     assertResult(1)(toTest.entries(_ => true).length)
     assert(! queueDir.listFiles().isEmpty,
       "Since the removal was aborted, the file should still be in the queue directory")
