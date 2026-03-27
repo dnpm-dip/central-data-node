@@ -16,10 +16,10 @@ import java.time.LocalDateTime
 import scala.util.Random
 import scala.util.chaining.scalaUtilChainingOps
 
-class RetainingFsBackedReportRepositoryTests extends AnyFlatSpec
+class ArchivingFsBackedReportRepositoryTests extends AnyFlatSpec
   with BeforeAndAfter
 {
-  behavior of "RetainingFsBackedReportRepository"
+  behavior of "ArchivingFsBackedReportRepository"
 
   //the two folders used by the report repository
   val queueDir:File = new File(".","queue")
@@ -57,8 +57,8 @@ class RetainingFsBackedReportRepositoryTests extends AnyFlatSpec
     file.delete()
   }
 
-  private def makeFixture():RetainingFsBackedReportRepository = {
-    new RetainingFsBackedReportRepository(queueDir,backupDir)
+  private def makeFixture():ArchivingReportRepository = {
+    new ArchivingReportRepository(queueDir,backupDir)
   }
 
   it should "save new reports into it's queue directory" in {
@@ -95,7 +95,7 @@ class RetainingFsBackedReportRepositoryTests extends AnyFlatSpec
     assertResult(0)(backupDir.listFiles().length)
     assertResult(4)(queueDir.listFiles().length)
     for (f <- someReports) {
-      toTest.remove(f)
+      toTest.removeFromQueue(f)
     }
     assertResult(0)(queueDir.listFiles().length)
     assertResult(3)(backupDir.listFiles().length)
@@ -118,7 +118,7 @@ class RetainingFsBackedReportRepositoryTests extends AnyFlatSpec
     val prepInstance = makeFixture()
     val testReport = makeFakeReport(transferTan=1, creationDate=dateIn(2028,3))
     prepInstance.saveIfAbsent(testReport)
-    prepInstance.remove(testReport)
+    prepInstance.removeFromQueue(testReport)
   }
 
   it should "not load files in the quarter report directory" in {
@@ -137,7 +137,7 @@ class RetainingFsBackedReportRepositoryTests extends AnyFlatSpec
 
 
   it should "warn on file name collision" in {
-    val logger = LoggerFactory.getLogger(classOf[RetainingFsBackedReportRepository]).asInstanceOf[Logger]
+    val logger = LoggerFactory.getLogger(classOf[ArchivingReportRepository]).asInstanceOf[Logger]
     val appender = new ListAppender[ILoggingEvent]()
     appender.start()
     logger.addAppender(appender)
@@ -151,7 +151,7 @@ class RetainingFsBackedReportRepositoryTests extends AnyFlatSpec
     toTest.saveIfAbsent(collidingSubmission)
 
     //file is already present. Should not take it out of the queue
-    toTest.remove(collidingSubmission)
+    toTest.removeFromQueue(collidingSubmission)
 
     assertResult(1)(toTest.entries(_ => true).length)
     assert(! queueDir.listFiles().isEmpty,

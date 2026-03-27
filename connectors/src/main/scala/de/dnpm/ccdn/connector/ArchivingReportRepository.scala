@@ -10,14 +10,14 @@ import java.time.LocalDateTime
 import scala.util.Properties.{envOrNone, propOrNone}
 import scala.util.{Failure, Try}
 
-final class RetainingReportRepositoryProviderImpl extends ReportRepositoryProvider
+final class ArchivingReportRepositoryProviderImpl extends ReportRepositoryProvider
 {
   override def getInstance: ReportRepository =
-    RetainingFsBackedReportRepository.instance
+    ArchivingReportRepository.instance
 }
 
 
-object RetainingFsBackedReportRepository extends Logging {
+object ArchivingReportRepository extends Logging {
   private val QUEUE_PROP = "ccdn.queue.dir"
   private val QUEUE_ENV = "CCDN_QUEUE_DIR"
 
@@ -40,13 +40,13 @@ object RetainingFsBackedReportRepository extends Logging {
       }
   }
 
-  lazy val instance: RetainingFsBackedReportRepository = {
+  lazy val instance: ArchivingReportRepository = {
     for {
       queueDir:File <- findFolder(QUEUE_ENV,QUEUE_PROP,
         "Couldn't retrieve directory path for queue")
       quarterReportDir:File <- findFolder(QUARTERREPORT_DIR_ENV,QUARTERREPORT_DIR_PROP,
         "Couldn't retrieve directory path for quarter report backup directory")
-    } yield new RetainingFsBackedReportRepository(queueDir,quarterReportDir)
+    } yield new ArchivingReportRepository(queueDir,quarterReportDir)
   }.get
 
 }
@@ -68,9 +68,9 @@ object RetainingFsBackedReportRepository extends Logging {
  *                 passed to the superclass and only used there
  * @param quarterRepoDir a handle to the folder where report files are backed up.
  *                       They are not stored there directly, but organized into
- *                       subfolders, see [[getBackupFolder]]
+ *                       subfolders, see [[getArchiveFolder]]
  */
-class RetainingFsBackedReportRepository(queueDir:File, val quarterRepoDir:File)
+class ArchivingReportRepository(queueDir:File, val quarterRepoDir:File)
   extends FSBackedReportRepository(queueDir) {
 
   /**
@@ -90,7 +90,7 @@ class RetainingFsBackedReportRepository(queueDir:File, val quarterRepoDir:File)
 
   override protected def reportDisposer(report: Submission.Report):Try[Boolean] ={
     val toMove = this.queueFile(report)
-    val into = getBackupFolder(report.createdAt)
+    val into = getArchiveFolder(report.createdAt)
     val reportFileName = filenameOf(report)
     val moveTarget = new File(into,reportFileName)
 
@@ -113,7 +113,7 @@ class RetainingFsBackedReportRepository(queueDir:File, val quarterRepoDir:File)
    * @return a filehandle to the folder where a report with the given time
    *         should be placed into. The returned folders are labeled like "Q4_2026"
    */
-  private def getBackupFolder(creationDate:LocalDateTime): File = {
+  private def getArchiveFolder(creationDate:LocalDateTime): File = {
     val creationYear = creationDate.getYear
     val creationQuarter:Quarter.Value = Quarter.fromDate(creationDate)
     val targetSubFolderName = s"${creationQuarter}_${creationYear}"

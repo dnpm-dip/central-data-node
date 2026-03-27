@@ -47,7 +47,7 @@ case class FakeReportRepository() extends ReportRepository
     cache.values.filter(f).toSeq
 
 
-  override def remove(report: Submission.Report): Either[String,Unit] = {
+  override def removeFromQueue(report: Submission.Report): Either[String,Unit] = {
     cache -= key(report)
     Right(())
   }

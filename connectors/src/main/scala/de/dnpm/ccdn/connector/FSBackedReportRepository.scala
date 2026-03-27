@@ -160,12 +160,14 @@ with Logging
 
   /**
    * Abstracts what happens to files when they are "deleted". This is allows
-   * [[RetainingFsBackedReportRepository]] to retain these files in a backup
+   * [[ArchivingReportRepository]] to retain these files in a backup
+   *
+   * This implementation simply deletes the file
    */
   protected def reportDisposer(report:Submission.Report):Try[Boolean] =
     Try(queueFile(report).delete)
 
-  override def remove(
+  override def removeFromQueue(
     report: Submission.Report
   ): Either[String,Unit] =
     this.reportDisposer(report)

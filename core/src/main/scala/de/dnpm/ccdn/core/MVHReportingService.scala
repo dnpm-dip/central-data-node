@@ -288,7 +288,7 @@ extends Logging
         .map {
           case Right(_) =>
             log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
-            queue.remove(report)
+            queue.removeFromQueue(report)
 
           case err@Left(msg) =>
             log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - $msg")
