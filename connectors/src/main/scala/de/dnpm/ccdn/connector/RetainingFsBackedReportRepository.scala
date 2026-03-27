@@ -20,27 +20,25 @@ object RetainingFsBackedReportRepository extends Logging {
   private val QUEUE_PROP = "ccdn.queue.dir"
   private val QUEUE_ENV = "CCDN_QUEUE_DIR"
 
-  private val QUARTERREPORTBACKUP_DIR_PROP = "ccdn.quarterBackup.dir"
-  private val QUARTERREPORTBACKUP_DIR_ENV = "CCDN_QUARTERBACKUP_DIR"
+  private val QUARTERREPORT_DIR_PROP = "ccdn.quarterBackup.dir"
+  private val QUARTERREPORT_DIR_ENV = "CCDN_QUARTERBACKUP_DIR"
+
+  private def findFolder(env:String,prop:String,errorMsg:String):Try[File] = {
+    Try(envOrNone(env).filter(_.nonEmpty).orElse(propOrNone(prop).filter(_.nonEmpty)).get)
+      .map(new File(_))
+      .filter(it => it.isDirectory)
+      .recoverWith {
+        case t => log.error(errorMsg)
+          Failure(t)
+      }
+  }
 
   lazy val instance: RetainingFsBackedReportRepository = {
     for {
-      queueDir:File <- Try(envOrNone(QUEUE_ENV)
-        .orElse(propOrNone(QUEUE_PROP)).get)
-        .map(new File(_))
-        .filter(it => it.isDirectory)
-        .recoverWith {
-          case t => log.error(s"Couldn't retrieve directory path for queue")
-          Failure(t)
-        }
-      quarterReportDir:File <- Try(envOrNone(QUARTERREPORTBACKUP_DIR_ENV)
-        .orElse(propOrNone(QUARTERREPORTBACKUP_DIR_PROP)).get)
-        .map(new File(_))
-        .filter(it => it.isDirectory)
-        .recoverWith {
-          case t => log.error(s"Couldn't retrieve directory path for quarter report backup directory")
-            Failure(t)
-        }
+      queueDir:File <- findFolder(QUEUE_ENV,QUEUE_PROP,
+        "Couldn't retrieve directory path for queue")
+      quarterReportDir:File <- findFolder(QUARTERREPORT_DIR_ENV,QUARTERREPORT_DIR_PROP,
+        "Couldn't retrieve directory path for quarter report backup directory")
     } yield new RetainingFsBackedReportRepository(queueDir,quarterReportDir)
   }.get
 
