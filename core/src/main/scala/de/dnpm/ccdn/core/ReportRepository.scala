@@ -63,7 +63,7 @@ trait Repository[T]
   def exists(filter: T => Boolean): Boolean =
     entries(filter).nonEmpty
 
-  def remove(t: T): Either[String,Unit]
+  def removeFromQueue(t: T): Either[String,Unit]
 
 }
 

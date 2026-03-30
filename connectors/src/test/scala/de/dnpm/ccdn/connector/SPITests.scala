@@ -14,6 +14,9 @@ final class SPITests extends AnyFlatSpec
 
   private val queueDir =
     createTempDirectory("dnpm_ccdn_test_").toFile
+  private val backupDir =
+    createTempDirectory("dnpm_ccdn_test_quarterReportBackup").toFile
+
 
   System.setProperty("ccdn.dnpm.broker.baseurl","http://localhost")
   System.setProperty("ccdn.bfarm.api.url","http://localhost/bfarm")
@@ -21,6 +24,7 @@ final class SPITests extends AnyFlatSpec
   System.setProperty("ccdn.bfarm.api.client.id","dummy")
   System.setProperty("ccdn.bfarm.api.client.secret","dummy")
   System.setProperty("ccdn.queue.dir",queueDir.getAbsolutePath)
+  System.setProperty("ccdn.quarterBackup.dir",backupDir.getAbsolutePath)
 
 
   private val dipConnector =
