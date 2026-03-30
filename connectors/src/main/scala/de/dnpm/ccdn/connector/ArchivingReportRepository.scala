@@ -100,13 +100,13 @@ class ArchivingReportRepository(queueDir:File, val quarterRepoDir:File)
         false
       }else{
 
-        val success = Files.move(toMove.toPath,moveTarget.toPath).toFile.exists
-        if(success) {
+        val wasSuccess = Files.move(toMove.toPath,moveTarget.toPath).toFile.exists
+        if(wasSuccess) {
           log.debug(s"Moved ${reportFileName} into backup folder ${into}")
         }else{
           log.error(s"Failed to move ${reportFileName} into backup folder ${into}")
         }
-        success
+        wasSuccess
       }
     }
 
