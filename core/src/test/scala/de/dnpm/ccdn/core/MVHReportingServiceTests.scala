@@ -25,13 +25,13 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       
       _ <- service.pollReports
       
-      _ = service.queue.entries(_ => true) must not be (empty)
+      _ = service.pollingQueue.entries(_ => true) must not be (empty)
 
       _ <- service.uploadReports
 
-      _ <- service.confirmSubmissions
+      _ <- service.confirmSubmissionsReports
 
-    } yield service.queue.entries(_ => true) must be (empty)
+    } yield service.pollingQueue.entries(_ => true) must be (empty)
   }
 
   it must " not process more submissions simultaneously than it has threads (non-deterministic)" in {
@@ -54,7 +54,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
       _ <- service.uploadReports
 
-      _ <- service.confirmSubmissions
+      _ <- service.confirmSubmissionsReports
 
     } yield{
       assertResult(MVHReportingService.nConfirmationThreads)(fakeDipConnector.maxSimultaneousConfirmationWaits.get())
