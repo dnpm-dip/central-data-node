@@ -155,7 +155,7 @@ object CodingWithText
 
 /**
  * Why a patient stopped his oncological therapy.
- * Can be converted from {@link de.dnpm.dip.mtb.model.MTBTherapy.StatusReason StatusReason}, where fallback value (unknown reason) is 'S'
+ * Can be converted from [[de.dnpm.dip.mtb.model.MTBTherapy.StatusReason StatusReason]], where fallback value (unknown reason) is 'S'
  *
  * Based on <a href="https://github.com/BfArM-MVH/MVGenomseq_KDK/blob/0bcf96267d938272ba625ba6a568c213db978415/KDK/OncologyFollowUp.json#L162-L173"> BfArM requirement</a>
  */
