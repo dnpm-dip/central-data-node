@@ -21,7 +21,7 @@ object MVHReportingService
 {
   import scala.concurrent.ExecutionContext.Implicits.global
 
-  /** See [[MVHReportingService.confirmSubmissions]]
+  /** See [[MVHReportingService.confirmSubmissionsReports]]
    */
   private[core] val nConfirmationThreads = 32
 
@@ -55,7 +55,7 @@ object MVHReportingService
 class MVHReportingService
 (
   config: Config,
-  private[core] val queue: ReportRepository,
+  private[core] val pollingQueue: ReportRepository,
   private[core] val dipConnector: DipConnector,
   private[core] val bfarmConnector: BfarmConnector
 )(
@@ -65,23 +65,26 @@ extends Logging
 {
 
   /**
-   * Executes the runnable in [[scheduledTask]] every full hour (at zero minutes and seconds)
+   * Executes the runnable in [[pollingTask]] in regular intervals
    */
-  private val executor: ScheduledExecutorService =
+  private val pollingExecutor: ScheduledExecutorService =
     Executors.newSingleThreadScheduledExecutor
 
 
   /**
-   * Every hour (by default) queries DIP sites for new submissions ([[pollReports]]), uploads them to
-   * BfArM ([[uploadReports]]) and sends a confirmation to dip sites ([[confirmSubmissions]])
+   * Regularly queries DIP sites for new submissions ([[pollReports]]), uploads them to
+   * BfArM ([[uploadReports]]) and sends a confirmation to dip sites ([[confirmSubmissionsReports]]).
+   * The interval is retrieved from [[config#polling]]
    *
-   * Before polling for new reports, the [[queue]] is checked for preexisting items,
+   * Before polling for new reports, the [[pollingQueue]] is checked for preexisting items,
    * which are processed before polling for new items in [[pollReports]]
    *
-   * The state of this process is stored in the [[queue]] and in the
+   * The state of this process is stored in the [[pollingQueue]] and in the
    * [[Submission.Report.status]] of it's items.
+   *
+   * Managed by [[pollingExecutor]]
    */
-  private var scheduledTask: Option[JavaFuture[_]] = None
+  private var pollingTask: Option[JavaFuture[_]] = None
 
   private val toSeconds =
     Map(
@@ -113,19 +116,19 @@ extends Logging
     log.info(s"Scheduling report polling to start in $delay s with $period s period")   
 
 
-    scheduledTask =
+    pollingTask =
       Some(
-        executor.scheduleAtFixedRate(
+        pollingExecutor.scheduleAtFixedRate(
           () => {
-            log.info(s"Conducting scheduled reporting workflow ${if(queue.exists(_ => true)) "with" else "without"} preexisting items in the queue")
+            log.info(s"Conducting scheduled reporting workflow ${if(pollingQueue.exists(_ => true)) "with" else "without"} preexisting items in the queue")
             for {
               // Start by draining the report queue, if non-empty (in case the service had been interrupted) and
               // it thus contains reports whose upload hasn't been confirmed to the origin DIP), in order to avoid polling them again
-              _ <- if (queue.exists(_.status == Unsubmitted)) uploadReports else Future.unit
-              _ <- if (queue.exists(_.status == Submitted)) confirmSubmissions else Future.unit
+              _ <- if (pollingQueue.exists(_.status == Unsubmitted)) uploadReports else Future.unit
+              _ <- if (pollingQueue.exists(_.status == Submitted)) confirmSubmissionsReports else Future.unit
               _ <- pollReports
               _ <- uploadReports
-              _ <- confirmSubmissions
+              _ <- confirmSubmissionsReports
             } yield ()
             ()
           },
@@ -142,7 +145,7 @@ extends Logging
 
     //first stop higher order thread which would use threads in
     // confirmationExecutor, then stop the latter
-    scheduledTask.foreach(_ cancel false)
+    pollingTask.foreach(_ cancel false)
     this.confirmationExecutor.shutdown()
     if(! this.confirmationExecutor.awaitTermination(5,TimeUnit.SECONDS)){
       this.confirmationExecutor.shutdownNow()
@@ -187,7 +190,7 @@ extends Logging
 
   /**
    * Communicates with all the configured DIP installations, queries them for new
-   * [[Submission.Report]] and stores them in the [[queue]] with status
+   * [[Submission.Report]] and stores them in the [[pollingQueue]] with status
    * [[Unsubmitted]]
    */
   private[core] def pollReports: Future[Any] = {
@@ -214,7 +217,7 @@ extends Logging
               .andThen {
                 case Success(Right(reports)) =>
                   log.debug(s"Enqueuing ${reports.size} $useCase SubmissionReport")
-                  queue.saveIfAbsent(reports)
+                  pollingQueue.saveIfAbsent(reports)
 
                 case Success(Left(err)) =>
                   log.error(s"Problem polling $useCase SubmissionReports of site $site: $err")
@@ -231,7 +234,7 @@ extends Logging
 
   /**
    * Communicates with the BfArM, sends them [[BfarmReport]] entities, each based
-   * on one of all the [[Submission.Report]] entities in the [[queue]] that are
+   * on one of all the [[Submission.Report]] entities in the [[pollingQueue]] that are
    * in status [[Unsubmitted]]. After this upload their status is changed to [[Submitted]]
    */
   private[core] def uploadReports: Future[Seq[Either[String,Unit]]] = {
@@ -239,14 +242,14 @@ extends Logging
     log.info("Uploading SubmissionReports...")
    
     Future.traverse(
-      queue.entries(_.status == Unsubmitted)
+      pollingQueue.entries(_.status == Unsubmitted)
     )(
       report =>
         bfarmConnector.upload(BfarmReport(report))
           .map {
             case Right(_) =>
               log.info(s"SubmissionReport Uploaded: Site ${report.site.code}, TAN ${report.id}")
-              queue.replace(report.copy(status = Submitted))
+              pollingQueue.replace(report.copy(status = Submitted))
 
             case err @ Left(msg) =>
               log.error(s"Problem uploading SubmissionReport: Site ${report.site.code}, TAN ${report.id} - $msg")
@@ -263,32 +266,32 @@ extends Logging
   }
 
   /**
-   * Used to gracefully end calls to [[confirmSubmissions]] on shutdown
+   * Used to gracefully end calls to [[confirmSubmissionsReports]] on shutdown
    */
   private val confirmationExecutor = Executors.newFixedThreadPool(nConfirmationThreads)
   private val confirmationExecutionContext = ExecutionContext.fromExecutor(confirmationExecutor)
 
   /**
    * Communicates with the DIP sites to confirm to them that a submission has
-   * been sent to the BfArM. If successful the submission is removed from [[queue]]
-   * Runs with an overridden threadpool to limit simultaneous executions. Apache Tomcats
-   * which deploy the DIP nodes only handle up to 200 sockets simultaneously by default.
-   * If a node is offline for some time, the accrued submissions can lead to a deadlock
-   * without this limit
+   * been sent to the BfArM. If successful the submission is removed from [[pollingQueue]]
+   * Runs with an overridden threadpool to limit simultaneous executions. The DIP nodes
+   * are topographically placed behind an Apache Tomcat server, which only handles
+   * up to 200 sockets simultaneously by default. If a node is offline for some
+   * time, the accrued submissions can lead to a deadlock without this limit
    */
-  private[core] def confirmSubmissions: Future[Seq[Either[String,Unit]]] = {
+  private[core] def confirmSubmissionsReports: Future[Seq[Either[String,Unit]]] = {
 
     implicit val ec:ExecutionContext = confirmationExecutionContext
     log.info("Confirming report submissions...")
     Future.traverse(
-      queue.entries(_.status == Submitted)
+      pollingQueue.entries(_.status == Submitted)
     )(
       report =>
       dipConnector.confirmSubmitted(report)
         .map {
           case Right(_) =>
             log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
-            queue.removeFromQueue(report)
+            pollingQueue.removeFromQueue(report)
 
           case err@Left(msg) =>
             log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - $msg")
