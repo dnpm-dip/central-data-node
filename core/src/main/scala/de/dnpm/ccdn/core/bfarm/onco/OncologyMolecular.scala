@@ -45,16 +45,18 @@ object OncologyMolecular
 {
 
   /**
-   * Classification, from what was the genome recorded
+   * Classifies where a mutation in the patient comes from
    */
   object GenomicSource extends Enumeration
   {
     /**
-     * The patients own genetic code at some point at some cell in his body
+     * Mutation occured in patients body during his lifetime and
+     * is only present in parts of his body.
      */
     val Somatic  = Value("somatic")
     /**
-     * From individuals parents
+     * Mutation was already present in sperm or egg, so it is now
+     * present in all of his body.
      */
     val Germline = Value("germline")
 
@@ -89,7 +91,6 @@ object OncologyMolecular
     val localization: Localization.Value
   }
 
-
   final case class SmallVariant
   (
     identifier: Id[SmallVariant],
@@ -105,7 +106,7 @@ object OncologyMolecular
     proteinChange: Option[Code[HGVS]],
     transcriptId: Coding[Transcript.Systems],
     variantTypes: Option[List[Coding[SequenceOntology]]],
-    loh: Option[Boolean]
+    loh: Option[Boolean] //Loss of Heterozygosity
   )
   extends Variant
 

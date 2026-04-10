@@ -274,10 +274,10 @@ extends Logging
   /**
    * Communicates with the DIP sites to confirm to them that a submission has
    * been sent to the BfArM. If successful the submission is removed from [[pollingQueue]]
-   * Runs with an overridden threadpool to limit simultaneous executions. Apache Tomcats
-   * which deploy the DIP nodes only handle up to 200 sockets simultaneously by default.
-   * If a node is offline for some time, the accrued submissions can lead to a deadlock
-   * without this limit
+   * Runs with an overridden threadpool to limit simultaneous executions. The DIP nodes
+   * are topographically placed behind an Apache Tomcat server, wihch only handles
+   * up to 200 sockets simultaneously by default. If a node is offline for some
+   * time, the accrued submissions can lead to a deadlock without this limit
    */
   private[core] def confirmSubmissionsReports: Future[Seq[Either[String,Unit]]] = {
 
