@@ -281,6 +281,13 @@ with BatchingUtil
           log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - $msg")
           err
       }
+      // Recover lest the Future traversal be "short-circuited" into a failed Future 
+      .recover {
+        case t =>
+          log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - ${t.getMessage}")
+          t.getMessage.asLeft
+      }
+      
     )
 
 }
