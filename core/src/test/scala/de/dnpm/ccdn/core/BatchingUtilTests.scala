@@ -2,7 +2,10 @@ package de.dnpm.ccdn.core
 
 
 import java.util.concurrent.atomic.AtomicInteger
-import scala.concurrent.Future
+import scala.concurrent.{
+  ExecutionContext,
+  Future
+}
 import scala.collection.concurrent.{
   Map,
   TrieMap
@@ -15,6 +18,13 @@ import org.scalatest.Inspectors._
 
 class BatchingUtilTests extends AsyncFlatSpec with BatchingUtil
 {
+
+  // Suggested by coderabbit:
+  // Use a multi-threaded ExecutionContext (EC) instead of AsyncFlatSpec's default serial EC,
+  // to ensure that the test becomes a genuine regression guard.
+  override implicit def executionContext: ExecutionContext =
+    ExecutionContext.global
+
 
   "Batch processing" must "have occurred strictly sequentially" in { 
 
