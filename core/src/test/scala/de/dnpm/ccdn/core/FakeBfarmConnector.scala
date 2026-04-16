@@ -9,13 +9,16 @@ import de.dnpm.ccdn.core.bfarm
 final class FakeBfarmConnectorProvider extends bfarm.BfarmConnectorProvider
 {
   override def getInstance: bfarm.BfarmConnector =
-    FakeBfarmConnector()
+    new FakeBfarmConnector
 }
 
-case class FakeBfarmConnector() extends bfarm.BfarmConnector
+class FakeBfarmConnector extends bfarm.BfarmConnector
 {
-  def upload(report: bfarm.SubmissionReport)
-            (implicit ec: ExecutionContext)
-            : Future[Either[String,Unit]] =
+
+  def upload(
+    report: bfarm.SubmissionReport
+  )(
+    implicit ec: ExecutionContext
+  ): Future[Either[String,Unit]] =
     Future.successful(().asRight)
 }
