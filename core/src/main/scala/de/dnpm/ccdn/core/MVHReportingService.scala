@@ -141,8 +141,7 @@ with BatchingUtil
   def stop(): Unit = {
     log.info("Stopping MVH Reporting service")
 
-    // First stop higher order thread which would use threads in
-    // confirmationExecutor, then stop the latter
+    // Gracefully stop pollingTask, if running
     pollingTask.foreach(_ cancel false)
 
     log.debug("Finished stopping MVH Reporting service")
