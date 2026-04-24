@@ -3,11 +3,13 @@ package de.dnpm.ccdn.core
 
 import java.time.LocalDateTime
 import java.util.UUID.randomUUID
+import scala.util.Random
 import scala.concurrent.{ExecutionContext, Future}
 import cats.syntax.either._
 import de.dnpm.dip.coding.{Code, Coding}
 import de.dnpm.dip.model.{HealthInsurance, Id, NGSReport, Patient, Site}
 import de.dnpm.dip.service.mvh.{Submission, TransferTAN, UseCase}
+
 
 final class FakeDIPConnectorProvider extends dip.DipConnectorProvider
 {
@@ -17,6 +19,9 @@ final class FakeDIPConnectorProvider extends dip.DipConnectorProvider
 
 class FakeDIPConnector extends dip.DipConnector
 {
+
+  private val rnd = new Random
+
 
   private def rndReport(
     site: Code[Site],
@@ -45,8 +50,9 @@ class FakeDIPConnector extends dip.DipConnector
   )(
     implicit ec: ExecutionContext
   ): Future[Either[String,Seq[Submission.Report]]] =
+    // Return between 5 and 15 of Submission.Reports 
     Future.successful(
-      Seq.fill(4)(rndReport(site,useCase)).asRight
+      Seq.fill(rnd.nextInt(10) + 5)(rndReport(site,useCase)).asRight
     )
 
   override def confirmSubmitted(
