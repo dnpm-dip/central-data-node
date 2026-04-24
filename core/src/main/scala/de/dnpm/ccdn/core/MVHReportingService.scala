@@ -272,13 +272,18 @@ with BatchingUtil
     )(
       report => dipConnector.confirmSubmitted(report).map {
         case Right(_) =>
-          log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
-          pollingQueue.removeFromQueue(report)
-            .map(_ => report)
+          pollingQueue.removeFromQueue(report).map(_ => report)
         
-        case err @ Left(msg) =>
-          log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - $msg")
-          err
+        case Left(msg) =>
+          s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - $msg".asLeft
+      }
+      .andThen { 
+        case Success(Right(_)) =>
+          log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
+
+        // Logs either the error message from the submission confirmation request or from queue removal
+        case Success(Left(msg)) =>
+          log.error(msg)
       }
       // Recover lest the Future traversal be "short-circuited" into a failed Future 
       .recover {
