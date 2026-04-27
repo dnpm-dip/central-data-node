@@ -28,7 +28,7 @@ class FakeDIPConnector extends dip.DipConnector
    * There will be an arbitrary number of submissions between 5 and 15
    * that each remote site will return
    */
-  var nSubmissions: Int = new Random().nextInt(10) + 5
+  var nSubmissions: Int = new Random().nextInt(11) + 5
 
   /**
    * Counts currently active pseudo confirmations in [[confirmSubmitted()]]

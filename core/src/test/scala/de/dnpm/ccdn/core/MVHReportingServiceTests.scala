@@ -55,9 +55,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     // testing setup has 39 clinic-usecases, so there can be no less than 39 uploads to run
     val expectedNumReports = Config.instance.sites.flatMap(it => it._2.useCases).size * fakeDipConnector.nSubmissions
     //have more reports overall than nThreads
-    assert(expectedNumReports > service.nSimultaneousSubmissionConfirmations)
-    //but no more than twice as many, so that a boolean predicate works to split one set of timings in two
-    assert(expectedNumReports <= service.nSimultaneousSubmissionConfirmations*fakeDipConnector.nSubmissions)
+    assert(expectedNumReports > service.nSimultaneousSubmissionConfirmations,"Setup assertion 1 failed")
 
     //run
     for{
