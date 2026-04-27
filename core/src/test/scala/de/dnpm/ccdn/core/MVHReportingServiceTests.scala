@@ -3,24 +3,35 @@ package de.dnpm.ccdn.core
 
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.must.Matchers._
+import org.slf4j.LoggerFactory
+
+import java.util.concurrent.Executors
+import scala.concurrent.ExecutionContext
 
 
 
 final class MVHReportingServiceTests extends AsyncFlatSpec
 {
+  override implicit def executionContext: ExecutionContext =
+    ExecutionContext.fromExecutor(Executors.newFixedThreadPool(50))
+  val log = LoggerFactory.getLogger(MVHReportingServiceTests.super.getClass)
+
   behavior of "MVHReportingService"
 
-    //cant instantiate proper fixtures, because MVHReportingService is a singleton
-    // and I don't want to copypaste from the companion object into testcode
-    val service = MVHReportingService.service
-    val fakeDipConnector:FakeDIPConnector = service.dipConnector.asInstanceOf[FakeDIPConnector]
-    val fakeBfarmConnector:FakeBfarmConnector = service.bfarmConnector.asInstanceOf[FakeBfarmConnector]
+  val fakeDipConnector = new FakeDIPConnector
+  val fakeBfarmConnector = new FakeBfarmConnector
+
+  val service = 
+    new MVHReportingService(
+      Config.instance,
+      ReportRepository.getInstance.get,
+      fakeDipConnector,
+      fakeBfarmConnector
+    )
 
 
   it must "handle multiple uploads from every DIP node in one go" in {
-    fakeDipConnector.nSubmissions = 4
-    fakeDipConnector.confirmationsTakeTime = false
-
+    log.info("FakeDipConnector sending "+fakeDipConnector.nSubmissions+ " submissions per site")
     for {
       
       _ <- service.pollReports
@@ -29,23 +40,22 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
       _ <- service.uploadReports
 
-      _ <- service.confirmSubmissionsReports
+      _ <- service.confirmSubmissions
 
     } yield service.pollingQueue.entries(_ => true) must be (empty)
   }
 
   it must " not process more submissions simultaneously than it has threads (non-deterministic)" in {
     //configure bfarmconnecteor to halt for 100 msec during upload
-    fakeDipConnector.nSubmissions = 1
+
+    log.info("FakeDipConnector sending "+fakeDipConnector.nSubmissions+ " submissions per site")
     fakeDipConnector.confirmationsTakeTime = true
     fakeDipConnector.maxSimultaneousConfirmationWaits.set(0)
 
     // testing setup has 39 clinic-usecases, so there can be no less than 39 uploads to run
-    val expectedNumReports = Config.instance.sites.flatMap(it => it._2.useCases).size
+    val expectedNumReports = Config.instance.sites.flatMap(it => it._2.useCases).size * fakeDipConnector.nSubmissions
     //have more reports overall than nThreads
-    assert(expectedNumReports > MVHReportingService.nConfirmationThreads)
-    //but no more than twice as many, so that a boolean predicate works to split one set of timings in two
-    assert(expectedNumReports <= MVHReportingService.nConfirmationThreads*2)
+    assert(expectedNumReports > service.nSimultaneousSubmissionConfirmations,"Setup assertion 1 failed")
 
     //run
     for{
@@ -54,12 +64,11 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
       _ <- service.uploadReports
 
-      _ <- service.confirmSubmissionsReports
+      _ <- service.confirmSubmissions
 
     } yield{
-      assertResult(MVHReportingService.nConfirmationThreads)(fakeDipConnector.maxSimultaneousConfirmationWaits.get())
+      assertResult(service.nSimultaneousSubmissionConfirmations)(fakeDipConnector.maxSimultaneousConfirmationWaits.get())
 
     }
   }
-
 }

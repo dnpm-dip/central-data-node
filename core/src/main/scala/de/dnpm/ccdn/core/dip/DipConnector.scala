@@ -34,7 +34,7 @@ trait DipConnectorOps[F[_],Env,Err]
     report: Submission.Report
   )(
     implicit env: Env
-  ): F[Either[Err,Unit]]
+  ): F[Either[Err,Submission.Report]]
 
 }
 

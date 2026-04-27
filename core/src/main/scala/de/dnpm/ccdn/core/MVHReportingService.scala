@@ -8,11 +8,11 @@ import java.util.concurrent.{TimeUnit, Future => JavaFuture}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Success
 import cats.syntax.either._
+import cats.syntax.traverse._
 import de.dnpm.dip.util.Logging
 import de.dnpm.dip.model.NGSReport
 import de.dnpm.dip.service.mvh.Submission
 import Submission.Report.Status.{Submitted, Unsubmitted}
-import de.dnpm.ccdn.core.MVHReportingService.nConfirmationThreads
 import de.dnpm.ccdn.core.bfarm.BfarmConnector
 import de.dnpm.ccdn.core.dip.DipConnector
 
@@ -20,10 +20,6 @@ import de.dnpm.ccdn.core.dip.DipConnector
 object MVHReportingService
 {
   import scala.concurrent.ExecutionContext.Implicits.global
-
-  /** See [[MVHReportingService.confirmSubmissionsReports]]
-   */
-  private[core] val nConfirmationThreads = 32
 
   private[core] lazy val service =
     new MVHReportingService(
@@ -49,6 +45,7 @@ object MVHReportingService
 
     service.start()
   }
+
 }
 
 
@@ -62,6 +59,7 @@ class MVHReportingService
   implicit ec: ExecutionContext
 )
 extends Logging
+with BatchingUtil
 {
 
   /**
@@ -73,7 +71,7 @@ extends Logging
 
   /**
    * Regularly queries DIP sites for new submissions ([[pollReports]]), uploads them to
-   * BfArM ([[uploadReports]]) and sends a confirmation to dip sites ([[confirmSubmissionsReports]]).
+   * BfArM ([[uploadReports]]) and sends a confirmation to dip sites ([[confirmSubmissions]]).
    * The interval is retrieved from [[config#polling]]
    *
    * Before polling for new reports, the [[pollingQueue]] is checked for preexisting items,
@@ -125,10 +123,10 @@ extends Logging
               // Start by draining the report queue, if non-empty (in case the service had been interrupted) and
               // it thus contains reports whose upload hasn't been confirmed to the origin DIP), in order to avoid polling them again
               _ <- if (pollingQueue.exists(_.status == Unsubmitted)) uploadReports else Future.unit
-              _ <- if (pollingQueue.exists(_.status == Submitted)) confirmSubmissionsReports else Future.unit
+              _ <- if (pollingQueue.exists(_.status == Submitted)) confirmSubmissions else Future.unit
               _ <- pollReports
               _ <- uploadReports
-              _ <- confirmSubmissionsReports
+              _ <- confirmSubmissions
             } yield ()
             ()
           },
@@ -143,13 +141,9 @@ extends Logging
   def stop(): Unit = {
     log.info("Stopping MVH Reporting service")
 
-    //first stop higher order thread which would use threads in
-    // confirmationExecutor, then stop the latter
+    // Gracefully stop pollingTask, if running
     pollingTask.foreach(_ cancel false)
-    this.confirmationExecutor.shutdown()
-    if(! this.confirmationExecutor.awaitTermination(5,TimeUnit.SECONDS)){
-      this.confirmationExecutor.shutdownNow()
-    }
+
     log.debug("Finished stopping MVH Reporting service")
   }
 
@@ -165,49 +159,45 @@ extends Logging
     import bfarm.SubmissionReport.DiseaseType._
     import NGSReport.Type._
 
-    report =>
-      bfarm.SubmissionReport(
-        report.createdAt.toLocalDate,
-        report.`type`,
-        report.id,
-        config.submitterId(report.site.code),
-        config.dataNodeIds(report.useCase),
-        report.useCase match { 
-          case MTB => Oncological
-          case RD  => Rare
-        },
-        report.sequencingType.collect { 
-          case GenomeLongRead  => LibraryType.WGSLr
-          case GenomeShortRead => LibraryType.WGS
-          case Exome           => LibraryType.WES
-          case Panel           => LibraryType.Panel
-        }
-        .getOrElse(LibraryType.None),
-        report.healthInsuranceType
-      )
+    report => bfarm.SubmissionReport(
+      report.createdAt.toLocalDate,
+      report.`type`,
+      report.id,
+      config.submitterId(report.site.code),
+      config.dataNodeIds(report.useCase),
+      report.useCase match { 
+        case MTB => Oncological
+        case RD  => Rare
+      },
+      report.sequencingType.collect { 
+        case GenomeLongRead  => LibraryType.WGSLr
+        case GenomeShortRead => LibraryType.WGS
+        case Exome           => LibraryType.WES
+        case Panel           => LibraryType.Panel
+      }
+      .getOrElse(LibraryType.None),
+      report.healthInsuranceType
+    )
   }
 
 
   /**
-   * Communicates with all the configured DIP installations, queries them for new
-   * [[Submission.Report]] and stores them in the [[pollingQueue]] with status
-   * [[Unsubmitted]]
+   * Communicates with all the configured DIP nodes, queries them for new  [[Submission.Reports]], 
+   * i.e. with status [[Unsubmitted]], and stores them in the [[pollingQueue]]
    */
   private[core] def pollReports: Future[Any] = {
 
     log.info(s"Polling Reports from ${config.sites.size} sites with up to ${config.activeUseCases.size} usecases")
-    Future.traverse(
-      config.sites.toList.sortBy(_._1.value)
-    ){
-      case (site,info) =>
-
-        Future.traverse(
-          info.useCases intersect config.activeUseCases  // ensure only active use cases are polled
-        ){
-          useCase =>
-
-            log.debug(s"Polling $useCase SubmissionReports of $site")
-            dipConnector.submissionReports(
+    config.sites.toList
+      .sortBy(_._1.value) // Just for easier log reading: sort the sites alphabetically
+      .traverse {
+        case (site,info) =>
+          info.useCases.intersect(config.activeUseCases) // ensure only active use cases are polled
+            .toList
+            .traverse { useCase =>
+              
+              log.debug(s"Polling $useCase SubmissionReports of $site")
+              dipConnector.submissionReports(
                 site,
                 useCase,
                 Submission.Report.Filter(
@@ -216,9 +206,9 @@ extends Logging
               )
               .andThen {
                 case Success(Right(reports)) =>
-                  log.debug(s"Enqueuing ${reports.size} $useCase SubmissionReport")
+                  log.debug(s"Enqueuing ${reports.size} $useCase SubmissionReports")
                   pollingQueue.saveIfAbsent(reports)
-
+            
                 case Success(Left(err)) =>
                   log.error(s"Problem polling $useCase SubmissionReports of site $site: $err")
               }
@@ -228,9 +218,11 @@ extends Logging
                   log.error(s"Error(s) occurred polling $useCase SubmissionReports of $site", t)
                   t.getMessage.asLeft
               }
-        }
-    }
+          }
+      }
+
   }
+
 
   /**
    * Communicates with the BfArM, sends them [[BfarmReport]] entities, each based
@@ -241,9 +233,7 @@ extends Logging
 
     log.info("Uploading SubmissionReports...")
    
-    Future.traverse(
-      pollingQueue.entries(_.status == Unsubmitted)
-    )(
+    pollingQueue.entries(_.status == Unsubmitted).traverse(
       report =>
         bfarmConnector.upload(BfarmReport(report))
           .map {
@@ -262,49 +252,51 @@ extends Logging
               t.getMessage.asLeft
           }
     )
-    
+
   }
 
   /**
-   * Used to gracefully end calls to [[confirmSubmissionsReports]] on shutdown
+   * Limits the number of submissions that can be processed simultaneously in [[confirmSubmissions]],
+   * which is additionally limited by the actual number of available threads
    */
-  private val confirmationExecutor = Executors.newFixedThreadPool(nConfirmationThreads)
-  private val confirmationExecutionContext = ExecutionContext.fromExecutor(confirmationExecutor)
+  private[core] val nSimultaneousSubmissionConfirmations:Int = 50
 
   /**
-   * Communicates with the DIP sites to confirm to them that a submission has
-   * been sent to the BfArM. If successful the submission is removed from [[pollingQueue]]
-   * Runs with an overridden threadpool to limit simultaneous executions. The DIP nodes
-   * are topographically placed behind an Apache Tomcat server, which only handles
-   * up to 200 sockets simultaneously by default. If a node is offline for some
-   * time, the accrued submissions can lead to a deadlock without this limit
+   * Send "submission confirmations" to the DIP nodes for each SubmissionReport that has
+   * been successfully submitted to BfArM. If successful the SubmissionReport is removed from [[pollingQueue]]
+   *
+   * NOTE: Given that some DIP nodes are placed behind an Apache Tomcat server, which only
+   * handles up to 200 sockets simultaneously by default, explicit batching is applied
+   * to avoid deadlock in case more than 200 SubmissionReports were processed in parallel here. 
    */
-  private[core] def confirmSubmissionsReports: Future[Seq[Either[String,Unit]]] = {
 
-    implicit val ec:ExecutionContext = confirmationExecutionContext
-    log.info("Confirming report submissions...")
-    Future.traverse(
-      pollingQueue.entries(_.status == Submitted)
+  private[core] def confirmSubmissions: Future[Seq[Either[String,Submission.Report]]] =
+    batchTraverse(
+      pollingQueue.entries(_.status == Submitted),
+      nSimultaneousSubmissionConfirmations
     )(
-      report =>
-      dipConnector.confirmSubmitted(report)
-        .map {
-          case Right(_) =>
-            log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
-            pollingQueue.removeFromQueue(report)
+      report => dipConnector.confirmSubmitted(report).map {
+        case Right(_) =>
+          pollingQueue.removeFromQueue(report).map(_ => report)
+        
+        case Left(msg) =>
+          s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - $msg".asLeft
+      }
+      .andThen { 
+        case Success(Right(_)) =>
+          log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
 
-          case err@Left(msg) =>
-            log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - $msg")
-            err
-        }
-        // Recover lest the Future traversal be "short-circuited" into a failed Future
-        .recover {
-          case t =>
-            log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - ${t.getMessage}")
-            t.getMessage.asLeft
-        }
-
+        // Logs either the error message from the submission confirmation request or from queue removal
+        case Success(Left(msg)) =>
+          log.error(msg)
+      }
+      // Recover lest the Future traversal be "short-circuited" into a failed Future 
+      .recover {
+        case t =>
+          log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - ${t.getMessage}")
+          t.getMessage.asLeft
+      }
+      
     )
 
-  }
 }
