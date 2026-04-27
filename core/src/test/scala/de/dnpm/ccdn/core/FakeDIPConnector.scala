@@ -3,6 +3,7 @@ package de.dnpm.ccdn.core
 
 import java.time.LocalDateTime
 import java.util.UUID.randomUUID
+import java.util.concurrent.atomic.AtomicInteger
 import scala.util.Random
 import scala.concurrent.{ExecutionContext, Future}
 import cats.syntax.either._
@@ -17,10 +18,28 @@ final class FakeDIPConnectorProvider extends dip.DipConnectorProvider
     new FakeDIPConnector
 }
 
+object FakeDIPConnector {
+  final val uploadDelayMsec = 100
+}
+
 class FakeDIPConnector extends dip.DipConnector
 {
+  /**
+   * There will be an arbitrary number of submissions between 5 and 15
+   * that each remote site will return
+   */
+  var nSubmissions: Int = new Random().nextInt(10) + 5
 
-  private val rnd = new Random
+  /**
+   * Counts currently active pseudo confirmations in [[confirmSubmitted()]]
+   */
+  val nActiveConfirmationWaits = new AtomicInteger(0)
+  /**
+   * Counts the maximum number of [[nActiveConfirmationWaits]]
+   */
+  val maxSimultaneousConfirmationWaits = new AtomicInteger(0)
+
+  var confirmationsTakeTime: Boolean = false
 
 
   private def rndReport(
@@ -50,9 +69,8 @@ class FakeDIPConnector extends dip.DipConnector
   )(
     implicit ec: ExecutionContext
   ): Future[Either[String,Seq[Submission.Report]]] =
-    // Return between 5 and 15 of Submission.Reports 
     Future.successful(
-      Seq.fill(rnd.nextInt(10) + 5)(rndReport(site,useCase)).asRight
+      Seq.fill(nSubmissions)(rndReport(site,useCase)).asRight
     )
 
   override def confirmSubmitted(
@@ -60,6 +78,18 @@ class FakeDIPConnector extends dip.DipConnector
   )(
     implicit ec: ExecutionContext
   ): Future[Either[String,Submission.Report]] =
-    Future.successful(report.asRight)
+    if (confirmationsTakeTime) {
+      Future {
+        nActiveConfirmationWaits.updateAndGet(oldCount => {
+          maxSimultaneousConfirmationWaits.updateAndGet(oldMax => Math.max(oldMax, oldCount + 1))
+          oldCount + 1
+        })
+        Thread.sleep(FakeDIPConnector.uploadDelayMsec)
+        nActiveConfirmationWaits.updateAndGet(old => old - 1)
+        report.asRight
+      }
+    } else {
+      Future.successful(report.asRight)
+    }
 
 }

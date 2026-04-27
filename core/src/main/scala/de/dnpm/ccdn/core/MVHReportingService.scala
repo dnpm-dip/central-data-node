@@ -255,6 +255,11 @@ with BatchingUtil
 
   }
 
+  /**
+   * Limits the number of submissions that can be processed simultaneously in [[confirmSubmissions]],
+   * which is additionally limited by the actual number of available threads
+   */
+  private[core] val nSimultaneousSubmissionConfirmations:Int = 50
 
   /**
    * Send "submission confirmations" to the DIP nodes for each SubmissionReport that has
@@ -268,7 +273,7 @@ with BatchingUtil
   private[core] def confirmSubmissions: Future[Seq[Either[String,Submission.Report]]] =
     batchTraverse(
       pollingQueue.entries(_.status == Submitted),
-      50
+      nSimultaneousSubmissionConfirmations
     )(
       report => dipConnector.confirmSubmitted(report).map {
         case Right(_) =>
