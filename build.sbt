@@ -45,7 +45,8 @@ lazy val core = project
       dependencies.logback,
       dependencies.mtb_dtos,
       dependencies.rd_dtos,
-      dependencies.service_base
+      dependencies.service_base,
+      dependencies.mongo4cats
     ),
     assembly / assemblyJarName := "dnpm-ccdn-core.jar",
     assembly / mainClass       := Some("de.dnpm.ccdn.core.MVHReportingService")
@@ -93,6 +94,7 @@ lazy val dependencies =
     val service_base = "de.dnpm.dip"       %% "service-base"            % "1.2.0"
     val mtb_dtos     = "de.dnpm.dip"       %% "mtb-dto-model"           % "1.1.2"
     val rd_dtos      = "de.dnpm.dip"       %% "rd-dto-model"            % "1.1.2"
+    val mongo4cats   = "io.github.kirill5k" %% "mongo4cats-core"         % "0.7.13"
   }
 
 

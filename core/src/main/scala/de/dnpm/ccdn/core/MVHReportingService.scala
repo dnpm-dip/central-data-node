@@ -8,6 +8,10 @@ import java.util.concurrent.{TimeUnit, Future => JavaFuture}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Success
 import cats.syntax.either._
+import cats.effect.IO
+import mongo4cats.bson.Document
+import mongo4cats.bson.syntax._
+import mongo4cats.client.MongoClient
 import de.dnpm.dip.util.Logging
 import de.dnpm.dip.model.NGSReport
 import de.dnpm.dip.service.mvh.Submission
