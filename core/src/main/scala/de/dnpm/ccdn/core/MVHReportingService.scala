@@ -9,6 +9,10 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Success
 import cats.syntax.either._
 import cats.syntax.traverse._
+import cats.effect.IO
+import mongo4cats.bson.Document
+import mongo4cats.bson.syntax._
+import mongo4cats.client.MongoClient
 import de.dnpm.dip.util.Logging
 import de.dnpm.dip.model.NGSReport
 import de.dnpm.dip.service.mvh.Submission
@@ -165,11 +169,11 @@ with BatchingUtil
       report.id,
       config.submitterId(report.site.code),
       config.dataNodeIds(report.useCase),
-      report.useCase match { 
+      report.useCase match {
         case MTB => Oncological
         case RD  => Rare
       },
-      report.sequencingType.collect { 
+      report.sequencingType.collect {
         case GenomeLongRead  => LibraryType.WGSLr
         case GenomeShortRead => LibraryType.WGS
         case Exome           => LibraryType.WES
@@ -182,7 +186,7 @@ with BatchingUtil
 
 
   /**
-   * Communicates with all the configured DIP nodes, queries them for new  [[Submission.Reports]], 
+   * Communicates with all the configured DIP nodes, queries them for new  [[Submission.Reports]],
    * i.e. with status [[Unsubmitted]], and stores them in the [[pollingQueue]]
    */
   private[core] def pollReports: Future[Any] = {
@@ -195,7 +199,7 @@ with BatchingUtil
           info.useCases.intersect(config.activeUseCases) // ensure only active use cases are polled
             .toList
             .traverse { useCase =>
-              
+
               log.debug(s"Polling $useCase SubmissionReports of $site")
               dipConnector.submissionReports(
                 site,
@@ -208,7 +212,7 @@ with BatchingUtil
                 case Success(Right(reports)) =>
                   log.debug(s"Enqueuing ${reports.size} $useCase SubmissionReports")
                   pollingQueue.saveIfAbsent(reports)
-            
+
                 case Success(Left(err)) =>
                   log.error(s"Problem polling $useCase SubmissionReports of site $site: $err")
               }
@@ -267,7 +271,7 @@ with BatchingUtil
    *
    * NOTE: Given that some DIP nodes are placed behind an Apache Tomcat server, which only
    * handles up to 200 sockets simultaneously by default, explicit batching is applied
-   * to avoid deadlock in case more than 200 SubmissionReports were processed in parallel here. 
+   * to avoid deadlock in case more than 200 SubmissionReports were processed in parallel here.
    */
 
   private[core] def confirmSubmissions: Future[Seq[Either[String,Submission.Report]]] =
@@ -278,11 +282,11 @@ with BatchingUtil
       report => dipConnector.confirmSubmitted(report).map {
         case Right(_) =>
           pollingQueue.removeFromQueue(report).map(_ => report)
-        
+
         case Left(msg) =>
           s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - $msg".asLeft
       }
-      .andThen { 
+      .andThen {
         case Success(Right(_)) =>
           log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
 
@@ -290,13 +294,13 @@ with BatchingUtil
         case Success(Left(msg)) =>
           log.error(msg)
       }
-      // Recover lest the Future traversal be "short-circuited" into a failed Future 
+      // Recover lest the Future traversal be "short-circuited" into a failed Future
       .recover {
         case t =>
           log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - ${t.getMessage}")
           t.getMessage.asLeft
       }
-      
+
     )
 
 }

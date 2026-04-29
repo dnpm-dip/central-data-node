@@ -43,7 +43,8 @@ lazy val core = project
       dependencies.scalatest,
       dependencies.logback,
       dependencies.service_base,
-      dependencies.bfarm_dto_base
+      dependencies.bfarm_dto_base,
+      dependencies.mongo4cats
     ),
     assembly / assemblyJarName := "dnpm-ccdn-core.jar",
     assembly / mainClass       := Some("de.dnpm.ccdn.core.MVHReportingService")
@@ -79,6 +80,7 @@ lazy val dependencies =
     val play_ahc_js    = "org.playframework" %% "play-ws-standalone-json" % "3.0.7"
     val service_base   = "de.dnpm.dip"       %% "service-base"            % "1.3.1"
     val bfarm_dto_base = "de.dnpm"           %% "dnpm-bfarm-model-base"   % "1.0.1"
+    val mongo4cats   = "io.github.kirill5k" %% "mongo4cats-core"         % "0.7.13"
   }
 
 
