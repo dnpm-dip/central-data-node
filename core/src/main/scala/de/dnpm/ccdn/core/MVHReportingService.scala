@@ -1,7 +1,7 @@
 package de.dnpm.ccdn.core
 
 
-import java.time.LocalTime
+import java.time.{Instant, LocalTime}
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.{Executors, ScheduledExecutorService}
 import java.util.concurrent.{TimeUnit, Future => JavaFuture}
@@ -14,11 +14,14 @@ import mongo4cats.bson.Document
 import mongo4cats.bson.syntax._
 import mongo4cats.client.MongoClient
 import de.dnpm.dip.util.Logging
-import de.dnpm.dip.model.NGSReport
+import de.dnpm.dip.model.{NGSReport, Site}
 import de.dnpm.dip.service.mvh.Submission
 import Submission.Report.Status.{Submitted, Unsubmitted}
 import de.dnpm.ccdn.core.bfarm.BfarmConnector
 import de.dnpm.ccdn.core.dip.DipConnector
+import de.dnpm.dip.coding.Code
+
+import scala.collection.mutable.ListBuffer
 
 
 object MVHReportingService
@@ -66,6 +69,23 @@ extends Logging
 with BatchingUtil
 {
 
+  private val mongoUri: Option[String] = sys.env.get("CCDN_MONGODB_URI") //TODO maybe put this into config
+
+  private def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport]): Unit =
+    mongoUri.foreach { uri =>
+      import cats.effect.unsafe.implicits.global
+      MongoClient.fromConnectionString[IO](uri).use { client =>
+        for {
+          db   <- client.getDatabase("ccdn")
+          coll <- db.getCollection("siteAvailabilityReports")
+          now   = Instant.now
+          docs  = reports.map(r => Document("site" := r.site.value, "responsivity" := r.responsivity.toString, "timestamp" := now)).toList
+          _    <- coll.insertMany(docs)
+        } yield ()
+      }.unsafeRunAndForget()
+    }
+
+
   /**
    * Executes the runnable in [[pollingTask]] in regular intervals
    */
@@ -79,7 +99,7 @@ with BatchingUtil
    * The interval is retrieved from [[config#polling]]
    *
    * Before polling for new reports, the [[pollingQueue]] is checked for preexisting items,
-   * which are processed before polling for new items in [[pollReports]]
+   * which are pro  cessed before polling for new items in [[pollReports]]
    *
    * The state of this process is stored in the [[pollingQueue]] and in the
    * [[Submission.Report.status]] of it's items.
@@ -101,6 +121,7 @@ with BatchingUtil
     log.info("Starting MVH Reporting service")
     log.info(s"Active Use Cases: ${config.activeUseCases.mkString(", ")}")
     log.info(s"Active sites: ${config.sites.keys.toList.sortBy(_.value).mkString(", ")}")
+    log.info(s"Mongodb uri: ${mongoUri}")
 
     val period =
       config.polling.period*toSeconds(config.polling.timeUnit)
@@ -122,16 +143,36 @@ with BatchingUtil
       Some(
         pollingExecutor.scheduleAtFixedRate(
           () => {
-            log.info(s"Conducting scheduled reporting workflow ${if(pollingQueue.exists(_ => true)) "with" else "without"} preexisting items in the queue")
+            log.info(s"Conducting scheduled reporting workflow ${if (pollingQueue.exists(_ => true)) "with" else "without"} preexisting items in the queue")
+
+            //responseLog stores notes about how well a site could be communicated with.
+            // checkSiteApiVersion will store a success item for every site that was
+            // available, so it is sufficient for the other functions to merely report
+            // failures. The endresult is reduced into a single value per site after the for loop.
+            val responseLog: ListBuffer[ResponsivityReport] = ListBuffer()
+
             for {
+              validSites <- checkSiteApiVersion(responseLog)
               // Start by draining the report queue, if non-empty (in case the service had been interrupted) and
               // it thus contains reports whose upload hasn't been confirmed to the origin DIP), in order to avoid polling them again
               _ <- if (pollingQueue.exists(_.status == Unsubmitted)) uploadReports else Future.unit
-              _ <- if (pollingQueue.exists(_.status == Submitted)) confirmSubmissions else Future.unit
-              _ <- pollReports
+              _ <- if (pollingQueue.exists(_.status == Submitted)) confirmSubmissions(responseLog) else Future.unit
+              _ <- pollReports(validSites,responseLog)
               _ <- uploadReports
-              _ <- confirmSubmissions
-            } yield ()
+              _ <- confirmSubmissions(responseLog)
+            } yield {
+              writeSiteAvailabilityReports(
+                responseLog
+                  .groupBy(_.site)
+                  .map { case (site, reports) =>
+                    val responsivity =
+                      if (reports.forall(_.responsivity == Responsivity.success)) Responsivity.success
+                      else if (reports.forall(_.responsivity == Responsivity.failure)) Responsivity.failure
+                      else Responsivity.mixedSuccess
+                    ResponsivityReport(site, responsivity)
+                  }
+              )
+            }
             ()
           },
           delay,
@@ -140,6 +181,17 @@ with BatchingUtil
         )
       )
   }
+
+  /**
+   * How a site responded to requests. A record can consist of multiple items
+   * for the same site and can be reduced to single value. Mixed reports reduce to [[mixedSuccess]]
+   */
+  object Responsivity extends Enumeration {
+    val success = Value("fully")
+    val mixedSuccess = Value("partial")
+    val failure = Value("offline")
+  }
+  case class ResponsivityReport(val site:Code[Site],val responsivity: Responsivity.Value)
 
 
   def stop(): Unit = {
@@ -185,14 +237,47 @@ with BatchingUtil
   }
 
 
+  private val isSiteApiVersionSupported: String => Boolean = _ == "1.2.3"
+
+  /**
+   *
+   * @param availabilityBuffer used to collect information on how well a site could be communicated with.
+   *                           This function should store a value for every site in [[config.sites]],
+   *                           either [[Responsivity.failure]] or [[Responsivity.success]]
+   * @return a list of sites that responded with a site code that is supported by the MVH network.
+   */
+  private[core] def checkSiteApiVersion(availabilityBuffer:ListBuffer[ResponsivityReport]): Future[Seq[Code[Site]]] = {
+    Future.traverse(config.sites.keys.toSeq) { site =>
+      dipConnector.getApiVersion(site)
+        .map {
+          case Right(v) if isSiteApiVersionSupported(v) =>
+            availabilityBuffer += ResponsivityReport(site, Responsivity.success)
+            Some(site)
+          case Right(_) =>
+            availabilityBuffer += ResponsivityReport(site, Responsivity.success)
+            None
+          case Left(_) =>
+            availabilityBuffer += ResponsivityReport(site, Responsivity.failure)
+            None
+        }
+        .recover {
+          case _ =>
+            availabilityBuffer += ResponsivityReport(site, Responsivity.failure)
+            None
+        }
+    }.map(_.flatten)
+  }
+
   /**
    * Communicates with all the configured DIP nodes, queries them for new  [[Submission.Reports]],
    * i.e. with status [[Unsubmitted]], and stores them in the [[pollingQueue]]
    */
-  private[core] def pollReports: Future[Any] = {
-
+  private[core] def pollReports(validSites: Seq[Code[Site]],
+                                availabilityBuffer:ListBuffer[ResponsivityReport])
+  : Future[Any] = {
     log.info(s"Polling Reports from ${config.sites.size} sites with up to ${config.activeUseCases.size} usecases")
     config.sites.toList
+      .filter(configVal => validSites.contains(configVal._1))
       .sortBy(_._1.value) // Just for easier log reading: sort the sites alphabetically
       .traverse {
         case (site,info) =>
@@ -214,12 +299,14 @@ with BatchingUtil
                   pollingQueue.saveIfAbsent(reports)
 
                 case Success(Left(err)) =>
-                  log.error(s"Problem polling $useCase SubmissionReports of site $site: $err")
+                  log.error(s"Problem polling $useCase SubmissionReports of site $curSite: $err")
+                  availabilityBuffer += ResponsivityReport(curSite,Responsivity.failure)
               }
               // Recover lest the Future traversal be "short-circuited" into a failed Future
               .recover {
                 case t =>
-                  log.error(s"Error(s) occurred polling $useCase SubmissionReports of $site", t)
+                  log.error(s"Error(s) occurred polling $useCase SubmissionReports of $curSite", t)
+                  availabilityBuffer += ResponsivityReport(curSite,Responsivity.failure)
                   t.getMessage.asLeft
               }
           }
@@ -274,7 +361,7 @@ with BatchingUtil
    * to avoid deadlock in case more than 200 SubmissionReports were processed in parallel here.
    */
 
-  private[core] def confirmSubmissions: Future[Seq[Either[String,Submission.Report]]] =
+  private[core] def confirmSubmissions(availabilityBuffer:ListBuffer[ResponsivityReport]): Future[Seq[Either[String,Submission.Report]]] =
     batchTraverse(
       pollingQueue.entries(_.status == Submitted),
       nSimultaneousSubmissionConfirmations
@@ -292,12 +379,14 @@ with BatchingUtil
 
         // Logs either the error message from the submission confirmation request or from queue removal
         case Success(Left(msg)) =>
+          availabilityBuffer += ResponsivityReport(report.site.code,Responsivity.failure)
           log.error(msg)
       }
       // Recover lest the Future traversal be "short-circuited" into a failed Future
       .recover {
         case t =>
           log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - ${t.getMessage}")
+          availabilityBuffer += ResponsivityReport(report.site.code,Responsivity.failure)
           t.getMessage.asLeft
       }
 
