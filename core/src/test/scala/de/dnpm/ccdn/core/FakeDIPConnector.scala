@@ -92,4 +92,9 @@ class FakeDIPConnector extends dip.DipConnector
       Future.successful(report.asRight)
     }
 
+  /**
+   * Asks the given site what version it is and returns the version string (extracted from json)
+   */
+  override def getApiVersion(site: Code[Site])(implicit env: ExecutionContext): Future[Either[String, String]] =
+    Future.successful(Right("1.2.3"))
 }

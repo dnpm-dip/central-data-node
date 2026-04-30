@@ -145,13 +145,24 @@ with BatchingUtil
           () => {
             log.info(s"Conducting scheduled reporting workflow ${if (pollingQueue.exists(_ => true)) "with" else "without"} preexisting items in the queue")
 
+            def coalesceResponsivityReports(responseLog: ListBuffer[ResponsivityReport]) = {
+              responseLog
+                .groupBy(_.site)
+                .map { case (site, reports) =>
+                  val responsivity =
+                    if (reports.forall(_.responsivity == Responsivity.success)) Responsivity.success
+                    else if (reports.forall(_.responsivity == Responsivity.failure)) Responsivity.failure
+                    else Responsivity.mixedSuccess
+                  ResponsivityReport(site, responsivity)
+                }
+            }
+
             //responseLog stores notes about how well a site could be communicated with.
             // checkSiteApiVersion will store a success item for every site that was
             // available, so it is sufficient for the other functions to merely report
             // failures. The endresult is reduced into a single value per site after the for loop.
-            val responseLog: ListBuffer[ResponsivityReport] = ListBuffer()
-
             for {
+              responseLog <- Future.successful(ListBuffer[ResponsivityReport]())
               validSites <- checkSiteApiVersion(responseLog)
               // Start by draining the report queue, if non-empty (in case the service had been interrupted) and
               // it thus contains reports whose upload hasn't been confirmed to the origin DIP), in order to avoid polling them again
@@ -161,17 +172,7 @@ with BatchingUtil
               _ <- uploadReports
               _ <- confirmSubmissions(responseLog)
             } yield {
-              writeSiteAvailabilityReports(
-                responseLog
-                  .groupBy(_.site)
-                  .map { case (site, reports) =>
-                    val responsivity =
-                      if (reports.forall(_.responsivity == Responsivity.success)) Responsivity.success
-                      else if (reports.forall(_.responsivity == Responsivity.failure)) Responsivity.failure
-                      else Responsivity.mixedSuccess
-                    ResponsivityReport(site, responsivity)
-                  }
-              )
+              writeSiteAvailabilityReports(coalesceResponsivityReports(responseLog))
             }
             ()
           },

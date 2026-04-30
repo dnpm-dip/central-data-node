@@ -8,6 +8,8 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
 
+import scala.collection.mutable.ListBuffer
+
 
 
 final class MVHReportingServiceTests extends AsyncFlatSpec
@@ -21,7 +23,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
   val fakeDipConnector = new FakeDIPConnector
   val fakeBfarmConnector = new FakeBfarmConnector
 
-  val service = 
+  val service =
     new MVHReportingService(
       Config.instance,
       ReportRepository.getInstance.get,
@@ -29,18 +31,19 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       fakeBfarmConnector
     )
 
+  val sites = Config.instance.sites.keys.toSeq
 
   it must "handle multiple uploads from every DIP node in one go" in {
     log.info("FakeDipConnector sending "+fakeDipConnector.nSubmissions+ " submissions per site")
     for {
       
-      _ <- service.pollReports
+      _ <- service.pollReports(sites,ListBuffer.empty)
       
       _ = service.pollingQueue.entries(_ => true) must not be (empty)
 
       _ <- service.uploadReports
 
-      _ <- service.confirmSubmissions
+      _ <- service.confirmSubmissions(ListBuffer.empty)
 
     } yield service.pollingQueue.entries(_ => true) must be (empty)
   }
@@ -60,11 +63,11 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     //run
     for{
 
-      _ <- service.pollReports
+      _ <- service.pollReports(sites, ListBuffer.empty)
 
       _ <- service.uploadReports
 
-      _ <- service.confirmSubmissions
+      _ <- service.confirmSubmissions(ListBuffer.empty)
 
     } yield{
       assertResult(service.nSimultaneousSubmissionConfirmations)(fakeDipConnector.maxSimultaneousConfirmationWaits.get())
