@@ -1,11 +1,12 @@
 package de.dnpm.ccdn.core
 
 
-import java.time.{Instant, LocalTime}
+import java.time.{Clock, Instant, LocalDate, LocalTime}
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.{Executors, ScheduledExecutorService}
 import java.util.concurrent.{TimeUnit, Future => JavaFuture}
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.duration.Duration
 import scala.util.Success
 import cats.syntax.either._
 import cats.syntax.traverse._
@@ -71,19 +72,26 @@ with BatchingUtil
 
   private val mongoUri: Option[String] = sys.env.get("CCDN_MONGODB_URI") //TODO maybe put this into config
 
-  private def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport]): Unit =
+  private[core] var clock: Clock = Clock.systemUTC()
+
+  private def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport], now: Instant): Unit =
     mongoUri.foreach { uri =>
       import cats.effect.unsafe.implicits.global
       MongoClient.fromConnectionString[IO](uri).use { client =>
         for {
           db   <- client.getDatabase("ccdn")
           coll <- db.getCollection("siteAvailabilityReports")
-          now   = Instant.now
-          docs  = reports.map(r => Document("site" := r.site.value, "responsivity" := r.responsivity.toString, "timestamp" := now)).toList
+          docs  = reports.map(r => Document(
+            "site" := r.site.value,
+            "responsivity" := r.responsivity.toString,
+            "timestamp" := now)).toList
           _    <- coll.insertMany(docs)
         } yield ()
       }.unsafeRunAndForget()
     }
+
+  private[core] var responsivitySink: (Iterable[ResponsivityReport], Instant) => Unit =
+    writeSiteAvailabilityReports
 
 
   /**
@@ -106,7 +114,7 @@ with BatchingUtil
    *
    * Managed by [[pollingExecutor]]
    */
-  private var pollingTask: Option[JavaFuture[_]] = None
+  private[core] var pollingTask: Option[JavaFuture[_]] = None
 
   private val toSeconds =
     Map(
@@ -142,20 +150,38 @@ with BatchingUtil
     pollingTask =
       Some(
         pollingExecutor.scheduleAtFixedRate(
-          () => {
-            log.info(s"Conducting scheduled reporting workflow ${if (pollingQueue.exists(_ => true)) "with" else "without"} preexisting items in the queue")
+          () => try {
+            Await.result(conductReportingWorkflow(), Duration(45, TimeUnit.MINUTES))
+          } catch {
+            case _: java.util.concurrent.TimeoutException =>
+              log.error("Reporting workflow did not complete within the 45-minute timeout")
+          },
+          delay,
+          period,
+          TimeUnit.SECONDS
+        )
+      )
+  }
 
-            def coalesceResponsivityReports(responseLog: ListBuffer[ResponsivityReport]) = {
-              responseLog
-                .groupBy(_.site)
-                .map { case (site, reports) =>
-                  val responsivity =
-                    if (reports.forall(_.responsivity == Responsivity.success)) Responsivity.success
-                    else if (reports.forall(_.responsivity == Responsivity.failure)) Responsivity.failure
-                    else Responsivity.mixedSuccess
-                  ResponsivityReport(site, responsivity)
-                }
-            }
+  /**
+   * Executes one full cycle of the reporting workflow: checks site API versions,
+   * drains any pre-existing queue entries, polls new reports, uploads them to
+   * BfArM, and confirms back. Logs responsivity into [[responsivitySink]]
+   */
+  private[core] def conductReportingWorkflow(): Future[Unit] = {
+
+    log.info(s"Conducting scheduled reporting workflow ${if (pollingQueue.exists(_ => true)) "with" else "without"} preexisting items in the queue")
+
+    def coalesceResponsivityReports(responseLog: ListBuffer[ResponsivityReport]) =
+      responseLog
+        .groupBy(_.site)
+        .map { case (site, reports) =>
+          val responsivity =
+            if (reports.forall(_.responsivity == Responsivity.success)) Responsivity.success
+            else if (reports.forall(_.responsivity == Responsivity.failure)) Responsivity.failure
+            else Responsivity.mixedSuccess
+          ResponsivityReport(site, responsivity)
+        }
 
             //responseLog stores notes about how well a site could be communicated with.
             // checkSiteApiVersion will store a success item for every site that was
@@ -238,7 +264,9 @@ with BatchingUtil
   }
 
 
-  private val isSiteApiVersionSupported: String => Boolean = _ == "1.2.3"
+  private val versionCutoverDate: LocalDate = LocalDate.of(2026, 6, 1)
+  private val isSiteApiVersionSupported: String => Boolean = version =>
+    LocalDate.now(clock).isBefore(versionCutoverDate) || (version >= "1.3")
 
   /**
    *
