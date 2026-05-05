@@ -129,6 +129,42 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     }
   }
 
+  it must "produce Responsivity.mixedSuccess when version check succeeds but data requests fail" in {
+    val preCutover = Instant.parse("2026-04-30T12:00:00Z")
+
+    val failingDataConnector = new dip.DipConnector {
+      override def getApiVersion(site: Code[Site])(implicit env: ExecutionContext): Future[Either[String, String]] =
+        Future.successful(Right("1.3.0"))
+      override def submissionReports(site: Code[Site], useCase: UseCase.Value, filter: Submission.Report.Filter)
+          (implicit ec: ExecutionContext): Future[Either[String, Seq[Submission.Report]]] =
+        Future.successful(Left("simulated data request failure"))
+      override def confirmSubmitted(report: Submission.Report)(implicit ec: ExecutionContext): Future[Either[String, Unit]] =
+        Future.successful(Right(()))
+    }
+
+    val testService = new MVHReportingService(
+      Config.instance,
+      FakeReportRepository(),
+      failingDataConnector,
+      FakeBfarmConnector()
+    )
+    testService.clock = Clock.fixed(preCutover, ZoneOffset.UTC)
+
+    val capturedResponsivityReports = ListBuffer.empty[testService.ResponsivityReport]
+    testService.responsivitySink = { (reports, _) =>
+      capturedResponsivityReports ++= reports
+    }
+
+    for {
+      _ <- testService.conductReportingWorkflow()
+    } yield {
+      val expectedSites = Config.instance.sites.keys.toSet
+      //conductReportingWorkflow would have created more than one report, but they would be coalesced into one each
+      capturedResponsivityReports.map(_.site).toSet mustEqual expectedSites
+      assert(capturedResponsivityReports.forall(_.responsivity == testService.Responsivity.mixedSuccess))
+    }
+  }
+
   it must " not process more submissions simultaneously than it has threads (non-deterministic)" in {
     //configure bfarmconnecteor to halt for 100 msec during upload
 
