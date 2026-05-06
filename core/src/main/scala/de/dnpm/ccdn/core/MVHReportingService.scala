@@ -69,27 +69,31 @@ class MVHReportingService
 extends Logging
 with BatchingUtil
 {
-
-  private val mongoUri: Option[String] = sys.env.get("CCDN_MONGODB_URI") //TODO maybe put this into config
-
   private[core] var clock: Clock = Clock.systemUTC()
 
   private def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport], now: Instant): Unit =
-    mongoUri.foreach { uri =>
-      import cats.effect.unsafe.implicits.global
-      MongoClient.fromConnectionString[IO](uri).use { client =>
-        for {
-          db   <- client.getDatabase("ccdn")
-          coll <- db.getCollection("siteAvailabilityReports")
-          docs  = reports.map(r => Document(
-            "site" := r.site.value,
-            "responsivity" := r.responsivity.toString,
-            "timestamp" := now)).toList
-          _    <- coll.insertMany(docs)
-        } yield ()
-      }.unsafeRunAndForget()
+    config.mongoUri match {
+      case Some(uri) =>
+        import cats.effect.unsafe.implicits.global
+        MongoClient.fromConnectionString[IO](uri).use { client =>
+          for {
+            db   <- client.getDatabase("ccdn")
+            coll <- db.getCollection("siteAvailabilityReports")
+            docs  = reports.map(r => Document(
+              "site" := r.site.value,
+              "responsivity" := r.responsivity.toString,
+              "timestamp" := now)).toList
+            _    <- coll.insertMany(docs)
+          } yield ()
+        }.unsafeRunAndForget()
+      case None =>
+        log.warn("CCDN_MONGODB_URI is not configured; site availability reports will not be persisted")
     }
 
+  /**
+   * Abstraction of logging responsivity reports for the purpose of having
+   * customization in unit tests
+   */
   private[core] var responsivitySink: (Iterable[ResponsivityReport], Instant) => Unit =
     writeSiteAvailabilityReports
 
@@ -129,7 +133,11 @@ with BatchingUtil
     log.info("Starting MVH Reporting service")
     log.info(s"Active Use Cases: ${config.activeUseCases.mkString(", ")}")
     log.info(s"Active sites: ${config.sites.keys.toList.sortBy(_.value).mkString(", ")}")
-    log.info(s"Mongodb uri: ${mongoUri}")
+    if(config.mongoUri.isDefined) {
+      log.debug(s"Mongodb uri: ${config.mongoUri.get}")
+    } else{
+      log.warn("Mongodb uri is undefined")
+    }
 
     val period =
       config.polling.period*toSeconds(config.polling.timeUnit)
@@ -218,7 +226,7 @@ with BatchingUtil
     val mixedSuccess = Value("partial")
     val failure = Value("offline")
   }
-  case class ResponsivityReport(val site:Code[Site],val responsivity: Responsivity.Value)
+  case class ResponsivityReport(site:Code[Site],responsivity: Responsivity.Value)
 
 
   def stop(): Unit = {

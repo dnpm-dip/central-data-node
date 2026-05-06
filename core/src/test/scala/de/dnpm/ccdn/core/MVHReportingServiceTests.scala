@@ -64,7 +64,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       Future.successful(Right(()))
   }
 
-  it must "record success responsivity for every reachable site in conductPollingCycle and capture the correct timestamp" in {
+  it must "record Responsivity.success for every reachable site in conductPollingCycle and capture the correct timestamp" in {
     // Responsivity reflects connectivity (Right response), not version acceptance.
     // Any version yields success before the cutover date.
     val fixedInstant = Instant.parse("2026-04-30T12:00:00Z")
@@ -108,7 +108,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
   it must "include sites with a 1.3.x version as valid on and after the cutover date" in {
     val onCutover = Instant.parse("2026-06-01T00:00:00Z")
     val testService = new MVHReportingService(
-      Config.instance, FakeReportRepository(), connectorReturningVersion("1.3.0"), FakeBfarmConnector()
+      Config.instance, FakeReportRepository(), connectorReturningVersion("1.3.0-RELEASE_5"), FakeBfarmConnector()
     )
     testService.clock = Clock.fixed(onCutover, ZoneOffset.UTC)
 
