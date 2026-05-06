@@ -191,30 +191,23 @@ with BatchingUtil
           ResponsivityReport(site, responsivity)
         }
 
-            //responseLog stores notes about how well a site could be communicated with.
-            // checkSiteApiVersion will store a success item for every site that was
-            // available, so it is sufficient for the other functions to merely report
-            // failures. The endresult is reduced into a single value per site after the for loop.
-            for {
-              responseLog <- Future.successful(ListBuffer[ResponsivityReport]())
-              validSites <- checkSiteApiVersion(responseLog)
-              // Start by draining the report queue, if non-empty (in case the service had been interrupted) and
-              // it thus contains reports whose upload hasn't been confirmed to the origin DIP), in order to avoid polling them again
-              _ <- if (pollingQueue.exists(_.status == Unsubmitted)) uploadReports else Future.unit
-              _ <- if (pollingQueue.exists(_.status == Submitted)) confirmSubmissions(responseLog) else Future.unit
-              _ <- pollReports(validSites,responseLog)
-              _ <- uploadReports
-              _ <- confirmSubmissions(responseLog)
-            } yield {
-              writeSiteAvailabilityReports(coalesceResponsivityReports(responseLog))
-            }
-            ()
-          },
-          delay,
-          period,
-          TimeUnit.SECONDS
-        )
-      )
+    //responseLog stores notes about how well a site could be communicated with.
+    // checkSiteApiVersion will store a success item for every site that was
+    // available, so it is sufficient for the other functions to merely report
+    // failures. The endresult is reduced into a single value per site after the for loop.
+    for {
+      responseLog <- Future.successful(ListBuffer[ResponsivityReport]())
+      validSites <- checkSiteApiVersion(responseLog)
+      // Start by draining the report queue, if non-empty (in case the service had been interrupted) and
+      // it thus contains reports whose upload hasn't been confirmed to the origin DIP), in order to avoid polling them again
+      _ <- if (pollingQueue.exists(_.status == Unsubmitted)) uploadReports else Future.unit
+      _ <- if (pollingQueue.exists(_.status == Submitted)) confirmSubmissions(responseLog) else Future.unit
+      _ <- pollReports(validSites,responseLog)
+      _ <- uploadReports
+      _ <- confirmSubmissions(responseLog)
+    } yield {
+      responsivitySink(coalesceResponsivityReports(responseLog),Instant.now(clock))
+    }
   }
 
   /**
@@ -317,14 +310,14 @@ with BatchingUtil
       .filter(configVal => validSites.contains(configVal._1))
       .sortBy(_._1.value) // Just for easier log reading: sort the sites alphabetically
       .traverse {
-        case (site,info) =>
+        case (curSite,info) =>
           info.useCases.intersect(config.activeUseCases) // ensure only active use cases are polled
             .toList
             .traverse { useCase =>
 
-              log.debug(s"Polling $useCase SubmissionReports of $site")
+              log.debug(s"Polling $useCase SubmissionReports of $curSite")
               dipConnector.submissionReports(
-                site,
+                curSite,
                 useCase,
                 Submission.Report.Filter(
                   status = Some(Set(Submission.Report.Status.Unsubmitted))
@@ -398,21 +391,24 @@ with BatchingUtil
    * to avoid deadlock in case more than 200 SubmissionReports were processed in parallel here.
    */
 
-  private[core] def confirmSubmissions(availabilityBuffer:ListBuffer[ResponsivityReport]): Future[Seq[Either[String,Submission.Report]]] =
-    batchTraverse(
+  private[core] def confirmSubmissions(availabilityBuffer:ListBuffer[ResponsivityReport]):
+  Future[Seq[Either[String,Submission.Report]]] =
+    batchTraverse[Submission.Report, Seq, Future, Either[String, Submission.Report]](
       pollingQueue.entries(_.status == Submitted),
       nSimultaneousSubmissionConfirmations
     )(
-      report => dipConnector.confirmSubmitted(report).map {
+      report => (dipConnector.confirmSubmitted(report).map {
         case Right(_) =>
           pollingQueue.removeFromQueue(report).map(_ => report)
 
         case Left(msg) =>
-          s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - $msg".asLeft
-      }
+          (s"Problem confirming submission: Site ${report.site.code}, " +
+            s"TAN ${report.id} - $msg").asLeft[Submission.Report]
+      }: Future[Either[String, Submission.Report]])
       .andThen {
         case Success(Right(_)) =>
-          log.debug(s"Submission confirmed: Site ${report.site.code}, TAN ${report.id}")
+          log.debug(s"Submission confirmed: Site ${report.site.code}, " +
+            s"TAN ${report.id}")
 
         // Logs either the error message from the submission confirmation request or from queue removal
         case Success(Left(msg)) =>
@@ -422,9 +418,10 @@ with BatchingUtil
       // Recover lest the Future traversal be "short-circuited" into a failed Future
       .recover {
         case t =>
-          log.error(s"Problem confirming submission: Site ${report.site.code}, TAN ${report.id} - ${t.getMessage}")
+          log.error(s"Problem confirming submission: Site ${report.site.code}, " +
+            s"TAN ${report.id} - ${t.getMessage}")
           availabilityBuffer += ResponsivityReport(report.site.code,Responsivity.failure)
-          t.getMessage.asLeft
+          t.getMessage.asLeft[Submission.Report]
       }
 
     )

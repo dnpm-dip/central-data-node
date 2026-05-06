@@ -10,7 +10,7 @@ import scala.concurrent.ExecutionContext
 
 import java.time.{Clock, Instant, ZoneOffset}
 import scala.collection.mutable.ListBuffer
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.Future
 import de.dnpm.dip.coding.Code
 import de.dnpm.dip.model.Site
 import de.dnpm.dip.service.mvh.{Submission, UseCase}
@@ -60,8 +60,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     override def submissionReports(site: Code[Site], useCase: UseCase.Value, filter: Submission.Report.Filter)
         (implicit ec: ExecutionContext): Future[Either[String, Seq[Submission.Report]]] =
       Future.successful(Right(Seq.empty))
-    override def confirmSubmitted(report: Submission.Report)(implicit ec: ExecutionContext): Future[Either[String, Unit]] =
-      Future.successful(Right(()))
+    override def confirmSubmitted(report: Submission.Report)(implicit ec: ExecutionContext): Future[Either[String, Submission.Report]] =
+      Future.successful(Right(report))
   }
 
   it must "record Responsivity.success for every reachable site in conductPollingCycle and capture the correct timestamp" in {
@@ -73,7 +73,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       Config.instance,
       FakeReportRepository(),
       connectorReturningVersion("0.9.0"),
-      FakeBfarmConnector()
+      fakeBfarmConnector
     )
     testService.clock = Clock.fixed(fixedInstant, ZoneOffset.UTC)
 
@@ -96,7 +96,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
   it must "include all reachable sites as valid before the version-check cutover date, regardless of version" in {
     val preCutover = Instant.parse("2026-05-31T23:59:59Z")
     val testService = new MVHReportingService(
-      Config.instance, FakeReportRepository(), connectorReturningVersion("0.9.0"), FakeBfarmConnector()
+      Config.instance, FakeReportRepository(), connectorReturningVersion("0.9.0"), fakeBfarmConnector
     )
     testService.clock = Clock.fixed(preCutover, ZoneOffset.UTC)
 
@@ -108,7 +108,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
   it must "include sites with a 1.3.x version as valid on and after the cutover date" in {
     val onCutover = Instant.parse("2026-06-01T00:00:00Z")
     val testService = new MVHReportingService(
-      Config.instance, FakeReportRepository(), connectorReturningVersion("1.3.0-RELEASE_5"), FakeBfarmConnector()
+      Config.instance, FakeReportRepository(), connectorReturningVersion("1.3.0-RELEASE_5"), fakeBfarmConnector
     )
     testService.clock = Clock.fixed(onCutover, ZoneOffset.UTC)
 
@@ -120,7 +120,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
   it must "exclude sites with a 1.2.x version from valid sites on and after the cutover date" in {
     val onCutover = Instant.parse("2026-06-01T00:00:00Z")
     val testService = new MVHReportingService(
-      Config.instance, FakeReportRepository(), connectorReturningVersion("1.2.4-BETA5-HOTFIX#133742"), FakeBfarmConnector()
+      Config.instance, FakeReportRepository(), connectorReturningVersion("1.2.4-BETA5-HOTFIX#133742"), fakeBfarmConnector
     )
     testService.clock = Clock.fixed(onCutover, ZoneOffset.UTC)
 
@@ -138,15 +138,15 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       override def submissionReports(site: Code[Site], useCase: UseCase.Value, filter: Submission.Report.Filter)
           (implicit ec: ExecutionContext): Future[Either[String, Seq[Submission.Report]]] =
         Future.successful(Left("simulated data request failure"))
-      override def confirmSubmitted(report: Submission.Report)(implicit ec: ExecutionContext): Future[Either[String, Unit]] =
-        Future.successful(Right(()))
+      override def confirmSubmitted(report: Submission.Report)(implicit ec: ExecutionContext): Future[Either[String, Submission.Report]] =
+        Future.successful(Right(report))
     }
 
     val testService = new MVHReportingService(
       Config.instance,
       FakeReportRepository(),
       failingDataConnector,
-      FakeBfarmConnector()
+      fakeBfarmConnector
     )
     testService.clock = Clock.fixed(preCutover, ZoneOffset.UTC)
 
