@@ -55,12 +55,14 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
   // Helper to create a DipConnector that returns a fixed version string and empty reports
   private def connectorReturningVersion(version: String) = new dip.DipConnector {
-    override def getApiVersion(site: Code[Site])(implicit env: ExecutionContext): Future[Either[String, String]] =
+    override def getApiVersion(site: Code[Site])(implicit env: ExecutionContext)
+    : Future[Either[String, String]] =
       Future.successful(Right(version))
     override def submissionReports(site: Code[Site], useCase: UseCase.Value, filter: Submission.Report.Filter)
         (implicit ec: ExecutionContext): Future[Either[String, Seq[Submission.Report]]] =
       Future.successful(Right(Seq.empty))
-    override def confirmSubmitted(report: Submission.Report)(implicit ec: ExecutionContext): Future[Either[String, Submission.Report]] =
+    override def confirmSubmitted(report: Submission.Report)(implicit ec: ExecutionContext)
+    : Future[Either[String, Submission.Report]] =
       Future.successful(Right(report))
   }
 
@@ -96,7 +98,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
   it must "include all reachable sites as valid before the version-check cutover date, regardless of version" in {
     val preCutover = Instant.parse("2026-05-31T23:59:59Z")
     val testService = new MVHReportingService(
-      Config.instance, FakeReportRepository(), connectorReturningVersion("0.9.0"), fakeBfarmConnector
+      Config.instance, FakeReportRepository(), connectorReturningVersion("0.9.0"),
+      fakeBfarmConnector
     )
     testService.clock = Clock.fixed(preCutover, ZoneOffset.UTC)
 
@@ -108,7 +111,10 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
   it must "include sites with a 1.3.x version as valid on and after the cutover date" in {
     val onCutover = Instant.parse("2026-06-01T00:00:00Z")
     val testService = new MVHReportingService(
-      Config.instance, FakeReportRepository(), connectorReturningVersion("1.3.0-RELEASE_5"), fakeBfarmConnector
+      Config.instance,
+      FakeReportRepository(),
+      connectorReturningVersion("1.3.0-RELEASE_5"),
+      fakeBfarmConnector
     )
     testService.clock = Clock.fixed(onCutover, ZoneOffset.UTC)
 
@@ -120,7 +126,10 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
   it must "exclude sites with a 1.2.x version from valid sites on and after the cutover date" in {
     val onCutover = Instant.parse("2026-06-01T00:00:00Z")
     val testService = new MVHReportingService(
-      Config.instance, FakeReportRepository(), connectorReturningVersion("1.2.4-BETA5-HOTFIX#133742"), fakeBfarmConnector
+      Config.instance,
+      FakeReportRepository(),
+      connectorReturningVersion("1.2.4-BETA5-HOTFIX#133742"),
+      fakeBfarmConnector
     )
     testService.clock = Clock.fixed(onCutover, ZoneOffset.UTC)
 
@@ -133,12 +142,15 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     val preCutover = Instant.parse("2026-04-30T12:00:00Z")
 
     val failingDataConnector = new dip.DipConnector {
-      override def getApiVersion(site: Code[Site])(implicit env: ExecutionContext): Future[Either[String, String]] =
+      override def getApiVersion(site: Code[Site])(implicit env: ExecutionContext)
+      :Future[Either[String, String]] =
         Future.successful(Right("1.3.0"))
-      override def submissionReports(site: Code[Site], useCase: UseCase.Value, filter: Submission.Report.Filter)
+      override def submissionReports(site: Code[Site], useCase: UseCase.Value,
+                                     filter: Submission.Report.Filter)
           (implicit ec: ExecutionContext): Future[Either[String, Seq[Submission.Report]]] =
         Future.successful(Left("simulated data request failure"))
-      override def confirmSubmitted(report: Submission.Report)(implicit ec: ExecutionContext): Future[Either[String, Submission.Report]] =
+      override def confirmSubmitted(report: Submission.Report)(implicit ec: ExecutionContext)
+      : Future[Either[String, Submission.Report]] =
         Future.successful(Right(report))
     }
 
@@ -159,9 +171,11 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       _ <- testService.conductReportingWorkflow()
     } yield {
       val expectedSites = Config.instance.sites.keys.toSet
-      //conductReportingWorkflow would have created more than one report, but they would be coalesced into one each
+      //conductReportingWorkflow would have created more than one report, but
+      // they would be coalesced into one each
       capturedResponsivityReports.map(_.site).toSet mustEqual expectedSites
-      assert(capturedResponsivityReports.forall(_.responsivity == testService.Responsivity.mixedSuccess))
+      assert(capturedResponsivityReports
+        .forall(_.responsivity == testService.Responsivity.mixedSuccess))
     }
   }
 
@@ -173,9 +187,11 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     fakeDipConnector.maxSimultaneousConfirmationWaits.set(0)
 
     // testing setup has 39 clinic-usecases, so there can be no less than 39 uploads to run
-    val expectedNumReports = Config.instance.sites.flatMap(it => it._2.useCases).size * fakeDipConnector.nSubmissions
+    val expectedNumReports = Config.instance.sites
+      .flatMap(it => it._2.useCases).size * fakeDipConnector.nSubmissions
     //have more reports overall than nThreads
-    assert(expectedNumReports > service.nSimultaneousSubmissionConfirmations,"Setup assertion 1 failed")
+    assert(expectedNumReports > service.nSimultaneousSubmissionConfirmations,
+      "Setup assertion 1 failed")
 
     //run
     for{
@@ -187,7 +203,9 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       _ <- service.confirmSubmissions(ListBuffer.empty)
 
     } yield{
-      assertResult(service.nSimultaneousSubmissionConfirmations)(fakeDipConnector.maxSimultaneousConfirmationWaits.get())
+
+      assertResult(service.nSimultaneousSubmissionConfirmations)(
+        fakeDipConnector.maxSimultaneousConfirmationWaits.get())
 
     }
   }

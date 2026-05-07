@@ -81,7 +81,8 @@ class FakeDIPConnector extends dip.DipConnector
     if (confirmationsTakeTime) {
       Future {
         nActiveConfirmationWaits.updateAndGet(oldCount => {
-          maxSimultaneousConfirmationWaits.updateAndGet(oldMax => Math.max(oldMax, oldCount + 1))
+          maxSimultaneousConfirmationWaits.updateAndGet(oldMax =>
+            Math.max(oldMax, oldCount + 1))
           oldCount + 1
         })
         Thread.sleep(FakeDIPConnector.uploadDelayMsec)
@@ -93,8 +94,10 @@ class FakeDIPConnector extends dip.DipConnector
     }
 
   /**
-   * Asks the given site what version it is and returns the version string (extracted from json)
+   * Asks the given site what version it is and returns the version string
+   * (extracted from json)
    */
-  override def getApiVersion(site: Code[Site])(implicit env: ExecutionContext): Future[Either[String, String]] =
+  override def getApiVersion(site: Code[Site])(implicit env: ExecutionContext)
+  : Future[Either[String, String]] =
     Future.successful(Right("1.3.0"))
 }
