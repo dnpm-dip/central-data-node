@@ -179,6 +179,31 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     }
   }
 
+  it must "coalesce versionString: pick the version if any report for the site has one" in {
+    val site = sites.head
+    val version = "1.3.0"
+    val reports = ListBuffer(
+      service.ResponsivityReport(site, service.Responsivity.success, Some(version)),
+      service.ResponsivityReport(site, service.Responsivity.failure, None)
+    )
+    val coalesced = service.coalesceResponsivityReports(reports)
+    Future.successful {
+      assert(coalesced.exists(_.versionString.contains(version)))
+    }
+  }
+
+  it must "coalesce versionString: report None if no report for the site had one" in {
+    val site = sites.head
+    val reports = ListBuffer(
+      service.ResponsivityReport(site, service.Responsivity.failure, None),
+      service.ResponsivityReport(site, service.Responsivity.failure, None)
+    )
+    val coalesced = service.coalesceResponsivityReports(reports)
+    Future.successful {
+      assert(coalesced.forall(_.versionString.isEmpty))
+    }
+  }
+
   it must " not process more submissions simultaneously than it has threads (non-deterministic)" in {
     //configure bfarmconnecteor to halt for 100 msec during upload
 

@@ -86,6 +86,7 @@ with BatchingUtil
             docs  = reports.map(r => Document(
               "site" := r.site.value,
               "responsivity" := r.responsivity.toString,
+              "apiVersion" := r.versionString.getOrElse("???"), //would happen only for failures
               "timestamp" := now)).toList
             _    <- coll.insertMany(docs)
           } yield ()
@@ -177,6 +178,33 @@ with BatchingUtil
   }
 
   /**
+   * The functions in the [[DipConnector]] that communicate with external sites
+   * return a report about connectivity. To end up with a single report per site
+   * per attempt, this function coalesces the information collected in.
+   * [[conductReportingWorkflow]]
+   * @param responseLog collected base data
+   * @return one report per site
+   */
+  private[core] def coalesceResponsivityReports(responseLog: ListBuffer[ResponsivityReport]) =
+    responseLog
+      .groupBy(_.site)
+      .map { case (site, reports) =>
+        val responsivity =
+          if (reports.forall(_.responsivity == Responsivity.success))
+            Responsivity.success
+          else if (reports.forall(_.responsivity == Responsivity.failure))
+            Responsivity.failure
+          else
+            Responsivity.mixedSuccess
+        //strictly speaking this picks a random version string, but that
+        // shouldn't be an issue, because only the one request to
+        // getApiCompatibleDipSites would return a ResponsivityReport with a
+        // version and all version info should be consistent anyway
+        val version = reports.flatMap(_.versionString).headOption
+        ResponsivityReport(site, responsivity, version)
+      }
+
+  /**
    * Executes one full cycle of the reporting workflow: checks site API versions,
    * drains any pre-existing queue entries, polls new reports, uploads them to
    * BfArM, and confirms back. Logs responsivity into [[responsivitySink]]
@@ -186,20 +214,6 @@ with BatchingUtil
     log.info(s"Conducting scheduled reporting workflow " +
       s"${if (pollingQueue.exists(_ => true)) "with" else "without"} " +
       s"preexisting items in the queue")
-
-    def coalesceResponsivityReports(responseLog: ListBuffer[ResponsivityReport]) =
-      responseLog
-        .groupBy(_.site)
-        .map { case (site, reports) =>
-          val responsivity =
-            if (reports.forall(_.responsivity == Responsivity.success))
-              Responsivity.success
-            else if (reports.forall(_.responsivity == Responsivity.failure))
-              Responsivity.failure
-            else
-              Responsivity.mixedSuccess
-          ResponsivityReport(site, responsivity)
-        }
 
     //responseLog stores notes about how well a site could be communicated with.
     // checkSiteApiVersion will store a success item for every site that was
@@ -231,7 +245,7 @@ with BatchingUtil
     val mixedSuccess = Value("partial")
     val failure = Value("offline")
   }
-  case class ResponsivityReport(site:Code[Site],responsivity: Responsivity.Value)
+  case class ResponsivityReport(site:Code[Site],responsivity: Responsivity.Value, versionString:Option[String] = None)
 
 
   def stop(): Unit = {
@@ -297,7 +311,7 @@ with BatchingUtil
       dipConnector.getApiVersion(site)
         .map {
           case Right(v) if isSiteApiVersionSupported(v) =>
-            availabilityBuffer += ResponsivityReport(site, Responsivity.success)
+            availabilityBuffer += ResponsivityReport(site, Responsivity.success,Some(v))
             Some(site)
           case Right(_) =>
             availabilityBuffer += ResponsivityReport(site, Responsivity.success)
