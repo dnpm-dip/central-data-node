@@ -69,6 +69,9 @@ class MVHReportingService
 extends Logging
 with BatchingUtil
 {
+  /**
+   * Serves local time. Abstracted for the purpose of unit tests
+   */
   private[core] var clock: Clock = Clock.systemUTC()
 
   private def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport],
@@ -113,7 +116,7 @@ with BatchingUtil
    * ([[confirmSubmissions]]). The interval is retrieved from [[config#polling]]
    *
    * Before polling for new reports, the [[pollingQueue]] is checked for preexisting items,
-   * which are pro  cessed before polling for new items in [[pollReports]]
+   * which are processed before polling for new items in [[pollReports]]
    *
    * The state of this process is stored in the [[pollingQueue]] and in the
    * [[Submission.Report.status]] of it's items.
@@ -325,14 +328,14 @@ with BatchingUtil
       .filter(configVal => validSites.contains(configVal._1))
       .sortBy(_._1.value) // Just for easier log reading: sort the sites alphabetically
       .traverse {
-        case (curSite,info) =>
+        case (site,info) =>
           info.useCases.intersect(config.activeUseCases) // ensure only active use cases are polled
             .toList
             .traverse { useCase =>
 
-              log.debug(s"Polling $useCase SubmissionReports of $curSite")
+              log.debug(s"Polling $useCase SubmissionReports of $site")
               dipConnector.submissionReports(
-                curSite,
+                site,
                 useCase,
                 Submission.Report.Filter(
                   status = Some(Set(Submission.Report.Status.Unsubmitted))
@@ -345,15 +348,15 @@ with BatchingUtil
 
                 case Success(Left(err)) =>
                   log.error(s"Problem polling $useCase SubmissionReports of " +
-                    s"site $curSite: $err")
-                  availabilityBuffer += ResponsivityReport(curSite,Responsivity.failure)
+                    s"site $site: $err")
+                  availabilityBuffer += ResponsivityReport(site,Responsivity.failure)
               }
               // Recover lest the Future traversal be "short-circuited" into a failed Future
               .recover {
                 case t =>
                   log.error(s"Error(s) occurred polling $useCase " +
-                    s"SubmissionReports of $curSite", t)
-                  availabilityBuffer += ResponsivityReport(curSite,Responsivity.failure)
+                    s"SubmissionReports of $site", t)
+                  availabilityBuffer += ResponsivityReport(site,Responsivity.failure)
                   t.getMessage.asLeft
               }
           }

@@ -206,7 +206,6 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
       assertResult(service.nSimultaneousSubmissionConfirmations)(
         fakeDipConnector.maxSimultaneousConfirmationWaits.get())
-
     }
   }
 }

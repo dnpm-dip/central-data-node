@@ -81,8 +81,8 @@ class FakeDIPConnector extends dip.DipConnector
     if (confirmationsTakeTime) {
       Future {
         nActiveConfirmationWaits.updateAndGet(oldCount => {
-          maxSimultaneousConfirmationWaits.updateAndGet(oldMax =>
-            Math.max(oldMax, oldCount + 1))
+          maxSimultaneousConfirmationWaits.updateAndGet(
+            oldMax => Math.max(oldMax, oldCount + 1))
           oldCount + 1
         })
         Thread.sleep(FakeDIPConnector.uploadDelayMsec)
