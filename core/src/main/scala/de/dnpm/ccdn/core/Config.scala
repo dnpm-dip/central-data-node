@@ -32,8 +32,8 @@ final case class Config
 ){
 
   private val MONGODBURIJVMPROP = "ccdn.mongodb.uri"
-  private val MONGODDBURIENVVAR = "CCDN_MONGODB_URI"
-  val mongoUri: Option[String] = envOrNone(MONGODDBURIENVVAR).orElse(propOrNone(MONGODBURIJVMPROP))
+  private val MONGODBURIENVVAR = "CCDN_MONGODB_URI"
+  val mongoUri: Option[String] = envOrNone(MONGODBURIENVVAR).orElse(propOrNone(MONGODBURIJVMPROP))
 
   def activeUseCases: Set[UseCase.Value] =
     dataNodeIds.keySet

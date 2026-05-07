@@ -313,8 +313,8 @@ with BatchingUtil
           case Right(v) if isSiteApiVersionSupported(v) =>
             availabilityBuffer += ResponsivityReport(site, Responsivity.success,Some(v))
             Some(site)
-          case Right(_) =>
-            availabilityBuffer += ResponsivityReport(site, Responsivity.success)
+          case Right(v) =>
+            availabilityBuffer += ResponsivityReport(site, Responsivity.success, Some(v))
             None
           case Left(_) =>
             availabilityBuffer += ResponsivityReport(site, Responsivity.failure)
