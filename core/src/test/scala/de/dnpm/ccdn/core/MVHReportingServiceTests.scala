@@ -5,9 +5,8 @@ import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.must.Matchers._
 import org.slf4j.LoggerFactory
 
-import java.util.concurrent.Executors
+import java.util.concurrent.{ConcurrentLinkedQueue, Executors}
 import scala.concurrent.ExecutionContext
-
 import java.time.{Clock, Instant, ZoneOffset}
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.Future
@@ -42,13 +41,13 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     log.info("FakeDipConnector sending "+fakeDipConnector.nSubmissions+ " submissions per site")
     for {
       
-      _ <- service.pollReports(sites,ListBuffer.empty)
+      _ <- service.pollReports(sites,new ConcurrentLinkedQueue())
       
       _ = service.pollingQueue.entries(_ => true) must not be (empty)
 
       _ <- service.uploadReports
 
-      _ <- service.confirmSubmissions(ListBuffer.empty)
+      _ <- service.confirmSubmissions(new ConcurrentLinkedQueue())
 
     } yield service.pollingQueue.entries(_ => true) must be (empty)
   }
@@ -103,7 +102,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     )
     testService.clock = Clock.fixed(preCutover, ZoneOffset.UTC)
 
-    testService.getApiCompatibleDipSites(ListBuffer.empty).map { validSites =>
+    testService.getApiCompatibleDipSites(new ConcurrentLinkedQueue()).map { validSites =>
       assertResult(Config.instance.sites.size)(validSites.size)
     }
   }
@@ -118,7 +117,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     )
     testService.clock = Clock.fixed(onCutover, ZoneOffset.UTC)
 
-    testService.getApiCompatibleDipSites(ListBuffer.empty).map { validSites =>
+    testService.getApiCompatibleDipSites(new ConcurrentLinkedQueue()).map { validSites =>
       assertResult(Config.instance.sites.size)(validSites.size)
     }
   }
@@ -133,7 +132,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     )
     testService.clock = Clock.fixed(onCutover, ZoneOffset.UTC)
 
-    testService.getApiCompatibleDipSites(ListBuffer.empty).map { validSites =>
+    testService.getApiCompatibleDipSites(new ConcurrentLinkedQueue()).map { validSites =>
       validSites must be(empty)
     }
   }
@@ -221,11 +220,11 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     //run
     for{
 
-      _ <- service.pollReports(sites, ListBuffer.empty)
+      _ <- service.pollReports(sites, new ConcurrentLinkedQueue())
 
       _ <- service.uploadReports
 
-      _ <- service.confirmSubmissions(ListBuffer.empty)
+      _ <- service.confirmSubmissions(new ConcurrentLinkedQueue())
 
     } yield{
 

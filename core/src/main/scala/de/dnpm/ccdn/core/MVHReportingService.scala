@@ -3,8 +3,7 @@ package de.dnpm.ccdn.core
 
 import java.time.{Clock, Instant, LocalDate, LocalTime}
 import java.time.temporal.ChronoUnit
-import java.util.concurrent.{Executors, ScheduledExecutorService}
-import java.util.concurrent.{TimeUnit, Future => JavaFuture}
+import java.util.concurrent.{ConcurrentLinkedQueue, Executors, ScheduledExecutorService, TimeUnit, Future => JavaFuture}
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration.Duration
 import scala.util.Success
@@ -22,7 +21,7 @@ import de.dnpm.ccdn.core.bfarm.BfarmConnector
 import de.dnpm.ccdn.core.dip.DipConnector
 import de.dnpm.dip.coding.Code
 
-import scala.collection.mutable.ListBuffer
+import scala.jdk.CollectionConverters.CollectionHasAsScala
 
 
 object MVHReportingService
@@ -188,7 +187,7 @@ with BatchingUtil
    * @param responseLog collected base data
    * @return one report per site
    */
-  private[core] def coalesceResponsivityReports(responseLog: ListBuffer[ResponsivityReport]) =
+  private[core] def coalesceResponsivityReports(responseLog: Iterable[ResponsivityReport]) =
     responseLog
       .groupBy(_.site)
       .map { case (site, reports) =>
@@ -223,7 +222,7 @@ with BatchingUtil
     // available, so it is sufficient for the other functions to merely report
     // failures. The endresult is reduced into a single value per site after the for loop.
     for {
-      responseLog <- Future.successful(ListBuffer[ResponsivityReport]())
+      responseLog <- Future.successful(new ConcurrentLinkedQueue[ResponsivityReport])
       validSites <- getApiCompatibleDipSites(responseLog)
       // Start by draining the report queue, if non-empty (in case the service
       // had been interrupted) and it thus contains reports whose upload hasn't
@@ -234,7 +233,7 @@ with BatchingUtil
       _ <- uploadReports
       _ <- confirmSubmissions(responseLog)
     } yield {
-      responsivitySink(coalesceResponsivityReports(responseLog),Instant.now(clock))
+      responsivitySink(coalesceResponsivityReports(responseLog.asScala),Instant.now(clock))
     }
   }
 
@@ -308,24 +307,24 @@ with BatchingUtil
    * @return a list of sites that responded with an API version code that is
    *         supported by the MVH network.
    */
-  private[core] def getApiCompatibleDipSites(availabilityBuffer:ListBuffer[ResponsivityReport])
+  private[core] def getApiCompatibleDipSites(availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport])
   : Future[Seq[Code[Site]]] = {
     Future.traverse(config.sites.keys.toSeq) { site =>
       dipConnector.getApiVersion(site)
         .map {
           case Right(v) if isSiteApiVersionSupported(v) =>
-            availabilityBuffer += ResponsivityReport(site, Responsivity.success,Some(v))
+            availabilityBuffer.add(ResponsivityReport(site, Responsivity.success,Some(v)))
             Some(site)
           case Right(v) =>
-            availabilityBuffer += ResponsivityReport(site, Responsivity.success, Some(v))
+            availabilityBuffer.add(ResponsivityReport(site, Responsivity.success, Some(v)))
             None
           case Left(_) =>
-            availabilityBuffer += ResponsivityReport(site, Responsivity.failure)
+            availabilityBuffer.add(ResponsivityReport(site, Responsivity.failure))
             None
         }
         .recover {
           case _ =>
-            availabilityBuffer += ResponsivityReport(site, Responsivity.failure)
+            availabilityBuffer.add(ResponsivityReport(site, Responsivity.failure))
             None
         }
     }.map(_.flatten)
@@ -337,7 +336,7 @@ with BatchingUtil
    * them in the [[pollingQueue]]
    */
   private[core] def pollReports(validSites: Seq[Code[Site]],
-                                availabilityBuffer:ListBuffer[ResponsivityReport])
+                                availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport])
   : Future[Any] = {
     log.info(s"Polling Reports from ${config.sites.size} sites with up " +
       s"to ${config.activeUseCases.size} usecases")
@@ -366,14 +365,14 @@ with BatchingUtil
                 case Success(Left(err)) =>
                   log.error(s"Problem polling $useCase SubmissionReports of " +
                     s"site $site: $err")
-                  availabilityBuffer += ResponsivityReport(site,Responsivity.failure)
+                  availabilityBuffer.add(ResponsivityReport(site,Responsivity.failure))
               }
               // Recover lest the Future traversal be "short-circuited" into a failed Future
               .recover {
                 case t =>
                   log.error(s"Error(s) occurred polling $useCase " +
                     s"SubmissionReports of $site", t)
-                  availabilityBuffer += ResponsivityReport(site,Responsivity.failure)
+                  availabilityBuffer.add(ResponsivityReport(site,Responsivity.failure))
                   t.getMessage.asLeft
               }
           }
@@ -435,7 +434,7 @@ with BatchingUtil
    * SubmissionReports were processed in parallel here.
    */
 
-  private[core] def confirmSubmissions(availabilityBuffer:ListBuffer[ResponsivityReport])
+  private[core] def confirmSubmissions(availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport])
   :Future[Seq[Either[String,Submission.Report]]] =
     batchTraverse[Submission.Report, Seq, Future, Either[String, Submission.Report]](
       pollingQueue.entries(_.status == Submitted),
@@ -457,7 +456,7 @@ with BatchingUtil
         //Logs either the error message from the submission confirmation request
         // or from queue removal
         case Success(Left(msg)) =>
-          availabilityBuffer += ResponsivityReport(report.site.code,Responsivity.failure)
+          availabilityBuffer.add(ResponsivityReport(report.site.code,Responsivity.failure))
           log.error(msg)
       }
       // Recover lest the Future traversal be "short-circuited" into a failed Future
@@ -465,7 +464,7 @@ with BatchingUtil
         case t =>
           log.error(s"Problem confirming submission: Site ${report.site.code}, " +
             s"TAN ${report.id} - ${t.getMessage}")
-          availabilityBuffer += ResponsivityReport(report.site.code,Responsivity.failure)
+          availabilityBuffer.add(ResponsivityReport(report.site.code,Responsivity.failure))
           t.getMessage.asLeft[Submission.Report]
       }
 
