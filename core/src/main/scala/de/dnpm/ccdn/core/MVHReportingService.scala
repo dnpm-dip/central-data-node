@@ -207,7 +207,7 @@ with BatchingUtil
     // failures. The endresult is reduced into a single value per site after the for loop.
     for {
       responseLog <- Future.successful(ListBuffer[ResponsivityReport]())
-      validSites <- checkSiteApiVersion(responseLog)
+      validSites <- getApiCompatibleDipSites(responseLog)
       // Start by draining the report queue, if non-empty (in case the service
       // had been interrupted) and it thus contains reports whose upload hasn't
       // been confirmed to the origin DIP), in order to avoid polling them again
@@ -288,10 +288,10 @@ with BatchingUtil
    *                           store a value for every site in [[config.sites]],
    *                           either [[Responsivity.failure]] or
    *                           [[Responsivity.success]]
-   * @return a list of sites that responded with a site code that is supported
-   *         by the MVH network.
+   * @return a list of sites that responded with an API version code that is
+   *         supported by the MVH network.
    */
-  private[core] def checkSiteApiVersion(availabilityBuffer:ListBuffer[ResponsivityReport])
+  private[core] def getApiCompatibleDipSites(availabilityBuffer:ListBuffer[ResponsivityReport])
   : Future[Seq[Code[Site]]] = {
     Future.traverse(config.sites.keys.toSeq) { site =>
       dipConnector.getApiVersion(site)

@@ -103,7 +103,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     )
     testService.clock = Clock.fixed(preCutover, ZoneOffset.UTC)
 
-    testService.checkSiteApiVersion(ListBuffer.empty).map { validSites =>
+    testService.getApiCompatibleDipSites(ListBuffer.empty).map { validSites =>
       assertResult(Config.instance.sites.size)(validSites.size)
     }
   }
@@ -118,7 +118,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     )
     testService.clock = Clock.fixed(onCutover, ZoneOffset.UTC)
 
-    testService.checkSiteApiVersion(ListBuffer.empty).map { validSites =>
+    testService.getApiCompatibleDipSites(ListBuffer.empty).map { validSites =>
       assertResult(Config.instance.sites.size)(validSites.size)
     }
   }
@@ -133,7 +133,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     )
     testService.clock = Clock.fixed(onCutover, ZoneOffset.UTC)
 
-    testService.checkSiteApiVersion(ListBuffer.empty).map { validSites =>
+    testService.getApiCompatibleDipSites(ListBuffer.empty).map { validSites =>
       validSites must be(empty)
     }
   }
