@@ -90,7 +90,10 @@ with BatchingUtil
               "timestamp" := now)).toList
             _    <- coll.insertMany(docs)
           } yield ()
-        }.unsafeRunAndForget()
+        }.unsafeRunAsync {
+          case Left(exc) => log.warn(s"Failed to persist responsivity logs. Exception: ${exc.getMessage}")
+          case Right(_) => log.debug("Successfully persisted responsivity logs")
+        }
       case None =>
         log.warn("CCDN_MONGODB_URI is not configured; site availability " +
           "reports will not be persisted")
