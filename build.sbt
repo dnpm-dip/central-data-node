@@ -3,7 +3,7 @@ import scala.util.Properties.envOrElse
 
 name := "dnpm-ccdn"  // Central Clinical Data Node
 ThisBuild / organization := "de.dnpm"
-ThisBuild / scalaVersion := "2.13.16"
+ThisBuild / scalaVersion := "2.13.18"
 ThisBuild / version      := envOrElse("VERSION","1.0.0")
 
 val ownerRepo  = envOrElse("REPOSITORY","dnpm-dip/central-data-node").split("/")
@@ -90,7 +90,7 @@ lazy val dependencies =
     val logback      = "ch.qos.logback"    %  "logback-classic"         % "1.5.18"
     val play_ahc     = "org.playframework" %% "play-ahc-ws-standalone"  % "3.0.7"
     val play_ahc_js  = "org.playframework" %% "play-ws-standalone-json" % "3.0.7"
-    val service_base = "de.dnpm.dip"       %% "service-base"            % "1.2.0"
+    val service_base = "de.dnpm.dip"       %% "service-base"            % "1.3.1"
     val mtb_dtos     = "de.dnpm.dip"       %% "mtb-dto-model"           % "1.1.2"
     val rd_dtos      = "de.dnpm.dip"       %% "rd-dto-model"            % "1.1.2"
   }

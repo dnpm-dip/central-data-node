@@ -34,13 +34,14 @@ class ArchivingReportRepositoryTests extends AnyFlatSpec
       Id(transferTan.toString),
       creationDate,
       Id("42"),
+      None,
       status,
       Coding[Site]("Uniklinik Tü","UKT"),
       UseCase.MTB,
       Submission.Type.Test,
-      None,None,
+      None,None,None,
       HealthInsurance.Type.SOZ,
-      None,None
+      None,None,None
     )
   }
   private def makeThreeReports:Seq[Submission.Report] = List(
