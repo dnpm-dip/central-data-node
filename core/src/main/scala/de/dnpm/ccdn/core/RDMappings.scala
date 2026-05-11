@@ -62,7 +62,7 @@ trait RDMappings extends Mappings[RDPatientRecord]
         record.diagnoses.toList.flatMap(_.onsetDate).minOption
           .orElse(record.hpoTerms.toList.flatMap(_.onsetDate).minOption)
           .getOrElse(YearMonth.of(1800,JANUARY)),
-        record.mvhCarePlan.get.issuedOn,
+        record.indicationCarePlan.get.issuedOn,
         record.diagnoses
           .toList
           .flatMap(_.familyControlLevel.map(_.code.enumValue))
@@ -474,7 +474,7 @@ trait RDMappings extends Mappings[RDPatientRecord]
             .exists(s => s == Confirmed || s == Partial),
           record.diagnoses.head.notes.flatMap(_.lastOption),
           record.patient.vitalStatus.code.enumValue,
-          record.patient.dateOfDeath.map(_.atEndOfMonth)
+          record.patient.dateOfDeath
         )
 
       } yield RDFollowUps(

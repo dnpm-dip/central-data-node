@@ -50,15 +50,15 @@ class FakeDIPConnector extends dip.DipConnector
       Id[TransferTAN](randomUUID.toString),
       LocalDateTime.now,
       Id[Patient](randomUUID.toString),
+      None,
       Submission.Report.Status.Unsubmitted,
       Coding[Site](site.value),
       useCase,
       Submission.Type.Initial,
       Some(NGSReport.Type.GenomeLongRead),
-      None,
+      None,None,
       HealthInsurance.Type.UNK,
-      None,
-      None
+      None, None, None
     )
 
 
