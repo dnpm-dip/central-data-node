@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/dnpm-dip/central-data-node/compare/v1.0.0...v1.1.0) (2026-05-13)
+
+
+### Features
+
+* trigger release ([96eb0f5](https://github.com/dnpm-dip/central-data-node/commit/96eb0f535a76a56bf7901699c9be04a2a7eb20c4))
+
 ## 1.0.0 (2026-03-30)
 
 
