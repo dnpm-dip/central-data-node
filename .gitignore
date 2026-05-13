@@ -35,3 +35,7 @@ run.sh
 .idea/
 
 .bsp/sbt.json
+
+.serena/
+.metals/
+cs
