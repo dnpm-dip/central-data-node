@@ -31,8 +31,7 @@ lazy val global = project
   )
   .aggregate(
     core,
-    connectors,
-    test_uploader
+    connectors
   )
 
 
@@ -43,9 +42,10 @@ lazy val core = project
     libraryDependencies ++= Seq(
       dependencies.scalatest,
       dependencies.logback,
-      dependencies.mtb_dtos,
-      dependencies.rd_dtos,
-      dependencies.service_base
+//      dependencies.mtb_dtos,
+//      dependencies.rd_dtos,
+      dependencies.service_base,
+      dependencies.bfarm_dto_base
     ),
     assembly / assemblyJarName := "dnpm-ccdn-core.jar",
     assembly / mainClass       := Some("de.dnpm.ccdn.core.MVHReportingService")
@@ -67,17 +67,6 @@ lazy val connectors = project
     core
   )
 
-lazy val test_uploader = project
-  .settings(
-    name := "ccdn-test-uploader",
-    settings,
-    assembly / assemblyJarName := "dnpm-ccdn-test-uploader.jar",
-    assembly / mainClass       := Some("de.dnpm.ccdn.test.uploader.Uploader")
-  )
-  .dependsOn(
-    connectors
-  )
-
 
 //-----------------------------------------------------------------------------
 // DEPENDENCIES
@@ -91,8 +80,9 @@ lazy val dependencies =
     val play_ahc     = "org.playframework" %% "play-ahc-ws-standalone"  % "3.0.7"
     val play_ahc_js  = "org.playframework" %% "play-ws-standalone-json" % "3.0.7"
     val service_base = "de.dnpm.dip"       %% "service-base"            % "1.3.1"
-    val mtb_dtos     = "de.dnpm.dip"       %% "mtb-dto-model"           % "1.1.2"
-    val rd_dtos      = "de.dnpm.dip"       %% "rd-dto-model"            % "1.1.2"
+    val bfarm_dto_base = "de.dnpm"         %% "dnpm-bfarm-model-base"   % "1.0.1"
+//    val mtb_dtos     = "de.dnpm.dip"       %% "mtb-dto-model"           % "1.1.2"
+//    val rd_dtos      = "de.dnpm.dip"       %% "rd-dto-model"            % "1.1.2"
   }
 
 

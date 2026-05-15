@@ -9,6 +9,7 @@ import de.dnpm.dip.model.{
 }
 import de.dnpm.dip.service.mvh.Submission.Type
 import de.dnpm.dip.service.mvh.TransferTAN
+import de.dnpm.bfarm.model.base.LibraryType
 import play.api.libs.json.{
   Json,
   Format,
@@ -26,6 +27,18 @@ import play.api.libs.json.{
  * but originate from the specification these DTO must conform to.
  *
  */
+
+
+/**
+ * Genomic Data Center, GRZ in German nomenclature
+ */
+sealed trait GDC
+
+/**
+ * Clinical Data Node, KDK in German nomenclature
+ */
+sealed trait CDN
+
 
 /**
  * A DTO for the exact JSON object that is sent to BfArM in [[de.dnpm.ccdn.core.MVHReportingService.uploadReports]]
@@ -109,22 +122,4 @@ object SubmissionReport
   implicit val format: Format[SubmissionReport] =
     Json.format[SubmissionReport]
 
-}
-
-
-/**
- * Abstraction of submissions over disease type
- *
- * The subclasses are instantiated in the apply function in subclasses of
- * [[de.dnpm.ccdn.core.Mappings]] from data in subclasses of
- * [[de.dnpm.dip.model.PatientRecord]]
- *
- */
-trait AbstractBfarmSubmission[Case,MolSeq,Plan,FU]
-{
-  val metadata: Metadata
-  val `case`: Case
-  val molecular: Option[MolSeq]
-  val plan: Option[Plan]
-  val followUp: Option[FU]
 }
