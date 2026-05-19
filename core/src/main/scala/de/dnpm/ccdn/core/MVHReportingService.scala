@@ -9,10 +9,8 @@ import scala.concurrent.duration.Duration
 import scala.util.Success
 import cats.syntax.either._
 import cats.syntax.traverse._
-import cats.effect.IO
-import mongo4cats.bson.Document
-import mongo4cats.bson.syntax._
-import mongo4cats.client.MongoClient
+import com.mongodb.client.MongoClients
+import org.bson.Document
 import de.dnpm.dip.util.Logging
 import de.dnpm.dip.model.{NGSReport, Site}
 import de.dnpm.dip.service.mvh.Submission
@@ -77,21 +75,27 @@ with BatchingUtil
                                            now: Instant): Unit =
     config.mongoUri match {
       case Some(uri) =>
-        import cats.effect.unsafe.implicits.global
-        MongoClient.fromConnectionString[IO](uri).use { client =>
-          for {
-            db   <- client.getDatabase("ccdn")
-            coll <- db.getCollection("siteAvailabilityReports")
-            docs  = reports.map(r => Document(
-              "site" := r.site.value,
-              "responsivity" := r.responsivity.toString,
-              "apiVersion" := r.versionString.getOrElse("???"), //would happen only for failures
-              "timestamp" := now)).toList
-            _    <- coll.insertMany(docs)
-          } yield ()
-        }.unsafeRunAsync {
-          case Left(exc) => log.warn(s"Failed to persist responsivity logs. Exception: ${exc.getMessage}")
-          case Right(_) => log.debug("Successfully persisted responsivity logs")
+        try { //making mongoDB client
+          val client = MongoClients.create(uri)
+          try { //communicating with it, closing it finally
+            val coll = client.getDatabase("ccdn").getCollection("siteAvailabilityReports")
+            val docs = new java.util.ArrayList[Document]()
+            reports.foreach { r =>
+              docs.add(
+                new Document("site", r.site.value)
+                  .append("responsivity", r.responsivity.toString)
+                  .append("apiVersion", r.versionString.getOrElse("???"))
+                  .append("timestamp", java.util.Date.from(now))
+              )
+            }
+            coll.insertMany(docs)
+            log.debug("Successfully persisted responsivity logs")
+          } finally {
+            client.close()
+          }
+        } catch {
+          case exc: Exception =>
+            log.warn(s"Failed to persist responsivity logs. Exception: ${exc.getMessage}")
         }
       case None =>
         log.warn("CCDN_MONGODB_URI is not configured; site availability " +
