@@ -155,7 +155,7 @@ with BatchingUtil
   private val BfarmReport: Submission.Report => bfarm.SubmissionReport = {
 
     import de.dnpm.dip.service.mvh.UseCase._
-    import bfarm.LibraryType
+    import de.dnpm.bfarm.model.base.LibraryType
     import bfarm.SubmissionReport.DiseaseType._
     import NGSReport.Type._
 
