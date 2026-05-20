@@ -41,7 +41,7 @@ final class SPITests extends AnyFlatSpec
           Failure(t)
       }
 
-  private val siteAvailabilityReporter =
+  private val persistenceService =
     PersistenceService.getInstance
 
 
@@ -49,7 +49,7 @@ final class SPITests extends AnyFlatSpec
     assert(dipConnector.isSuccess)
     assert(bfarmConnector.isSuccess)
     assert(reportQueue.isSuccess)
-    assert(siteAvailabilityReporter.isSuccess)
+    assert(persistenceService.isSuccess)
   }
 
 }

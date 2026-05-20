@@ -247,8 +247,16 @@ with BatchingUtil
 
 
   private val versionCutoverDate: LocalDate = LocalDate.of(2026, 6, 1)
-  private val isSiteApiVersionSupported: String => Boolean = version =>
-    LocalDate.now(clock).isBefore(versionCutoverDate) || (version >= "1.3")
+  private val versionPattern = raw"(\d+)\.(\d+)\..*".r
+  private val isSiteApiVersionSupported: String => Boolean = {
+    case versionPattern(major, minor) =>
+      LocalDate.now(clock).isBefore(versionCutoverDate) ||
+        (major.toInt > 1 || (major.toInt == 1 && minor.toInt >= 3))
+    case version =>
+      throw new IllegalArgumentException(
+        s"Version string '$version' does not match expected pattern '<number>.<number>.<anything>'"
+      )
+  }
 
   /**
    *
