@@ -200,6 +200,7 @@ with BatchingUtil
     } yield {
       persistenceService.writeSiteAvailabilityReports(
         coalesceResponsivityReports(responseLog.asScala), Instant.now(clock))
+      log.debug("Reporting workflow completed")
     }
   }
 

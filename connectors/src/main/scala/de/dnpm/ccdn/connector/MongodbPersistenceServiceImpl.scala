@@ -34,7 +34,7 @@ final class MongodbPersistenceServiceImpl extends PersistenceService with Loggin
     reports: Iterable[ResponsivityReport],
     now: Instant
   ): Unit =
-    mongoUri match {
+    if(reports.nonEmpty) mongoUri match {
       case Some(uri) =>
         try {
           val client = MongoClients.create(uri)
@@ -61,6 +61,9 @@ final class MongodbPersistenceServiceImpl extends PersistenceService with Loggin
       case None =>
         log.warn("CCDN_MONGODB_URI is not configured; site availability " +
           "reports will not be persisted")
+    }
+    else {
+      log.warn("Empty set of reports passed to writeSiteAvailabilityReports")
     }
 
 }
