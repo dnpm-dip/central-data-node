@@ -21,8 +21,6 @@ import de.dnpm.ccdn.core.bfarm.{
   GDC
 }
 
-import scala.util.Properties.{envOrNone, propOrNone}
-
 
 final case class Config
 (
@@ -31,11 +29,7 @@ final case class Config
   sites: Map[Code[Site],Config.SiteInfo]
 ){
 
-  private val MONGODBURIJVMPROP = "ccdn.mongodb.uri"
-  private val MONGODBURIENVVAR = "CCDN_MONGODB_URI"
-  val mongoUri: Option[String] = envOrNone(MONGODBURIENVVAR).orElse(propOrNone(MONGODBURIJVMPROP))
-
-  def activeUseCases: Set[UseCase.Value] =
+  def activeUseCases:Set[UseCase.Value] =
     dataNodeIds.keySet
 
   def submitterId(site: Code[Site]): Id[Site] =

@@ -106,11 +106,6 @@ with BatchingUtil
     log.info("Starting MVH Reporting service")
     log.info(s"Active Use Cases: ${config.activeUseCases.mkString(", ")}")
     log.info(s"Active sites: ${config.sites.keys.toList.sortBy(_.value).mkString(", ")}")
-    if(config.mongoUri.isDefined) {
-      log.debug(s"Mongodb uri: ${config.mongoUri.get}")
-    } else{
-      log.warn("Mongodb uri is undefined")
-    }
 
     val period =
       config.polling.period*toSeconds(config.polling.timeUnit)

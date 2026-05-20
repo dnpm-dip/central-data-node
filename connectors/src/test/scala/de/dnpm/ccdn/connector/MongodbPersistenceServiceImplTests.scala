@@ -17,7 +17,7 @@ final class MongodbPersistenceServiceImplTests extends AnyFlatSpec
   behavior of "MongodbPersistenceServiceImpl"
 
   it must "log a warning when called with an empty set of reports" in {
-    val impl = new MongodbPersistenceServiceImpl
+    val impl = new MongodbPersistenceServiceImpl(Some("somewhere"))
     val logger =
       LoggerFactory.getLogger(classOf[MongodbPersistenceServiceImpl])
         .asInstanceOf[Logger]

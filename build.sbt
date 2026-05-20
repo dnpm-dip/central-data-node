@@ -43,7 +43,7 @@ lazy val core = project
       dependencies.scalatest,
       dependencies.logback,
       dependencies.service_base,
-      dependencies.bfarm_dto_base,
+      dependencies.bfarm_dto_base
     ),
     assembly / assemblyJarName := "dnpm-ccdn-core.jar",
     assembly / mainClass       := Some("de.dnpm.ccdn.core.MVHReportingService")
@@ -58,7 +58,7 @@ lazy val connectors = project
       dependencies.scalamock,
       dependencies.play_ahc,
       dependencies.play_ahc_js,
-      dependencies.mongodb_driver,
+      dependencies.mongodb_driver
     ),
     assembly / assemblyJarName := "dnpm-ccdn-connectors.jar",
   )

@@ -21,49 +21,52 @@ final class PersistenceServiceProviderImpl extends PersistenceServiceProvider
 
 object MongodbPersistenceServiceImpl
 {
-  lazy val instance = new MongodbPersistenceServiceImpl
+  private val MONGODBURIJVMPROP = "ccdn.mongodb.uri"
+  private val MONGODBURIENVVAR  = "CCDN_MONGODB_URI"
+
+  lazy val instance = new MongodbPersistenceServiceImpl(
+    envOrNone(MONGODBURIENVVAR).orElse(propOrNone(MONGODBURIJVMPROP))
+  )
 }
 
-final class MongodbPersistenceServiceImpl extends PersistenceService with Logging
+final class MongodbPersistenceServiceImpl(
+  val mongoUri: Option[String]
+) extends PersistenceService with Logging
 {
 
-  private val mongoUri: Option[String] =
-    envOrNone("CCDN_MONGODB_URI").orElse(propOrNone("ccdn.mongodb.uri"))
+  mongoUri match {
+    case Some(uri) => log.debug(s"MongoDB URI: $uri")
+    case None      => log.warn("MongoDB URI is not configured; site availability reports will not be persisted")
+  }
 
   override def writeSiteAvailabilityReports(
     reports: Iterable[ResponsivityReport],
     now: Instant
   ): Unit =
-    if(reports.nonEmpty) mongoUri match {
-      case Some(uri) =>
+    if (reports.nonEmpty) mongoUri.foreach { uri =>
+      try {
+        val client = MongoClients.create(uri)
         try {
-          val client = MongoClients.create(uri)
-          try {
-            val coll = client.getDatabase("ccdn").getCollection("siteAvailabilityReports")
-            val docs = new java.util.ArrayList[Document]()
-            reports.foreach { r =>
-              docs.add(
-                new Document("site", r.site.value)
-                  .append("responsivity", r.responsivity.toString)
-                  .append("apiVersion", r.versionString.getOrElse("???"))
-                  .append("timestamp", java.util.Date.from(now))
-              )
-            }
-            coll.insertMany(docs)
-            log.debug("Successfully persisted responsivity logs")
-          } finally {
-            client.close()
+          val coll = client.getDatabase("ccdn").getCollection("siteAvailabilityReports")
+          val docs = new java.util.ArrayList[Document]()
+          reports.foreach { r =>
+            docs.add(
+              new Document("site", r.site.value)
+                .append("responsivity", r.responsivity.toString)
+                .append("apiVersion", r.versionString.getOrElse("???"))
+                .append("timestamp", java.util.Date.from(now))
+            )
           }
-        } catch {
-          case exc: Exception =>
-            log.warn(s"Failed to persist responsivity logs. Exception: ${exc.getMessage}")
+          coll.insertMany(docs)
+          log.debug("Successfully persisted responsivity logs")
+        } finally {
+          client.close()
         }
-      case None =>
-        log.warn("CCDN_MONGODB_URI is not configured; site availability " +
-          "reports will not be persisted")
+      } catch {
+        case exc: Exception =>
+          log.warn(s"Failed to persist responsivity logs. Exception: ${exc.getMessage}")
+      }
     }
-    else {
-      log.warn("Empty set of reports passed to writeSiteAvailabilityReports")
-    }
+    else log.warn("Empty set of reports passed to writeSiteAvailabilityReports")
 
 }
