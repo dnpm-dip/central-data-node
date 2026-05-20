@@ -32,7 +32,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       Config.instance,
       ReportRepository.getInstance.get,
       fakeDipConnector,
-      fakeBfarmConnector
+      fakeBfarmConnector,
+      new FakePersistenceService
     )
 
   val sites = Config.instance.sites.keys.toSeq
@@ -70,27 +71,30 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     // Any version yields success before the cutover date.
     val fixedInstant = Instant.parse("2026-04-30T12:00:00Z")
 
+    val capturedReports = ListBuffer.empty[ResponsivityReport]
+    var capturedInstant: Option[Instant] = None
+    val capturingReporter = new PersistenceService {
+      override def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport], now: Instant): Unit = {
+        capturedReports ++= reports
+        capturedInstant = Some(now)
+      }
+    }
+
     val testService = new MVHReportingService(
       Config.instance,
       FakeReportRepository(),
       connectorReturningVersion("0.9.0"),
-      fakeBfarmConnector
+      fakeBfarmConnector,
+      capturingReporter
     )
     testService.clock = Clock.fixed(fixedInstant, ZoneOffset.UTC)
-
-    val capturedReports = ListBuffer.empty[testService.ResponsivityReport]
-    var capturedInstant: Option[Instant] = None
-    testService.responsivitySink = { (reports, now) =>
-      capturedReports ++= reports
-      capturedInstant = Some(now)
-    }
 
     for {
       _ <- testService.conductReportingWorkflow()
     } yield {
       capturedInstant must be(Some(fixedInstant))
       capturedReports must not be empty
-      assert(capturedReports.forall(_.responsivity == testService.Responsivity.success))
+      assert(capturedReports.forall(_.responsivity == Responsivity.success))
     }
   }
 
@@ -98,7 +102,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     val preCutover = Instant.parse("2026-05-31T23:59:59Z")
     val testService = new MVHReportingService(
       Config.instance, FakeReportRepository(), connectorReturningVersion("0.9.0"),
-      fakeBfarmConnector
+      fakeBfarmConnector, new FakePersistenceService
     )
     testService.clock = Clock.fixed(preCutover, ZoneOffset.UTC)
 
@@ -113,7 +117,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       Config.instance,
       FakeReportRepository(),
       connectorReturningVersion("1.3.0-RELEASE_5"),
-      fakeBfarmConnector
+      fakeBfarmConnector,
+      new FakePersistenceService
     )
     testService.clock = Clock.fixed(onCutover, ZoneOffset.UTC)
 
@@ -128,7 +133,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       Config.instance,
       FakeReportRepository(),
       connectorReturningVersion("1.2.4-BETA5-HOTFIX#133742"),
-      fakeBfarmConnector
+      fakeBfarmConnector,
+      new FakePersistenceService
     )
     testService.clock = Clock.fixed(onCutover, ZoneOffset.UTC)
 
@@ -153,18 +159,20 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
         Future.successful(Right(report))
     }
 
+    val capturedResponsivityReports = ListBuffer.empty[ResponsivityReport]
+    val capturingReporter = new PersistenceService {
+      override def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport], now: Instant): Unit =
+        capturedResponsivityReports ++= reports
+    }
+
     val testService = new MVHReportingService(
       Config.instance,
       FakeReportRepository(),
       failingDataConnector,
-      fakeBfarmConnector
+      fakeBfarmConnector,
+      capturingReporter
     )
     testService.clock = Clock.fixed(preCutover, ZoneOffset.UTC)
-
-    val capturedResponsivityReports = ListBuffer.empty[testService.ResponsivityReport]
-    testService.responsivitySink = { (reports, _) =>
-      capturedResponsivityReports ++= reports
-    }
 
     for {
       _ <- testService.conductReportingWorkflow()
@@ -174,7 +182,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       // they would be coalesced into one each
       capturedResponsivityReports.map(_.site).toSet mustEqual expectedSites
       assert(capturedResponsivityReports
-        .forall(_.responsivity == testService.Responsivity.mixedSuccess))
+        .forall(_.responsivity == Responsivity.mixedSuccess))
     }
   }
 
@@ -182,8 +190,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     val site = sites.head
     val version = "1.3.0"
     val reports = ListBuffer(
-      service.ResponsivityReport(site, service.Responsivity.success, Some(version)),
-      service.ResponsivityReport(site, service.Responsivity.failure, None)
+      ResponsivityReport(site, Responsivity.success, Some(version)),
+      ResponsivityReport(site, Responsivity.failure, None)
     )
     val coalesced = service.coalesceResponsivityReports(reports)
     Future.successful {
@@ -194,8 +202,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
   it must "coalesce versionString: report None if no report for the site had one" in {
     val site = sites.head
     val reports = ListBuffer(
-      service.ResponsivityReport(site, service.Responsivity.failure, None),
-      service.ResponsivityReport(site, service.Responsivity.failure, None)
+      ResponsivityReport(site, Responsivity.failure, None),
+      ResponsivityReport(site, Responsivity.failure, None)
     )
     val coalesced = service.coalesceResponsivityReports(reports)
     Future.successful {

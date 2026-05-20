@@ -3,14 +3,13 @@ package de.dnpm.ccdn.core
 
 import java.time.{Clock, Instant, LocalDate, LocalTime}
 import java.time.temporal.ChronoUnit
-import java.util.concurrent.{ConcurrentLinkedQueue, Executors, ScheduledExecutorService, TimeUnit, Future => JavaFuture}
+import java.util.concurrent.{ConcurrentLinkedQueue, Executors,
+  ScheduledExecutorService, TimeUnit, Future => JavaFuture}
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration.Duration
 import scala.util.Success
 import cats.syntax.either._
 import cats.syntax.traverse._
-import com.mongodb.client.MongoClients
-import org.bson.Document
 import de.dnpm.dip.util.Logging
 import de.dnpm.dip.model.{NGSReport, Site}
 import de.dnpm.dip.service.mvh.Submission
@@ -18,7 +17,6 @@ import Submission.Report.Status.{Submitted, Unsubmitted}
 import de.dnpm.ccdn.core.bfarm.BfarmConnector
 import de.dnpm.ccdn.core.dip.DipConnector
 import de.dnpm.dip.coding.Code
-
 import scala.jdk.CollectionConverters.CollectionHasAsScala
 
 
@@ -31,7 +29,8 @@ object MVHReportingService
       Config.instance,
       ReportRepository.getInstance.get,
       dip.DipConnector.getInstance.get,
-      bfarm.BfarmConnector.getInstance.get
+      bfarm.BfarmConnector.getInstance.get,
+      PersistenceService.getInstance.get
     )
 
   /**
@@ -59,7 +58,8 @@ class MVHReportingService
   config: Config,
   private[core] val pollingQueue: ReportRepository,
   private[core] val dipConnector: DipConnector,
-  private[core] val bfarmConnector: BfarmConnector
+  private[core] val bfarmConnector: BfarmConnector,
+  private[core] val persistenceService: PersistenceService
 )(
   implicit ec: ExecutionContext
 )
@@ -70,45 +70,6 @@ with BatchingUtil
    * Serves local time. Abstracted for the purpose of unit tests
    */
   private[core] var clock: Clock = Clock.systemUTC()
-
-  private def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport],
-                                           now: Instant): Unit =
-    config.mongoUri match {
-      case Some(uri) =>
-        try { //making mongoDB client
-          val client = MongoClients.create(uri)
-          try { //communicating with it, closing it finally
-            val coll = client.getDatabase("ccdn").getCollection("siteAvailabilityReports")
-            val docs = new java.util.ArrayList[Document]()
-            reports.foreach { r =>
-              docs.add(
-                new Document("site", r.site.value)
-                  .append("responsivity", r.responsivity.toString)
-                  .append("apiVersion", r.versionString.getOrElse("???"))
-                  .append("timestamp", java.util.Date.from(now))
-              )
-            }
-            coll.insertMany(docs)
-            log.debug("Successfully persisted responsivity logs")
-          } finally {
-            client.close()
-          }
-        } catch {
-          case exc: Exception =>
-            log.warn(s"Failed to persist responsivity logs. Exception: ${exc.getMessage}")
-        }
-      case None =>
-        log.warn("CCDN_MONGODB_URI is not configured; site availability " +
-          "reports will not be persisted")
-    }
-
-  /**
-   * Abstraction of logging responsivity reports for the purpose of having
-   * customization in unit tests
-   */
-  private[core] var responsivitySink: (Iterable[ResponsivityReport], Instant) => Unit =
-    writeSiteAvailabilityReports
-
 
   /**
    * Executes the runnable in [[pollingTask]] in regular intervals
@@ -213,7 +174,7 @@ with BatchingUtil
   /**
    * Executes one full cycle of the reporting workflow: checks site API versions,
    * drains any pre-existing queue entries, polls new reports, uploads them to
-   * BfArM, and confirms back. Logs responsivity into [[responsivitySink]]
+   * BfArM, and confirms back. Logs responsivity via [[PersistenceService]]
    */
   private[core] def conductReportingWorkflow(): Future[Unit] = {
 
@@ -237,22 +198,10 @@ with BatchingUtil
       _ <- uploadReports
       _ <- confirmSubmissions(responseLog)
     } yield {
-      responsivitySink(coalesceResponsivityReports(responseLog.asScala),Instant.now(clock))
+      persistenceService.writeSiteAvailabilityReports(
+        coalesceResponsivityReports(responseLog.asScala), Instant.now(clock))
     }
   }
-
-  /**
-   * How a site responded to requests. A record can consist of multiple items
-   * for the same site and can be reduced to single value. Mixed reports reduce
-   * to [[mixedSuccess]]
-   */
-  object Responsivity extends Enumeration {
-    val success = Value("fully")
-    val mixedSuccess = Value("partial")
-    val failure = Value("offline")
-  }
-  case class ResponsivityReport(site:Code[Site],responsivity: Responsivity.Value, versionString:Option[String] = None)
-
 
   def stop(): Unit = {
     log.info("Stopping MVH Reporting service")
