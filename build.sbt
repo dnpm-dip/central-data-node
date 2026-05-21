@@ -12,6 +12,7 @@ ThisBuild / githubRepository := ownerRepo(1)
 
 
 ThisBuild / assemblyMergeStrategy := {
+  case "config.json"                             => MergeStrategy.discard
   case PathList("META-INF", "services", xs @ _*) => MergeStrategy.first
   case PathList("META-INF", xs @ _*)             => MergeStrategy.discard
   case "reference.conf"                          => MergeStrategy.concat
