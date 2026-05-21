@@ -12,6 +12,7 @@ ThisBuild / githubRepository := ownerRepo(1)
 
 
 ThisBuild / assemblyMergeStrategy := {
+  case "config.json"                             => MergeStrategy.discard
   case PathList("META-INF", "services", xs @ _*) => MergeStrategy.first
   case PathList("META-INF", xs @ _*)             => MergeStrategy.discard
   case "reference.conf"                          => MergeStrategy.concat
@@ -58,6 +59,7 @@ lazy val connectors = project
       dependencies.scalamock,
       dependencies.play_ahc,
       dependencies.play_ahc_js,
+      dependencies.mongodb_driver
     ),
     assembly / assemblyJarName := "dnpm-ccdn-connectors.jar",
   )
@@ -79,6 +81,7 @@ lazy val dependencies =
     val play_ahc_js    = "org.playframework" %% "play-ws-standalone-json" % "3.0.7"
     val service_base   = "de.dnpm.dip"       %% "service-base"            % "1.3.1"
     val bfarm_dto_base = "de.dnpm"           %% "dnpm-bfarm-model-base"   % "1.0.1"
+    val mongodb_driver = "org.mongodb" % "mongodb-driver-sync" % "5.3.0"
   }
 
 

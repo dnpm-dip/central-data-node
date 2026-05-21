@@ -36,6 +36,12 @@ trait DipConnectorOps[F[_],Env,Err]
     implicit env: Env
   ): F[Either[Err,Submission.Report]]
 
+  /**
+   * Asks the given site what version it is and returns the version string
+   * (extracted from json)
+   */
+  def getApiVersion(site:Code[Site])(implicit env: Env): F[Either[Err,String]]
+
 }
 
 trait DipConnector extends DipConnectorOps[Future,ExecutionContext,String]

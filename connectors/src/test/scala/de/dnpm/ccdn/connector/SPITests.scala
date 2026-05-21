@@ -4,7 +4,7 @@ package de.dnpm.ccdn.connector
 import java.nio.file.Files.createTempDirectory
 import scala.util.Failure
 import org.scalatest.flatspec.AnyFlatSpec
-import de.dnpm.ccdn.core.ReportRepository
+import de.dnpm.ccdn.core.{ReportRepository, PersistenceService}
 import de.dnpm.ccdn.core.bfarm.BfarmConnector
 import de.dnpm.ccdn.core.dip.DipConnector
 
@@ -35,17 +35,21 @@ final class SPITests extends AnyFlatSpec
 
   private val reportQueue =
     ReportRepository.getInstance
-      .recoverWith { 
+      .recoverWith {
         case t =>
           t.printStackTrace
           Failure(t)
       }
+
+  private val persistenceService =
+    PersistenceService.getInstance
 
 
   "SPI Loaders" must "load implementations" in {
     assert(dipConnector.isSuccess)
     assert(bfarmConnector.isSuccess)
     assert(reportQueue.isSuccess)
+    assert(persistenceService.isSuccess)
   }
 
 }

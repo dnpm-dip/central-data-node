@@ -129,7 +129,7 @@ with Logging
   import java.util.concurrent.atomic.AtomicReference
 
 
-  private val sitesConfig: AtomicReference[Map[Code[Site],String]] =
+  private[connector] val sitesConfig: AtomicReference[Map[Code[Site],String]] =
     new AtomicReference(Map.empty)
 
   private implicit lazy val executor: ScheduledExecutorService =
@@ -258,4 +258,24 @@ with Logging
       } 
     )
 
+  /**
+   * Asks the given site what version it is and returns the version string (extracted from json) as Right
+   * If the communication fails or the returned json object has an unexpected format, the entire content is returned as Left
+   */
+  override def getApiVersion(site: Code[Site])(implicit env: ExecutionContext): Future[Either[String, String]] =
+    request(site, "/api/peer2peer/meta-info")
+      .get()
+      .map(
+        resp => resp.status match {
+          case 200 =>
+            (resp.body[JsValue] \ "version")
+              .asOpt[String]
+              .toRight(s"No 'version' field in meta-info response from site $site: ${resp.body}")
+          case _ =>
+            s"Meta-info request for site $site failed with status ${resp.status} ${resp.statusText}: ${resp.body}".asLeft
+        }
+      )
+      .recover {
+        case t => t.getMessage.asLeft
+      }
 }

@@ -1,0 +1,72 @@
+package de.dnpm.ccdn.connector
+
+
+import java.time.Instant
+import com.mongodb.client.MongoClients
+import org.bson.Document
+import de.dnpm.dip.util.Logging
+import de.dnpm.ccdn.core.{
+  ResponsivityReport,
+  PersistenceService,
+  PersistenceServiceProvider
+}
+import scala.util.Properties.{envOrNone, propOrNone}
+
+
+final class PersistenceServiceProviderImpl extends PersistenceServiceProvider
+{
+  override def getInstance: PersistenceService =
+    MongodbPersistenceServiceImpl.instance
+}
+
+object MongodbPersistenceServiceImpl
+{
+  private val MONGODBURIJVMPROP = "ccdn.mongodb.uri"
+  private val MONGODBURIENVVAR  = "CCDN_MONGODB_URI"
+
+  lazy val instance = new MongodbPersistenceServiceImpl(
+    envOrNone(MONGODBURIENVVAR).orElse(propOrNone(MONGODBURIJVMPROP))
+  )
+}
+
+final class MongodbPersistenceServiceImpl(
+  val mongoUri: Option[String]
+) extends PersistenceService with Logging
+{
+
+  mongoUri match {
+    case Some(uri) => log.debug(s"MongoDB URI: $uri")
+    case None      => log.warn("MongoDB URI is not configured; site availability reports will not be persisted")
+  }
+
+  override def writeSiteAvailabilityReports(
+    reports: Iterable[ResponsivityReport],
+    now: Instant
+  ): Unit =
+    if (reports.nonEmpty) mongoUri.foreach { uri =>
+      try {
+        val client = MongoClients.create(uri)
+        try {
+          val coll = client.getDatabase("ccdn").getCollection("siteAvailabilityReports")
+          val docs = new java.util.ArrayList[Document]()
+          reports.foreach { r =>
+            docs.add(
+              new Document("site", r.site.value)
+                .append("responsivity", r.responsivity.toString)
+                .append("apiVersion", r.versionString.getOrElse("???"))
+                .append("timestamp", java.util.Date.from(now))
+            )
+          }
+          coll.insertMany(docs)
+          log.debug("Successfully persisted responsivity logs")
+        } finally {
+          client.close()
+        }
+      } catch {
+        case exc: Exception =>
+          log.warn(s"Failed to persist responsivity logs. Exception: ${exc.getMessage}")
+      }
+    }
+    else log.warn("Empty set of reports passed to writeSiteAvailabilityReports")
+
+}

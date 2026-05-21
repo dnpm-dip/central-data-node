@@ -29,7 +29,7 @@ final case class Config
   sites: Map[Code[Site],Config.SiteInfo]
 ){
 
-  def activeUseCases =
+  def activeUseCases:Set[UseCase.Value] =
     dataNodeIds.keySet
 
   def submitterId(site: Code[Site]): Id[Site] =
