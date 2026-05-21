@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.2.0](https://github.com/dnpm-dip/central-data-node/compare/v1.1.0...v1.2.0) (2026-05-21)
+
+
+### Features
+
+* Added service for connecting to a mongodb container and storing connectivity reports. Dependency to org.mongodb : mongodb-driver-sync was introduced for this. ([7b08b35](https://github.com/dnpm-dip/central-data-node/commit/7b08b35fb4c7ee41aefe2e13d355b5609b1cb795))
+* API version of DIP sites is queried. If below "1.3.0" further communication is rejected. ([7b08b35](https://github.com/dnpm-dip/central-data-node/commit/7b08b35fb4c7ee41aefe2e13d355b5609b1cb795))
+* Connectivity to each DIP site is recorded in every report polling and stored. ([7b08b35](https://github.com/dnpm-dip/central-data-node/commit/7b08b35fb4c7ee41aefe2e13d355b5609b1cb795))
+* Fetch, test and log dip node version ([#16](https://github.com/dnpm-dip/central-data-node/issues/16)) ([7b08b35](https://github.com/dnpm-dip/central-data-node/commit/7b08b35fb4c7ee41aefe2e13d355b5609b1cb795))
+
+
+### Bug Fixes
+
+* If a dependency should introduce a config.json file, it will be discarded when building JAR files. Otherwise it would shadow configuration files that should actually be served by our deployment project. ([7b08b35](https://github.com/dnpm-dip/central-data-node/commit/7b08b35fb4c7ee41aefe2e13d355b5609b1cb795))
+
 ## [1.1.0](https://github.com/dnpm-dip/central-data-node/compare/v1.0.0...v1.1.0) (2026-05-13)
 
 
