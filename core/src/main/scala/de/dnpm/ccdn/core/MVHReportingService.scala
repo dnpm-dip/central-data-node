@@ -249,9 +249,8 @@ with BatchingUtil
       LocalDate.now(clock).isBefore(versionCutoverDate) ||
         (major.toInt > 1 || (major.toInt == 1 && minor.toInt >= 3))
     case version =>
-      throw new IllegalArgumentException(
-        s"Version string '$version' does not match expected pattern '<number>.<number>.<anything>'"
-      )
+      log.warn(s"Version string '$version' does not match expected pattern '<number>.<number>.<anything>'")
+      false
   }
 
   /**
