@@ -4,13 +4,15 @@ import de.dnpm.ccdn.connector.BfarmConnectorImpl.Token
 import de.dnpm.ccdn.core.bfarm
 import de.dnpm.ccdn.core.bfarm.CDN
 import de.dnpm.dip.model.{HealthInsurance, Id, Site}
-import de.dnpm.dip.service.mvh.{Submission, TransferTAN}
+import de.dnpm.dip.service.mvh.TransferTAN
 import de.dnpm.bfarm.model.base.LibraryType
+import de.dnpm.dip.service.mvh.Submission.Type
 import org.scalamock.scalatest.AsyncMockFactory
 import org.scalatest.BeforeAndAfter
 import org.scalatest.flatspec.AsyncFlatSpec
 import play.api.libs.json.{JsValue, Json, Writes}
 import play.api.libs.ws._
+
 import java.time.LocalDate
 import java.util.UUID.randomUUID
 import java.util.concurrent.{Executors, TimeUnit}
@@ -28,7 +30,7 @@ class BfarmConnectorImplTests extends AsyncFlatSpec
     import bfarm.SubmissionReport.DiseaseType.Oncological
     bfarm.SubmissionReport(
       LocalDate.now,
-      Submission.Type.Initial,
+      Type.Initial,
       Id[TransferTAN](randomUUID.toString),
       Id[Site]("260832299"),
       Id[CDN]("KDKTUE005"),

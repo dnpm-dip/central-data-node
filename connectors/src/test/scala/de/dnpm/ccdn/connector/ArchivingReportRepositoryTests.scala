@@ -2,8 +2,7 @@ package de.dnpm.ccdn.connector
 
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.{HealthInsurance, Id, Site}
-import de.dnpm.dip.service.mvh.Submission.Report.Status
-import de.dnpm.dip.service.mvh.{Submission, UseCase}
+import de.dnpm.dip.service.mvh.UseCase
 import org.scalatest.BeforeAndAfter
 import org.scalatest.flatspec.AnyFlatSpec
 import org.slf4j.LoggerFactory
@@ -11,6 +10,9 @@ import ch.qos.logback.classic.{Level, Logger}
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import ch.qos.logback.core.spi.FilterReply
+import de.dnpm.ccdn.core.Submission
+import de.dnpm.ccdn.core.Submission.Report.Status.{Submitted, Unsubmitted}
+import de.dnpm.dip.service.mvh.Submission.Type
 
 import java.io.{File, IOException}
 import java.time.LocalDateTime
@@ -29,7 +31,7 @@ class ArchivingReportRepositoryTests extends AnyFlatSpec
 
   private def makeFakeReport(transferTan:Int = Random.nextInt(),
                              creationDate:LocalDateTime = LocalDateTime.now,
-                             status:Submission.Report.Status.Value = Status.Unsubmitted):Submission.Report = {
+                             status:Submission.Report.Status.Value = Unsubmitted):Submission.Report = {
     Submission.Report(
       Id(transferTan.toString),
       creationDate,
@@ -38,7 +40,7 @@ class ArchivingReportRepositoryTests extends AnyFlatSpec
       status,
       Coding[Site]("Uniklinik Tü","UKT"),
       UseCase.MTB,
-      Submission.Type.Test,
+      Type.Test,
       None,None,None,
       HealthInsurance.Type.SOZ,
       None,None,None
@@ -46,8 +48,8 @@ class ArchivingReportRepositoryTests extends AnyFlatSpec
   }
   private def makeThreeReports:Seq[Submission.Report] = List(
     makeFakeReport(transferTan = 12),
-    makeFakeReport(transferTan = 3, creationDate = LocalDateTime.now().plusDays(120), status = Status.Unsubmitted),
-    makeFakeReport(transferTan = 54, status = Status.Submitted))
+    makeFakeReport(transferTan = 3, creationDate = LocalDateTime.now().plusDays(120), status = Unsubmitted),
+    makeFakeReport(transferTan = 54, status = Submitted))
 
   /**
    * For teardown

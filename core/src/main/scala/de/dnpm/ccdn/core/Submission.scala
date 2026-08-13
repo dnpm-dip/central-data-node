@@ -1,12 +1,13 @@
 package de.dnpm.ccdn.core
 
 
-import java.time.LocalDateTime
 import de.dnpm.dip.coding.Coding
-import de.dnpm.dip.model.{EpisodeOfCare, HealthInsurance, Id, NGSReport, Patient, PatientRecord, Period, Reference, Site}
-import de.dnpm.dip.service.mvh.Submission.{DiagnosticExtent, Metadata, SequenceType, Type}
-import de.dnpm.dip.service.mvh.{BroadConsent, Consent, JsonEnumKeyHelpers, ModelProjectConsent, TransferTAN, UseCase}
-import play.api.libs.json.{Format, Json, OFormat, OWrites, Reads}
+import de.dnpm.dip.model._
+import de.dnpm.dip.service.mvh.Submission.{DiagnosticExtent, SequenceType, Type}
+import de.dnpm.dip.service.mvh._
+import play.api.libs.json._
+
+import java.time.LocalDateTime
 
 
 
@@ -95,13 +96,13 @@ object Submission
         Json.formatEnum(this)
     }
 
-/*    final case class Filter
+    final case class Filter
     (
       period: Option[Period[LocalDateTime]] = None,
       status: Option[Set[Status.Value]] = None,
       `type`: Option[Set[Type.Value]] = None,
       patient: Option[Set[Id[Patient]]] = None
-    )*/
+    )
 
 
     implicit val formatInsType: Format[HealthInsurance.Type.Value] =
@@ -144,8 +145,8 @@ object Submission
   )*/
 
 
-  import play.api.libs.json.JsPath
   import play.api.libs.functional.syntax._
+  import play.api.libs.json.JsPath
 
   implicit def reads[T <: PatientRecord: Reads]: Reads[Submission[T]] =
     (

@@ -1,21 +1,14 @@
 package de.dnpm.ccdn.core.dip
 
 
-import scala.concurrent.{
-  Future,
-  ExecutionContext
-}
-import scala.util.Either
-import de.dnpm.dip.util.{
-  SPI,
-  SPILoader
-}
+import de.dnpm.ccdn.core.Submission
+import de.dnpm.ccdn.core.Submission.Report.Filter
+
+import scala.concurrent.{ExecutionContext, Future}
+import de.dnpm.dip.util.{SPI, SPILoader}
 import de.dnpm.dip.coding.Code
 import de.dnpm.dip.model.Site
-import de.dnpm.dip.service.mvh.{
-  Submission,
-  UseCase
-}
+import de.dnpm.dip.service.mvh.UseCase
 
 
 trait DipConnectorOps[F[_],Env,Err]
@@ -24,7 +17,7 @@ trait DipConnectorOps[F[_],Env,Err]
   def submissionReports(
     site: Code[Site],
     useCase: UseCase.Value,
-    filter: Submission.Report.Filter
+    filter: Filter
   )(
     implicit env: Env
   ): F[Either[Err,Seq[Submission.Report]]]

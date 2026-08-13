@@ -1,23 +1,26 @@
 package de.dnpm.ccdn.core
 
 
-import java.time.{Clock, Instant, LocalDate, LocalTime}
-import java.time.temporal.ChronoUnit
-import java.util.concurrent.{ConcurrentLinkedQueue, Executors,
-  ScheduledExecutorService, TimeUnit, Future => JavaFuture}
-import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.concurrent.duration.Duration
-import scala.util.Success
 import cats.syntax.either._
 import cats.syntax.traverse._
-import de.dnpm.dip.util.Logging
-import de.dnpm.dip.model.{NGSReport, Site}
-import de.dnpm.dip.service.mvh.Submission
-import Submission.Report.Status.{Submitted, Unsubmitted}
+import de.dnpm.ccdn.core.Submission.Report.Status
+import de.dnpm.ccdn.core.Submission.Report.Status.{Submitted, Unsubmitted}
 import de.dnpm.ccdn.core.bfarm.BfarmConnector
 import de.dnpm.ccdn.core.dip.DipConnector
 import de.dnpm.dip.coding.Code
+import de.dnpm.dip.model.{NGSReport, Site}
+import de.dnpm.ccdn.core.Submission.Report.Filter
+import de.dnpm.dip.util.Logging
+
+import java.time.temporal.ChronoUnit
+import java.time.{Clock, Instant, LocalDate, LocalTime}
+import java.util.concurrent.{ConcurrentLinkedQueue, Executors, ScheduledExecutorService, TimeUnit, Future => JavaFuture}
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.jdk.CollectionConverters.CollectionHasAsScala
+import scala.util.Success
+
+
 
 
 object MVHReportingService
@@ -215,10 +218,10 @@ with BatchingUtil
    */
   private val BfarmReport: Submission.Report => bfarm.SubmissionReport = {
 
-    import de.dnpm.dip.service.mvh.UseCase._
-    import de.dnpm.bfarm.model.base.LibraryType
-    import bfarm.SubmissionReport.DiseaseType._
     import NGSReport.Type._
+    import bfarm.SubmissionReport.DiseaseType._
+    import de.dnpm.bfarm.model.base.LibraryType
+    import de.dnpm.dip.service.mvh.UseCase._
 
     report => bfarm.SubmissionReport(
       report.createdAt.toLocalDate,
@@ -309,8 +312,8 @@ with BatchingUtil
               dipConnector.submissionReports(
                 site,
                 useCase,
-                Submission.Report.Filter(
-                  status = Some(Set(Submission.Report.Status.Unsubmitted))
+                Filter(
+                  status = Some(Set(Unsubmitted:Status.Value))
                 )
               )
               .andThen {

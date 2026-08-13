@@ -6,7 +6,6 @@ import scala.collection.concurrent.{
   TrieMap
 }
 import cats.data.EitherNel
-import de.dnpm.dip.service.mvh.Submission
 
 
 final class FakeReportRepositoryProvider extends ReportRepositoryProvider

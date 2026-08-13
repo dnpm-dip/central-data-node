@@ -1,6 +1,7 @@
 package de.dnpm.ccdn.core
 
 
+import de.dnpm.ccdn.core.Submission.Report.Filter
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.must.Matchers._
 import org.slf4j.LoggerFactory
@@ -12,7 +13,7 @@ import scala.collection.mutable.ListBuffer
 import scala.concurrent.Future
 import de.dnpm.dip.coding.Code
 import de.dnpm.dip.model.Site
-import de.dnpm.dip.service.mvh.{Submission, UseCase}
+import de.dnpm.dip.service.mvh.UseCase
 
 
 
@@ -58,7 +59,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     override def getApiVersion(site: Code[Site])(implicit env: ExecutionContext)
     : Future[Either[String, String]] =
       Future.successful(Right(version))
-    override def submissionReports(site: Code[Site], useCase: UseCase.Value, filter: Submission.Report.Filter)
+    override def submissionReports(site: Code[Site], useCase: UseCase.Value, filter: Filter)
         (implicit ec: ExecutionContext): Future[Either[String, Seq[Submission.Report]]] =
       Future.successful(Right(Seq.empty))
     override def confirmSubmitted(report: Submission.Report)(implicit ec: ExecutionContext)
@@ -151,7 +152,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       :Future[Either[String, String]] =
         Future.successful(Right("1.3.0"))
       override def submissionReports(site: Code[Site], useCase: UseCase.Value,
-                                     filter: Submission.Report.Filter)
+                                     filter: Filter)
           (implicit ec: ExecutionContext): Future[Either[String, Seq[Submission.Report]]] =
         Future.successful(Left("simulated data request failure"))
       override def confirmSubmitted(report: Submission.Report)(implicit ec: ExecutionContext)

@@ -2,43 +2,21 @@ package de.dnpm.ccdn.connector
 
 
 import java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME
-import scala.concurrent.{
-  Future,
-  ExecutionContext
-}
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
-import scala.util.{
-  Either,
-  Success,
-  Failure
-}
+import scala.util.{Either, Failure, Success}
 import scala.util.chaining._
 import cats.syntax.either._
-import play.api.libs.json.{
-  Json,
-  JsValue,
-  Reads
-}
-import play.api.libs.ws.{
-  StandaloneWSClient => WSClient,
-  StandaloneWSRequest => WSRequest,
-}
+import de.dnpm.ccdn.core.Submission
+import de.dnpm.ccdn.core.Submission.Report.Filter
+import play.api.libs.json.{JsValue, Json, Reads}
+import play.api.libs.ws.{StandaloneWSClient => WSClient, StandaloneWSRequest => WSRequest}
 import play.api.libs.ws.JsonBodyReadables._
-import de.dnpm.dip.util.{
-  Logging,
-  Retry
-}
+import de.dnpm.dip.util.{Logging, Retry}
 import de.dnpm.dip.coding.Code
 import de.dnpm.dip.model.Site
-import de.dnpm.dip.service.mvh.{
-  Submission,
-  UseCase
-}
-import de.dnpm.ccdn.core.dip.{
-  DipConnector,
-  DipConnectorProvider
-}
-
+import de.dnpm.dip.service.mvh.UseCase
+import de.dnpm.ccdn.core.dip.{DipConnector, DipConnectorProvider}
 
 final case class Collection[T](entries: List[T])
 
@@ -202,7 +180,7 @@ with Logging
   override def submissionReports(
     site: Code[Site],
     useCase: UseCase.Value,
-    filter: Submission.Report.Filter
+    filter: Filter
   )(
     implicit ec: ExecutionContext
   ): Future[Either[String,Seq[Submission.Report]]] =

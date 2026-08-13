@@ -1,7 +1,6 @@
 package de.dnpm.ccdn.connector
 
-import de.dnpm.ccdn.core.{ReportRepository, ReportRepositoryProvider}
-import de.dnpm.dip.service.mvh.Submission
+import de.dnpm.ccdn.core.{ReportRepository, ReportRepositoryProvider, Submission}
 import de.dnpm.dip.util.Logging
 
 import java.io.File

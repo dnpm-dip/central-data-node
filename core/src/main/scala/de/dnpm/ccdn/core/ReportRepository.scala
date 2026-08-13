@@ -12,7 +12,6 @@ import de.dnpm.dip.model.{
   Site
 }
 import de.dnpm.dip.service.mvh.{
-  Submission,
   TransferTAN
 }
 

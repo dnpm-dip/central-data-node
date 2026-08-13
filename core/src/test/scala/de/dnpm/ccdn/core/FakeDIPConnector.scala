@@ -7,9 +7,11 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.util.Random
 import scala.concurrent.{ExecutionContext, Future}
 import cats.syntax.either._
+import de.dnpm.ccdn.core.Submission.Report.Filter
 import de.dnpm.dip.coding.{Code, Coding}
 import de.dnpm.dip.model.{HealthInsurance, Id, NGSReport, Patient, Site}
-import de.dnpm.dip.service.mvh.{Submission, TransferTAN, UseCase}
+import de.dnpm.dip.service.mvh.{TransferTAN, UseCase}
+import de.dnpm.dip.service.mvh.Submission.Type
 
 
 final class FakeDIPConnectorProvider extends dip.DipConnectorProvider
@@ -54,7 +56,7 @@ class FakeDIPConnector extends dip.DipConnector
       Submission.Report.Status.Unsubmitted,
       Coding[Site](site.value),
       useCase,
-      Submission.Type.Initial,
+      Type.Initial,
       Some(NGSReport.Type.GenomeLongRead),
       None,None,
       HealthInsurance.Type.UNK,
@@ -65,7 +67,7 @@ class FakeDIPConnector extends dip.DipConnector
   override def submissionReports(
     site: Code[Site],
     useCase: UseCase.Value,
-    filter: Submission.Report.Filter
+    filter: Filter
   )(
     implicit ec: ExecutionContext
   ): Future[Either[String,Seq[Submission.Report]]] =
