@@ -49,7 +49,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
       _ <- service.uploadReports
 
-      _ <- service.confirmSubmissions(new ConcurrentLinkedQueue())
+      _ <- service.confirmReports(new ConcurrentLinkedQueue())
 
     } yield service.pollingQueue.entries(_ => true) must be (empty)
   }
@@ -233,7 +233,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
       _ <- service.uploadReports
 
-      _ <- service.confirmSubmissions(new ConcurrentLinkedQueue())
+      _ <- service.confirmReports(new ConcurrentLinkedQueue())
 
     } yield{
 

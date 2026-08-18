@@ -89,8 +89,29 @@ object Submission
 
     object Status extends Enumeration
     {
+      /**
+       * 1st state. When a submission is freshly fetched from the DIP node,
+       * not yet further processed
+       */
       val Unsubmitted = Value("unsubmitted")
-      val Submitted   = Value("submitted")
+      /**
+       * 2nd state. When a submission is submitted to BfArM
+       */
+      val SubmittedToBfarm   = Value("submitted")
+      /**
+       * 3rd state. When submission to BfArM has been reported back to
+       * the source DIP node.
+       */
+      val confirmedToSource = Value("confirmed")
+      /**
+       * 4th state. Associated submission has been downloaded from source DIP
+       * node, encrytped and stored.
+       *
+       * Subsequently this report will also be encrypted and stored and then
+       * removed from the queue.
+       */
+      val submissionBackedup = Value("backedup")
+
 
       implicit val formatValue: Format[Value] =
         Json.formatEnum(this)

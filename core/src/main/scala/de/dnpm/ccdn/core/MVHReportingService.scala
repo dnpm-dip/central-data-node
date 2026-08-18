@@ -4,7 +4,7 @@ package de.dnpm.ccdn.core
 import cats.syntax.either._
 import cats.syntax.traverse._
 import de.dnpm.ccdn.core.Submission.Report.Status
-import de.dnpm.ccdn.core.Submission.Report.Status.{Submitted, Unsubmitted}
+import de.dnpm.ccdn.core.Submission.Report.Status.{SubmittedToBfarm, Unsubmitted}
 import de.dnpm.ccdn.core.bfarm.BfarmConnector
 import de.dnpm.ccdn.core.dip.DipConnector
 import de.dnpm.dip.coding.Code
@@ -84,7 +84,7 @@ with BatchingUtil
   /**
    * Regularly queries DIP sites for new submissions ([[pollReports]]), uploads
    * them to BfArM ([[uploadReports]]) and sends a confirmation to dip sites
-   * ([[confirmSubmissions]]). The interval is retrieved from [[config#polling]]
+   * ([[confirmReports]]). The interval is retrieved from [[config#polling]]
    *
    * Before polling for new reports, the [[pollingQueue]] is checked for preexisting items,
    * which are processed before polling for new items in [[pollReports]]
@@ -191,10 +191,13 @@ with BatchingUtil
       // had been interrupted) and it thus contains reports whose upload hasn't
       // been confirmed to the origin DIP), in order to avoid polling them again
       _ <- if (pollingQueue.exists(_.status == Unsubmitted)) uploadReports else Future.unit
-      _ <- if (pollingQueue.exists(_.status == Submitted)) confirmSubmissions(responseLog) else Future.unit
+      _ <- if (pollingQueue.exists(_.status == SubmittedToBfarm)) confirmReports(responseLog) else Future.unit
       _ <- pollReports(validSites,responseLog)
       _ <- uploadReports
-      _ <- confirmSubmissions(responseLog)
+      _ <- confirmReports(responseLog)
+      _ <- downloadSubmissions(validSites,responseLog)
+      _ <- archiveReports
+      _ <- downloadDeletions(validSites,responseLog)
     } yield {
       persistenceService.writeSiteAvailabilityReports(
         coalesceResponsivityReports(responseLog.asScala), Instant.now(clock))
@@ -344,7 +347,7 @@ with BatchingUtil
    * Communicates with the BfArM, sends them [[BfarmReport]] entities, each based
    * on one of all the [[Submission.Report]] entities in the [[pollingQueue]]
    * that are in status [[Unsubmitted]]. After this upload their status is
-   * changed to [[Submitted]]
+   * changed to [[SubmittedToBfarm]]
    */
   private[core] def uploadReports: Future[Seq[Either[String,Unit]]] = {
 
@@ -357,7 +360,7 @@ with BatchingUtil
             case Right(_) =>
               log.info(s"SubmissionReport Uploaded: " +
                 s"Site ${report.site.code}, TAN ${report.id}")
-              pollingQueue.replace(report.copy(status = Submitted))
+              pollingQueue.replace(report.copy(status = SubmittedToBfarm))
 
             case err @ Left(msg) =>
               log.error(s"Problem uploading SubmissionReport: " +
@@ -377,7 +380,7 @@ with BatchingUtil
 
   /**
    * Limits the number of submissions that can be processed simultaneously
-   * in [[confirmSubmissions]], which is additionally limited by the actual
+   * in [[confirmReports]], which is additionally limited by the actual
    * number of available threads
    */
   private[core] val nSimultaneousSubmissionConfirmations:Int = 50
@@ -385,7 +388,7 @@ with BatchingUtil
   /**
    * Send "submission confirmations" to the DIP nodes for each SubmissionReport
    * that has been successfully submitted to BfArM. If successful the
-   * SubmissionReport is removed from [[pollingQueue]]
+   * SubmissionReport is elevated to status [[Status.confirmedToSource]]
    *
    * NOTE: Given that some DIP nodes are placed behind an Apache Tomcat server,
    * which only handles up to 200 sockets simultaneously by default, explicit
@@ -393,15 +396,17 @@ with BatchingUtil
    * SubmissionReports were processed in parallel here.
    */
 
-  private[core] def confirmSubmissions(availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport])
+  private[core] def confirmReports(availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport])
   :Future[Seq[Either[String,Submission.Report]]] =
     batchTraverse[Submission.Report, Seq, Future, Either[String, Submission.Report]](
-      pollingQueue.entries(_.status == Submitted),
+      pollingQueue.entries(_.status == SubmittedToBfarm),
       nSimultaneousSubmissionConfirmations
     )(
       report => (dipConnector.confirmSubmitted(report).map {
         case Right(_) =>
-          pollingQueue.removeFromQueue(report).map(_ => report)
+          val asConfirmed = report.copy(status = Status.confirmedToSource)
+          pollingQueue.replace(asConfirmed).map(_ => asConfirmed)
+          //pollingQueue.removeFromQueue(report).map(_ => report)
 
         case Left(msg) =>
           (s"Problem confirming submission: Site ${report.site.code}, " +
@@ -429,4 +434,30 @@ with BatchingUtil
 
     )
 
+  /**
+   * Fetches all reports in the queue in state [[Status.confirmedToSource]],
+   * takes a subset of them (at least [[minNumDownloads]]), downloads them,
+   * and passes them to ??? to store them safely
+   */
+  def downloadSubmissions(minNumDownloads:Int, validSites: Seq[Code[Site]],
+                          availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport]):Future[Any] = {
+    ???
+  }
+
+  /**
+   * Fetches all reports in state [[Status.submissionBackedup]]
+   * @return
+   */
+  def archiveReports:Future[Any] = { ???}
+
+  /**
+   * Iterates over all [[validSites]] and fetches the deletions since the time that ??? considers the minimum time
+   * @param validSites
+   * @param availabilityBuffer
+   * @return
+   */
+  def downloadDeletions(validSites: Seq[Code[Site]],
+                        availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport]):Future[Any] = {
+    ???
+  }
 }

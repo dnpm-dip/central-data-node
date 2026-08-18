@@ -11,7 +11,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import ch.qos.logback.core.spi.FilterReply
 import de.dnpm.ccdn.core.Submission
-import de.dnpm.ccdn.core.Submission.Report.Status.{Submitted, Unsubmitted}
+import de.dnpm.ccdn.core.Submission.Report.Status.{SubmittedToBfarm, Unsubmitted}
 import de.dnpm.dip.service.mvh.Submission.Type
 
 import java.io.{File, IOException}
@@ -49,7 +49,7 @@ class ArchivingReportRepositoryTests extends AnyFlatSpec
   private def makeThreeReports:Seq[Submission.Report] = List(
     makeFakeReport(transferTan = 12),
     makeFakeReport(transferTan = 3, creationDate = LocalDateTime.now().plusDays(120), status = Unsubmitted),
-    makeFakeReport(transferTan = 54, status = Submitted))
+    makeFakeReport(transferTan = 54, status = SubmittedToBfarm))
 
   /**
    * For teardown
