@@ -7,7 +7,7 @@ import de.dnpm.ccdn.core.Submission.Report.Filter
 import scala.concurrent.{ExecutionContext, Future}
 import de.dnpm.dip.util.{SPI, SPILoader}
 import de.dnpm.dip.coding.Code
-import de.dnpm.dip.model.Site
+import de.dnpm.dip.model.{PatientRecord, Site}
 import de.dnpm.dip.service.mvh.UseCase
 
 
@@ -34,6 +34,12 @@ trait DipConnectorOps[F[_],Env,Err]
    * (extracted from json)
    */
   def getApiVersion(site:Code[Site])(implicit env: Env): F[Either[Err,String]]
+
+  def downloadSubmission[T <: PatientRecord](
+    report: Submission.Report
+  )(
+    implicit env: Env
+  ): F[Either[Err,Submission[T]]]
 
 }
 

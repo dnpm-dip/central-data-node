@@ -106,11 +106,20 @@ object Submission
       /**
        * 4th state. Associated submission has been downloaded from source DIP
        * node, encrytped and stored.
-       *
-       * Subsequently this report will also be encrypted and stored and then
-       * removed from the queue.
        */
-      val submissionBackedup = Value("backedup")
+      val submissionBackedup = Value("submissionbackedup")
+      /**
+       * 5th state. The report was also backed up.
+       */
+      val reportBackedup = Value("reportbackedup")
+
+      /**
+       * 6th and final state. The report has been stored for quarter reports
+       *
+       * Subsequently, in this state a report may be removed
+       */
+      val reportArchived = Value("archived")
+
 
 
       implicit val formatValue: Format[Value] =

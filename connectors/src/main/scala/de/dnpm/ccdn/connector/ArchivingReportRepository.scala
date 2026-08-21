@@ -9,13 +9,14 @@ import java.time.LocalDateTime
 import scala.util.Properties.{envOrNone, propOrNone}
 import scala.util.{Failure, Try}
 
+@Deprecated
 final class ArchivingReportRepositoryProviderImpl extends ReportRepositoryProvider
 {
   override def getInstance: ReportRepository =
     ArchivingReportRepository.instance
 }
 
-
+@Deprecated
 object ArchivingReportRepository extends Logging {
   private val QUEUE_PROP = "ccdn.queue.dir"
   private val QUEUE_ENV = "CCDN_QUEUE_DIR"

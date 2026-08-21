@@ -8,7 +8,7 @@ import de.dnpm.ccdn.core.Submission.Report.Status.{SubmittedToBfarm, Unsubmitted
 import de.dnpm.ccdn.core.bfarm.BfarmConnector
 import de.dnpm.ccdn.core.dip.DipConnector
 import de.dnpm.dip.coding.Code
-import de.dnpm.dip.model.{NGSReport, Site}
+import de.dnpm.dip.model.{NGSReport, PatientRecord, Site}
 import de.dnpm.ccdn.core.Submission.Report.Filter
 import de.dnpm.dip.util.Logging
 
@@ -191,12 +191,13 @@ with BatchingUtil
       // had been interrupted) and it thus contains reports whose upload hasn't
       // been confirmed to the origin DIP), in order to avoid polling them again
       _ <- if (pollingQueue.exists(_.status == Unsubmitted)) uploadReports else Future.unit
-      _ <- if (pollingQueue.exists(_.status == SubmittedToBfarm)) confirmReports(responseLog) else Future.unit
+      oldConfirmations <- if (pollingQueue.exists(_.status == SubmittedToBfarm)) confirmReports(responseLog) else Future.successful(Seq.empty)
       _ <- pollReports(validSites,responseLog)
       _ <- uploadReports
-      _ <- confirmReports(responseLog)
-      _ <- downloadSubmissions(validSites,responseLog)
-      _ <- archiveReports
+      freshConfirmations <- confirmReports(responseLog)
+      _ <- downloadSubmissions(freshConfirmations.concat(oldConfirmations).count(_.isRight),validSites,responseLog) //should process as at least as many submissions
+      _ = archiveReports
+      _ <- flushReportQueue
       _ <- downloadDeletions(validSites,responseLog)
     } yield {
       persistenceService.writeSiteAvailabilityReports(
@@ -384,6 +385,7 @@ with BatchingUtil
    * number of available threads
    */
   private[core] val nSimultaneousSubmissionConfirmations:Int = 50
+  private[core] val nSimultaneousSubmissionDownloads:Int = 4
 
   /**
    * Send "submission confirmations" to the DIP nodes for each SubmissionReport
@@ -441,14 +443,56 @@ with BatchingUtil
    */
   def downloadSubmissions(minNumDownloads:Int, validSites: Seq[Code[Site]],
                           availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport]):Future[Any] = {
-    ???
+    val numDownloads:Int = minNumDownloads match {
+      case 0 => 25
+      case n if n >= 25 => n
+      case n => (n * 1.5).floor.toInt
+    }
+    batchTraverse[Submission.Report, Seq, Future, Either[String, Submission.Report]](
+      pollingQueue.entries(_.status == Status.confirmedToSource).take(numDownloads),
+      nSimultaneousSubmissionDownloads
+    )(
+      report => dipConnector.downloadSubmission[PatientRecord](report).map {
+        case Right(submission) =>
+          persistenceService.backup(report,submission) match {
+            case Right(_) => {
+              //backup saved successful
+              val asBackedUp = report.copy(status = Status.submissionBackedup)
+              pollingQueue.replace(asBackedUp).map(_ => asBackedUp)
+            }
+            case Left(storeError) =>
+              (s"Problem storing submission for backup: Site ${report.site.code}, " +
+                s"TAN ${report.id} - $storeError").asLeft[Submission.Report]
+          }
+
+        case Left(downloadError) =>
+          (s"Problem downloading submission for backup: Site ${report.site.code}, " +
+            s"TAN ${report.id} - $downloadError").asLeft[Submission.Report]
+      }
+    )
   }
 
-  /**
-   * Fetches all reports in state [[Status.submissionBackedup]]
-   * @return
-   */
-  def archiveReports:Future[Any] = { ???}
+  def archiveReports = {
+    pollingQueue.entries(_.status == Status.submissionBackedup).foreach(
+      report => persistenceService.backup(report) match {
+        case Right(_) => {
+          //backup saved successful
+          val asBackedUp = report.copy(status = Status.reportBackedup)
+          pollingQueue.replace(asBackedUp).map(_ => asBackedUp)
+        }
+        case Left(storeError) => {
+          (s"Problem storing submission for backup: Site ${report.site.code}, " +
+            s"TAN ${report.id} - $storeError").asLeft[Submission.Report]
+        }
+          //TODO danach noch fürn Quartalsbericht archivieren
+      }
+    )
+  }
+
+  def flushReportQueue:Future[Any] = {
+    //TODO
+    ???
+  }
 
   /**
    * Iterates over all [[validSites]] and fetches the deletions since the time that ??? considers the minimum time

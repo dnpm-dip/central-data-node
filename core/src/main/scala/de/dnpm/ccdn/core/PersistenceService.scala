@@ -1,6 +1,8 @@
 package de.dnpm.ccdn.core
 
 
+import de.dnpm.dip.model.PatientRecord
+
 import java.time.Instant
 import de.dnpm.dip.util.{
   SPI,
@@ -18,6 +20,12 @@ trait PersistenceService
     reports: Iterable[ResponsivityReport],
     now: Instant
   ): Unit
+
+  def backup(report:Submission.Report):Either[String,Unit]
+
+  def backup[T <: PatientRecord](report:Submission.Report,
+                                 submission:Submission[T]):Either[String,Unit]
+
 }
 
 trait PersistenceServiceProvider extends SPI[PersistenceService]
