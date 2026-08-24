@@ -2,18 +2,11 @@ package de.dnpm.ccdn.core
 
 
 import cats.data.EitherNel
-import de.dnpm.dip.util.{
-  SPI,
-  SPILoader
-}
+import de.dnpm.ccdn.core.dip.Report
+import de.dnpm.dip.util.{SPI, SPILoader}
 import de.dnpm.dip.coding.Code
-import de.dnpm.dip.model.{
-  Id,
-  Site
-}
-import de.dnpm.dip.service.mvh.{
-  TransferTAN
-}
+import de.dnpm.dip.model.{Id, Site}
+import de.dnpm.dip.service.mvh.TransferTAN
 
 
 /**
@@ -67,11 +60,11 @@ trait Repository[T]
 }
 
 
-trait ReportRepository extends Repository[Submission.Report]
+trait ReportRepository extends Repository[Report]
 {
   type Key = (Code[Site],Id[TransferTAN])
 
-  override def key(report: Submission.Report): Key =
+  override def key(report: Report): Key =
     report.site.code -> report.id
 }
 

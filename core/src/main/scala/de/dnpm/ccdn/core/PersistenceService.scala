@@ -1,13 +1,12 @@
 package de.dnpm.ccdn.core
 
 
+import de.dnpm.ccdn.core.dip.Report
 import de.dnpm.dip.model.PatientRecord
+import de.dnpm.dip.service.mvh.Submission
 
 import java.time.Instant
-import de.dnpm.dip.util.{
-  SPI,
-  SPILoader
-}
+import de.dnpm.dip.util.{SPI, SPILoader}
 
 
 /**
@@ -21,9 +20,9 @@ trait PersistenceService
     now: Instant
   ): Unit
 
-  def backup(report:Submission.Report):Either[String,Unit]
+  def backup(report:Report):Either[String,Unit]
 
-  def backup[T <: PatientRecord](report:Submission.Report,
+  def backup[T <: PatientRecord](report:Report,
                                  submission:Submission[T]):Either[String,Unit]
 
 }

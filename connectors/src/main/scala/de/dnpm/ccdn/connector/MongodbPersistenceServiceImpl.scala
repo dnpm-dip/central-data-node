@@ -3,13 +3,13 @@ package de.dnpm.ccdn.connector
 
 import java.time.Instant
 import com.mongodb.client.MongoClients
+import de.dnpm.ccdn.core.dip.Report
 import org.bson.Document
 import de.dnpm.dip.util.Logging
-import de.dnpm.ccdn.core.{
-  ResponsivityReport,
-  PersistenceService,
-  PersistenceServiceProvider
-}
+import de.dnpm.ccdn.core.{PersistenceService, PersistenceServiceProvider, ResponsivityReport}
+import de.dnpm.dip.model.PatientRecord
+import de.dnpm.dip.service.mvh.Submission
+
 import scala.util.Properties.{envOrNone, propOrNone}
 
 
@@ -69,4 +69,7 @@ final class MongodbPersistenceServiceImpl(
     }
     else log.warn("Empty set of reports passed to writeSiteAvailabilityReports")
 
+  override def backup(report: Report): Either[String, Unit] = ???
+
+  override def backup[T <: PatientRecord](report: Report, submission: Submission[T]): Either[String, Unit] = ???
 }

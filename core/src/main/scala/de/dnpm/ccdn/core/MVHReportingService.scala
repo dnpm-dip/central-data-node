@@ -3,13 +3,13 @@ package de.dnpm.ccdn.core
 
 import cats.syntax.either._
 import cats.syntax.traverse._
-import de.dnpm.ccdn.core.Submission.Report.Status
-import de.dnpm.ccdn.core.Submission.Report.Status.{SubmittedToBfarm, Unsubmitted}
 import de.dnpm.ccdn.core.bfarm.BfarmConnector
-import de.dnpm.ccdn.core.dip.DipConnector
+import de.dnpm.ccdn.core.dip.{DipConnector, Report}
+import de.dnpm.ccdn.core.dip.Report.Filter
+import de.dnpm.ccdn.core.dip.Report.Status
 import de.dnpm.dip.coding.Code
 import de.dnpm.dip.model.{NGSReport, PatientRecord, Site}
-import de.dnpm.ccdn.core.Submission.Report.Filter
+import de.dnpm.dip.service.mvh.Submission
 import de.dnpm.dip.util.Logging
 
 import java.time.temporal.ChronoUnit
@@ -190,8 +190,8 @@ with BatchingUtil
       // Start by draining the report queue, if non-empty (in case the service
       // had been interrupted) and it thus contains reports whose upload hasn't
       // been confirmed to the origin DIP), in order to avoid polling them again
-      _ <- if (pollingQueue.exists(_.status == Unsubmitted)) uploadReports else Future.unit
-      oldConfirmations <- if (pollingQueue.exists(_.status == SubmittedToBfarm)) confirmReports(responseLog) else Future.successful(Seq.empty)
+      _ <- if (pollingQueue.exists(_.status == Status.Unsubmitted)) uploadReports else Future.unit
+      oldConfirmations <- if (pollingQueue.exists(_.status == Status.SubmittedToBfarm)) confirmReports(responseLog) else Future.successful(Seq.empty)
       _ <- pollReports(validSites,responseLog)
       _ <- uploadReports
       freshConfirmations <- confirmReports(responseLog)
@@ -220,7 +220,7 @@ with BatchingUtil
    * for reimbursement) as it comes from the DIP node (in [[pollReports]]) into
    * a report that will be transmitted to the BfArM (in [[uploadReports]])
    */
-  private val BfarmReport: Submission.Report => bfarm.SubmissionReport = {
+  private val BfarmReport: Report => bfarm.SubmissionReport = {
 
     import NGSReport.Type._
     import bfarm.SubmissionReport.DiseaseType._
@@ -317,7 +317,7 @@ with BatchingUtil
                 site,
                 useCase,
                 Filter(
-                  status = Some(Set(Unsubmitted:Status.Value))
+                  status = Some(Set(Status.Unsubmitted:Status.Value))
                 )
               )
               .andThen {
@@ -354,14 +354,14 @@ with BatchingUtil
 
     log.info("Uploading SubmissionReports...")
    
-    pollingQueue.entries(_.status == Unsubmitted).traverse(
+    pollingQueue.entries(_.status == Status.Unsubmitted).traverse(
       report =>
         bfarmConnector.upload(BfarmReport(report))
           .map {
             case Right(_) =>
               log.info(s"SubmissionReport Uploaded: " +
                 s"Site ${report.site.code}, TAN ${report.id}")
-              pollingQueue.replace(report.copy(status = SubmittedToBfarm))
+              pollingQueue.replace(report.copy(status = Status.SubmittedToBfarm))
 
             case err @ Left(msg) =>
               log.error(s"Problem uploading SubmissionReport: " +
@@ -399,9 +399,9 @@ with BatchingUtil
    */
 
   private[core] def confirmReports(availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport])
-  :Future[Seq[Either[String,Submission.Report]]] =
-    batchTraverse[Submission.Report, Seq, Future, Either[String, Submission.Report]](
-      pollingQueue.entries(_.status == SubmittedToBfarm),
+  :Future[Seq[Either[String,Report]]] =
+    batchTraverse[Report, Seq, Future, Either[String, Report]](
+      pollingQueue.entries(_.status == Status.SubmittedToBfarm),
       nSimultaneousSubmissionConfirmations
     )(
       report => (dipConnector.confirmSubmitted(report).map {
@@ -412,8 +412,8 @@ with BatchingUtil
 
         case Left(msg) =>
           (s"Problem confirming submission: Site ${report.site.code}, " +
-            s"TAN ${report.id} - $msg").asLeft[Submission.Report]
-      }: Future[Either[String, Submission.Report]])
+            s"TAN ${report.id} - $msg").asLeft[Report]
+      }: Future[Either[String, Report]])
       .andThen {
         case Success(Right(_)) =>
           log.debug(s"Submission confirmed: Site ${report.site.code}, " +
@@ -431,7 +431,7 @@ with BatchingUtil
           log.error(s"Problem confirming submission: Site ${report.site.code}, " +
             s"TAN ${report.id} - ${t.getMessage}")
           availabilityBuffer.add(ResponsivityReport(report.site.code,Responsivity.failure))
-          t.getMessage.asLeft[Submission.Report]
+          t.getMessage.asLeft[Report]
       }
 
     )
@@ -439,7 +439,7 @@ with BatchingUtil
   /**
    * Fetches all reports in the queue in state [[Status.confirmedToSource]],
    * takes a subset of them (at least [[minNumDownloads]]), downloads them,
-   * and passes them to ??? to store them safely
+   * and passes them to persistenceService to store them safely
    */
   def downloadSubmissions(minNumDownloads:Int, validSites: Seq[Code[Site]],
                           availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport]):Future[Any] = {
@@ -448,7 +448,7 @@ with BatchingUtil
       case n if n >= 25 => n
       case n => (n * 1.5).floor.toInt
     }
-    batchTraverse[Submission.Report, Seq, Future, Either[String, Submission.Report]](
+    batchTraverse[Report, Seq, Future, Either[String, Report]](
       pollingQueue.entries(_.status == Status.confirmedToSource).take(numDownloads),
       nSimultaneousSubmissionDownloads
     )(
@@ -462,12 +462,12 @@ with BatchingUtil
             }
             case Left(storeError) =>
               (s"Problem storing submission for backup: Site ${report.site.code}, " +
-                s"TAN ${report.id} - $storeError").asLeft[Submission.Report]
+                s"TAN ${report.id} - $storeError").asLeft[Report]
           }
 
         case Left(downloadError) =>
           (s"Problem downloading submission for backup: Site ${report.site.code}, " +
-            s"TAN ${report.id} - $downloadError").asLeft[Submission.Report]
+            s"TAN ${report.id} - $downloadError").asLeft[Report]
       }
     )
   }

@@ -7,11 +7,12 @@ import scala.util.{Failure, Try, Using}
 import scala.util.chaining._
 import cats.data.{EitherNel, NonEmptyList}
 import cats.syntax.either._
+import de.dnpm.ccdn.core.dip.Report
 
 import scala.util.Properties.{envOrNone, propOrNone}
 import play.api.libs.json.{Json, Writes}
 import de.dnpm.dip.util.Logging
-import de.dnpm.ccdn.core.{ReportRepository, ReportRepositoryProvider, Submission}
+import de.dnpm.ccdn.core.{ReportRepository, ReportRepositoryProvider}
 
 
 final class ReportRepositoryProviderImpl extends ReportRepositoryProvider
@@ -56,7 +57,7 @@ with Logging
   //ensure that the folder hierarchy for the FS cache exists
   queueDir.mkdirs
 
-  private val cache: Map[Key,Submission.Report] =
+  private val cache: Map[Key,Report] =
     TrieMap.from(
       queueDir.listFiles(
         (_,name) => name.startsWith(filePrefix) && name.endsWith(".json")
@@ -64,18 +65,18 @@ with Logging
       .to(LazyList)
       .map(new FileInputStream(_))
       .map(Json.parse)
-      .map(Json.fromJson[Submission.Report](_))
+      .map(Json.fromJson[Report](_))
       .map(_.get)
       .map(
         report => (report.site.code,report.id) -> report
       )
     )
 
-  protected def filenameOf(report:Submission.Report):String = {
+  protected def filenameOf(report:Report):String = {
     val (site,tan) = key(report)
     s"${filePrefix}_${site}_${tan}.json"
   }
-  protected def queueFile(report: Submission.Report): File = {
+  protected def queueFile(report: Report): File = {
     new File(queueDir, filenameOf(report))
   }
     
@@ -95,7 +96,7 @@ with Logging
     
 
   override def saveIfAbsent(
-    report: Submission.Report
+    report: Report
   ): Either[String,Unit] =
     cache.get(key(report)) match {
       case Some(_) => ().asRight
@@ -104,10 +105,10 @@ with Logging
 
 
   override def saveIfAbsent(
-    reports: Seq[Submission.Report]
-  ): EitherNel[Submission.Report,Unit] =
+    reports: Seq[Report]
+  ): EitherNel[Report,Unit] =
     NonEmptyList.fromList(
-      reports.foldLeft(List.empty[Submission.Report])(
+      reports.foldLeft(List.empty[Report])(
         (failures,report) =>
           saveIfAbsent(report) match {
             case Right(_) => failures
@@ -119,7 +120,7 @@ with Logging
 
 
   override def replace(
-    report: Submission.Report
+    report: Report
   ): Either[String,Unit] =
     Try(saveToFile(report,queueFile(report)))
       .map(_ => cache += key(report) -> report)
@@ -129,7 +130,7 @@ with Logging
       )
 
 
-  override def entries(f: Submission.Report => Boolean): Seq[Submission.Report] =
+  override def entries(f: Report => Boolean): Seq[Report] =
     cache.values
       .filter(f)
       .toSeq
@@ -140,11 +141,11 @@ with Logging
    *
    * This implementation simply deletes the file
    */
-  protected def reportDisposer(report:Submission.Report):Try[Boolean] =
+  protected def reportDisposer(report:Report):Try[Boolean] =
     Try(queueFile(report).delete)
 
   override def removeFromQueue(
-    report: Submission.Report
+    report: Report
   ): Either[String,Unit] =
     this.reportDisposer(report)
       .collect {

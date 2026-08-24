@@ -10,8 +10,8 @@ import ch.qos.logback.classic.{Level, Logger}
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import ch.qos.logback.core.spi.FilterReply
-import de.dnpm.ccdn.core.Submission
-import de.dnpm.ccdn.core.Submission.Report.Status.{SubmittedToBfarm, Unsubmitted}
+import de.dnpm.ccdn.core.dip.Report
+import de.dnpm.ccdn.core.dip.Report.Status
 import de.dnpm.dip.service.mvh.Submission.Type
 
 import java.io.{File, IOException}
@@ -31,8 +31,8 @@ class ArchivingReportRepositoryTests extends AnyFlatSpec
 
   private def makeFakeReport(transferTan:Int = Random.nextInt(),
                              creationDate:LocalDateTime = LocalDateTime.now,
-                             status:Submission.Report.Status.Value = Unsubmitted):Submission.Report = {
-    Submission.Report(
+                             status:Report.Status.Value = Status.Unsubmitted):Report = {
+    Report(
       Id(transferTan.toString),
       creationDate,
       Id("42"),
@@ -46,10 +46,10 @@ class ArchivingReportRepositoryTests extends AnyFlatSpec
       None,None,None
     )
   }
-  private def makeThreeReports:Seq[Submission.Report] = List(
+  private def makeThreeReports:Seq[Report] = List(
     makeFakeReport(transferTan = 12),
-    makeFakeReport(transferTan = 3, creationDate = LocalDateTime.now().plusDays(120), status = Unsubmitted),
-    makeFakeReport(transferTan = 54, status = SubmittedToBfarm))
+    makeFakeReport(transferTan = 3, creationDate = LocalDateTime.now().plusDays(120), status = Status.Unsubmitted),
+    makeFakeReport(transferTan = 54, status = Status.SubmittedToBfarm))
 
   /**
    * For teardown

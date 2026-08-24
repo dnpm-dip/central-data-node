@@ -1,6 +1,7 @@
 package de.dnpm.ccdn.connector
 
-import de.dnpm.ccdn.core.{ReportRepository, ReportRepositoryProvider, Submission}
+import de.dnpm.ccdn.core.dip.Report
+import de.dnpm.ccdn.core.{ReportRepository, ReportRepositoryProvider}
 import de.dnpm.dip.util.Logging
 
 import java.io.File
@@ -88,7 +89,7 @@ class ArchivingReportRepository(queueDir:File, val quarterRepoDir:File)
     }
   }
 
-  override protected def reportDisposer(report: Submission.Report):Try[Boolean] ={
+  override protected def reportDisposer(report: Report):Try[Boolean] ={
     val toMove = this.queueFile(report)
     val into = getArchiveFolder(report.createdAt)
     val reportFileName = filenameOf(report)

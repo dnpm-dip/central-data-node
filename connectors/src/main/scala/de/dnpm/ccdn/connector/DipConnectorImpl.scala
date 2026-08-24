@@ -7,16 +7,15 @@ import scala.concurrent.duration._
 import scala.util.{Either, Failure, Success}
 import scala.util.chaining._
 import cats.syntax.either._
-import de.dnpm.ccdn.core.Submission
-import de.dnpm.ccdn.core.Submission.Report.Filter
+import de.dnpm.ccdn.core.dip.Report.Filter
 import play.api.libs.json.{JsValue, Json, Reads}
 import play.api.libs.ws.{StandaloneWSClient => WSClient, StandaloneWSRequest => WSRequest}
 import play.api.libs.ws.JsonBodyReadables._
 import de.dnpm.dip.util.{Logging, Retry}
 import de.dnpm.dip.coding.Code
-import de.dnpm.dip.model.Site
-import de.dnpm.dip.service.mvh.UseCase
-import de.dnpm.ccdn.core.dip.{DipConnector, DipConnectorProvider}
+import de.dnpm.dip.model.{PatientRecord, Site}
+import de.dnpm.dip.service.mvh.{Submission, UseCase}
+import de.dnpm.ccdn.core.dip.{DipConnector, DipConnectorProvider, Report}
 
 final case class Collection[T](entries: List[T])
 
@@ -183,7 +182,7 @@ with Logging
     filter: Filter
   )(
     implicit ec: ExecutionContext
-  ): Future[Either[String,Seq[Submission.Report]]] =
+  ): Future[Either[String,Seq[Report]]] =
     request(
       site, s"/api/${useCase.toString.toLowerCase}/peer2peer/mvh/submission-reports"
     )
@@ -210,7 +209,7 @@ with Logging
     .get()
     .map(
       resp => resp.status match {
-        case 200 => resp.body[JsValue].as[Collection[Submission.Report]].entries.asRight
+        case 200 => resp.body[JsValue].as[Collection[Report]].entries.asRight
         case _   => s"Site ${site}, Use Case $useCase: SubmissionReport polling failed with status ${resp.status} ${resp.statusText}".asLeft
       }
     )
@@ -220,10 +219,10 @@ with Logging
 
 
   override def confirmSubmitted(
-    report: Submission.Report
+    report: Report
   )(
     implicit env: ExecutionContext
-  ): Future[Either[String,Submission.Report]] =
+  ): Future[Either[String,Report]] =
     request(
       report.site.code,
       s"/api/${report.useCase.toString.toLowerCase}/peer2peer/mvh/submission-reports/${report.id.value}:submitted"
@@ -256,4 +255,6 @@ with Logging
       .recover {
         case t => t.getMessage.asLeft
       }
+
+  override def downloadSubmission[T <: PatientRecord](report: Report)(implicit env: ExecutionContext): Future[Either[String, Submission[T]]] = ???
 }

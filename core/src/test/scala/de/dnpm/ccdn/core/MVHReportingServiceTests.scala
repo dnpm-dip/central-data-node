@@ -1,7 +1,7 @@
 package de.dnpm.ccdn.core
 
 
-import de.dnpm.ccdn.core.Submission.Report.Filter
+import de.dnpm.ccdn.core.dip.Report
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.must.Matchers._
 import org.slf4j.LoggerFactory
@@ -12,8 +12,8 @@ import java.time.{Clock, Instant, ZoneOffset}
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.Future
 import de.dnpm.dip.coding.Code
-import de.dnpm.dip.model.Site
-import de.dnpm.dip.service.mvh.UseCase
+import de.dnpm.dip.model.{PatientRecord, Site}
+import de.dnpm.dip.service.mvh.{Submission, UseCase}
 
 
 
@@ -59,12 +59,14 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     override def getApiVersion(site: Code[Site])(implicit env: ExecutionContext)
     : Future[Either[String, String]] =
       Future.successful(Right(version))
-    override def submissionReports(site: Code[Site], useCase: UseCase.Value, filter: Filter)
-        (implicit ec: ExecutionContext): Future[Either[String, Seq[Submission.Report]]] =
+    override def submissionReports(site: Code[Site], useCase: UseCase.Value, filter: Report.Filter)
+        (implicit ec: ExecutionContext): Future[Either[String, Seq[Report]]] =
       Future.successful(Right(Seq.empty))
-    override def confirmSubmitted(report: Submission.Report)(implicit ec: ExecutionContext)
-    : Future[Either[String, Submission.Report]] =
+    override def confirmSubmitted(report: Report)(implicit ec: ExecutionContext)
+    : Future[Either[String, Report]] =
       Future.successful(Right(report))
+
+    override def downloadSubmission[T <: PatientRecord](report: Report)(implicit env: ExecutionContext): Future[Either[String, Submission[T]]] = ???
   }
 
   it must "record Responsivity.success for every reachable site in conductPollingCycle and capture the correct timestamp" in {
@@ -79,6 +81,9 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
         capturedReports ++= reports
         capturedInstant = Some(now)
       }
+
+      override def backup(report: Report): Either[String, Unit] = ???
+      override def backup[T <: PatientRecord](report: Report, submission: Submission[T]): Either[String, Unit] = ???
     }
 
     val testService = new MVHReportingService(
@@ -152,18 +157,23 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       :Future[Either[String, String]] =
         Future.successful(Right("1.3.0"))
       override def submissionReports(site: Code[Site], useCase: UseCase.Value,
-                                     filter: Filter)
-          (implicit ec: ExecutionContext): Future[Either[String, Seq[Submission.Report]]] =
+                                     filter: Report.Filter)
+          (implicit ec: ExecutionContext): Future[Either[String, Seq[Report]]] =
         Future.successful(Left("simulated data request failure"))
-      override def confirmSubmitted(report: Submission.Report)(implicit ec: ExecutionContext)
-      : Future[Either[String, Submission.Report]] =
+      override def confirmSubmitted(report: Report)(implicit ec: ExecutionContext)
+      : Future[Either[String, Report]] =
         Future.successful(Right(report))
+
+      override def downloadSubmission[T <: PatientRecord](report: Report)(implicit env: ExecutionContext): Future[Either[String, Submission[T]]] = ???
     }
 
     val capturedResponsivityReports = ListBuffer.empty[ResponsivityReport]
     val capturingReporter = new PersistenceService {
       override def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport], now: Instant): Unit =
         capturedResponsivityReports ++= reports
+
+      override def backup(report: Report): Either[String, Unit] = ???
+      override def backup[T <: PatientRecord](report: Report, submission: Submission[T]): Either[String, Unit] = ???
     }
 
     val testService = new MVHReportingService(
