@@ -24,4 +24,6 @@ class FakePersistenceService extends PersistenceService
   override def backup(report: Report): Either[String, Unit] = ???
 
   override def backup[T <: PatientRecord](report: Report, submission: Submission[T]): Either[String, Unit] = ???
+
+  override def backupForQuarterReport(report: Report): Either[String, Unit] = ???
 }

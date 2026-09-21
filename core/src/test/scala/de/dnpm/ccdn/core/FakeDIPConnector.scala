@@ -103,5 +103,11 @@ class FakeDIPConnector extends dip.DipConnector
   : Future[Either[String, String]] =
     Future.successful(Right("1.3.0"))
 
-  override def downloadSubmission[T <: PatientRecord](report: Report)(implicit env: ExecutionContext): Future[Either[String, Submission[T]]] = ???
+  override def downloadSubmission[T <: PatientRecord]
+                                 (report: Report)
+                                 (implicit env: ExecutionContext)
+  : Future[Either[String, Submission[T]]] = {
+    //TODO implement
+    Future.successful("asdbest".asLeft)
+  }
 }

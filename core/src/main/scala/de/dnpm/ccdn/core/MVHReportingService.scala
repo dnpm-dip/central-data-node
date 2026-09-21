@@ -9,7 +9,9 @@ import de.dnpm.ccdn.core.dip.Report.Filter
 import de.dnpm.ccdn.core.dip.Report.Status
 import de.dnpm.dip.coding.Code
 import de.dnpm.dip.model.{NGSReport, PatientRecord, Site}
-import de.dnpm.dip.service.mvh.Submission
+import de.dnpm.dip.mtb.model.MTBPatientRecord
+import de.dnpm.dip.rd.model.RDPatientRecord
+import de.dnpm.dip.service.mvh.{Submission, UseCase}
 import de.dnpm.dip.util.Logging
 
 import java.time.temporal.ChronoUnit
@@ -42,8 +44,8 @@ object MVHReportingService
   def main(args: Array[String]): Unit = {
     
     Runtime.getRuntime.addShutdownHook(
-      new Thread { 
-        override def run = {
+      new Thread {
+        override def run: Unit = {
           println("Shutting down MVH Reporting service...")
           service.stop()
         }
@@ -195,9 +197,9 @@ with BatchingUtil
       _ <- pollReports(validSites,responseLog)
       _ <- uploadReports
       freshConfirmations <- confirmReports(responseLog)
-      _ <- downloadSubmissions(freshConfirmations.concat(oldConfirmations).count(_.isRight),validSites,responseLog) //should process as at least as many submissions
+      _ <- backupSubmissions(freshConfirmations.concat(oldConfirmations).count(_.isRight),validSites,responseLog) //should process as at least as many submissions
       _ = archiveReports
-      _ <- flushReportQueue
+      _ = flushReportQueue
       _ <- downloadDeletions(validSites,responseLog)
     } yield {
       persistenceService.writeSiteAvailabilityReports(
@@ -295,7 +297,7 @@ with BatchingUtil
 
   /**
    * Communicates with all the configured DIP nodes, queries them for
-   * new  [[Submission.Reports]], i.e. with status [[Unsubmitted]], and stores
+   * new  [[Submission.Reports]], i.e. with status [[Status.Unsubmitted]], and stores
    * them in the [[pollingQueue]]
    */
   private[core] def pollReports(validSites: Seq[Code[Site]],
@@ -347,8 +349,8 @@ with BatchingUtil
   /**
    * Communicates with the BfArM, sends them [[BfarmReport]] entities, each based
    * on one of all the [[Submission.Report]] entities in the [[pollingQueue]]
-   * that are in status [[Unsubmitted]]. After this upload their status is
-   * changed to [[SubmittedToBfarm]]
+   * that are in status [[Status.Unsubmitted]]. After this upload their status is
+   * changed to [[Status.SubmittedToBfarm]]
    */
   private[core] def uploadReports: Future[Seq[Either[String,Unit]]] = {
 
@@ -390,7 +392,7 @@ with BatchingUtil
   /**
    * Send "submission confirmations" to the DIP nodes for each SubmissionReport
    * that has been successfully submitted to BfArM. If successful the
-   * SubmissionReport is elevated to status [[Status.confirmedToSource]]
+   * SubmissionReport is elevated to status [[Status.ConfirmedToSource]]
    *
    * NOTE: Given that some DIP nodes are placed behind an Apache Tomcat server,
    * which only handles up to 200 sockets simultaneously by default, explicit
@@ -406,7 +408,7 @@ with BatchingUtil
     )(
       report => (dipConnector.confirmSubmitted(report).map {
         case Right(_) =>
-          val asConfirmed = report.copy(status = Status.confirmedToSource)
+          val asConfirmed = report.copy(status = Status.ConfirmedToSource)
           pollingQueue.replace(asConfirmed).map(_ => asConfirmed)
           //pollingQueue.removeFromQueue(report).map(_ => report)
 
@@ -437,47 +439,62 @@ with BatchingUtil
     )
 
   /**
-   * Fetches all reports in the queue in state [[Status.confirmedToSource]],
-   * takes a subset of them (at least [[minNumDownloads]]), downloads them,
-   * and passes them to persistenceService to store them safely
+   * Downloads the [[Submission]] for one [[Report]] and hands it to
+   * [[persistenceService]] for backup. Generic in the concrete [[PatientRecord]]
+   * subtype [[T]], which [[backupSubmissions]] selects based on
+   * [[Report.useCase]], since that is the only place where the static type
+   * corresponding to a given [[Report]] is known.
    */
-  def downloadSubmissions(minNumDownloads:Int, validSites: Seq[Code[Site]],
-                          availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport]):Future[Any] = {
+  private def downloadAndBackupSubmission[T <: PatientRecord](
+    report: Report,
+    availabilityBuffer: ConcurrentLinkedQueue[ResponsivityReport]
+  ): Future[Either[String,Report]] =
+    dipConnector.downloadSubmission[T](report).map {
+      case Right(submission) =>
+        persistenceService.backup(report,submission) match {
+          case Right(_) => {
+            //backup saved successful
+            val asBackedUp = report.copy(status = Status.SubmissionBackedup)
+            pollingQueue.replace(asBackedUp).map(_ => asBackedUp)
+          }
+          case Left(storeError) =>
+            (s"Problem storing submission for backup: Site ${report.site.code}, " +
+              s"TAN ${report.id} - $storeError").asLeft[Report]
+        }
+
+      case Left(downloadError) =>
+        availabilityBuffer.add(ResponsivityReport(report.site.code,Responsivity.failure))
+        (s"Problem downloading submission for backup: Site ${report.site.code}, " +
+          s"TAN ${report.id} - $downloadError").asLeft[Report]
+    }
+
+  def backupSubmissions(minNumDownloads:Int, validSites: Seq[Code[Site]],
+                        availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport]):Future[Any] = {
     val numDownloads:Int = minNumDownloads match {
-      case 0 => 25
-      case n if n >= 25 => n
-      case n => (n * 1.5).floor.toInt
+      //download and store at least as many submissions as reports were fetched, but at least 25
+      case n if n >= 25 => n //TODO outsource "25" into a externally configurable variable
+      case _ => 25
     }
     batchTraverse[Report, Seq, Future, Either[String, Report]](
-      pollingQueue.entries(_.status == Status.confirmedToSource).take(numDownloads),
+      pollingQueue.entries(_.status == Status.ConfirmedToSource)
+        .filter(report => validSites.contains(report.site.code))
+        .take(numDownloads),
       nSimultaneousSubmissionDownloads
     )(
-      report => dipConnector.downloadSubmission[PatientRecord](report).map {
-        case Right(submission) =>
-          persistenceService.backup(report,submission) match {
-            case Right(_) => {
-              //backup saved successful
-              val asBackedUp = report.copy(status = Status.submissionBackedup)
-              pollingQueue.replace(asBackedUp).map(_ => asBackedUp)
-            }
-            case Left(storeError) =>
-              (s"Problem storing submission for backup: Site ${report.site.code}, " +
-                s"TAN ${report.id} - $storeError").asLeft[Report]
-          }
-
-        case Left(downloadError) =>
-          (s"Problem downloading submission for backup: Site ${report.site.code}, " +
-            s"TAN ${report.id} - $downloadError").asLeft[Report]
-      }
+      report =>
+        report.useCase match {
+          case UseCase.MTB => downloadAndBackupSubmission[MTBPatientRecord](report,availabilityBuffer)
+          case UseCase.RD  => downloadAndBackupSubmission[RDPatientRecord](report,availabilityBuffer)
+        }
     )
   }
 
   def archiveReports = {
-    pollingQueue.entries(_.status == Status.submissionBackedup).foreach(
+    pollingQueue.entries(_.status == Status.SubmissionBackedup).map(
       report => persistenceService.backup(report) match {
         case Right(_) => {
           //backup saved successful
-          val asBackedUp = report.copy(status = Status.reportBackedup)
+          val asBackedUp = report.copy(status = Status.ReportBackedup)
           pollingQueue.replace(asBackedUp).map(_ => asBackedUp)
         }
         case Left(storeError) => {
@@ -485,13 +502,18 @@ with BatchingUtil
             s"TAN ${report.id} - $storeError").asLeft[Submission.Report]
         }
           //TODO danach noch fürn Quartalsbericht archivieren
+        //TODO testen, dass diese Funktion mit bereits existierenden Dokumenten umgehen kann (werden einfach so belassen)
       }
     )
   }
 
-  def flushReportQueue:Future[Any] = {
-    //TODO
-    ???
+  def flushReportQueue:Unit = { //TODO schlechter name, muss ein anderes Wort für "archive" finden
+    //TODO reports im Status reportBackedup für den Quartalsbericht archivieren, erst danach löschen
+
+    pollingQueue.entries(_.status == Status.ReportBackedup).foreach(report =>
+      pollingQueue.removeFromQueue(report)
+
+    )
   }
 
   /**
@@ -502,6 +524,6 @@ with BatchingUtil
    */
   def downloadDeletions(validSites: Seq[Code[Site]],
                         availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport]):Future[Any] = {
-    ???
+    Future.successful() //TODO
   }
 }

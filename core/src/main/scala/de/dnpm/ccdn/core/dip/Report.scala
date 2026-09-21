@@ -43,23 +43,23 @@ object Report extends JsonEnumKeyHelpers
      * 3rd state. When submission to BfArM has been reported back to
      * the source DIP node.
      */
-    val confirmedToSource: Value = Value("confirmed")
+    val ConfirmedToSource: Value = Value("confirmed")
     /**
      * 4th state. Associated submission has been downloaded from source DIP
      * node, encrytped and stored.
      */
-    val submissionBackedup: Value = Value("submissionbackedup")
+    val SubmissionBackedup: Value = Value("submissionbackedup")
     /**
      * 5th state. The report was also backed up.
      */
-    val reportBackedup: Value = Value("reportbackedup")
+    val ReportBackedup: Value = Value("reportbackedup")
 
     /**
      * 6th and final state. The report has been stored for quarter reports
      *
      * Subsequently, in this state a report may be removed
      */
-    val reportArchived: Value = Value("archived")
+    val ReportArchived: Value = Value("archived")
 
 
 

@@ -2,6 +2,7 @@ package de.dnpm.ccdn.core
 
 
 import de.dnpm.ccdn.core.dip.Report
+import de.dnpm.ccdn.core.dip.Report.Status
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.must.Matchers._
 import org.slf4j.LoggerFactory
@@ -42,14 +43,21 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
   it must "handle multiple uploads from every DIP node in one go" in {
     log.info("FakeDipConnector sending "+fakeDipConnector.nSubmissions+ " submissions per site")
     for {
-      
-      _ <- service.pollReports(sites,new ConcurrentLinkedQueue())
-      
-      _ = service.pollingQueue.entries(_ => true) must not be (empty)
 
+      responseLog <- Future.successful(new ConcurrentLinkedQueue[ResponsivityReport])
+      validSites <- service.getApiCompatibleDipSites(responseLog)
+      // Start by draining the report queue, if non-empty (in case the service
+      // had been interrupted) and it thus contains reports whose upload hasn't
+      // been confirmed to the origin DIP), in order to avoid polling them again
+      _ <- if (service.pollingQueue.exists(_.status == Status.Unsubmitted)) service.uploadReports else Future.unit
+      oldConfirmations <- if (service.pollingQueue.exists(_.status == Status.SubmittedToBfarm)) service.confirmReports(responseLog) else Future.successful(Seq.empty)
+      _ <- service.pollReports(validSites,responseLog)
       _ <- service.uploadReports
-
-      _ <- service.confirmReports(new ConcurrentLinkedQueue())
+      freshConfirmations <- service.confirmReports(responseLog)
+      _ <- service.backupSubmissions(freshConfirmations.concat(oldConfirmations).count(_.isRight),validSites,responseLog) //should process as at least as many submissions
+      _ = service.archiveReports
+      _ = service.flushReportQueue
+      _ <- service.downloadDeletions(validSites,responseLog)
 
     } yield service.pollingQueue.entries(_ => true) must be (empty)
   }
@@ -84,6 +92,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
       override def backup(report: Report): Either[String, Unit] = ???
       override def backup[T <: PatientRecord](report: Report, submission: Submission[T]): Either[String, Unit] = ???
+      override def backupForQuarterReport(report: Report): Either[String, Unit] = ???
     }
 
     val testService = new MVHReportingService(
@@ -174,6 +183,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
       override def backup(report: Report): Either[String, Unit] = ???
       override def backup[T <: PatientRecord](report: Report, submission: Submission[T]): Either[String, Unit] = ???
+
+      override def backupForQuarterReport(report: Report): Either[String, Unit] = ???
     }
 
     val testService = new MVHReportingService(

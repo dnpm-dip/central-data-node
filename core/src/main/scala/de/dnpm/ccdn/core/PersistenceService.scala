@@ -20,11 +20,12 @@ trait PersistenceService
     now: Instant
   ): Unit
 
-  def backup(report:Report):Either[String,Unit]
+  def backup(report: Report): Either[String, Unit]
 
-  def backup[T <: PatientRecord](report:Report,
-                                 submission:Submission[T]):Either[String,Unit]
+  def backup[T <: PatientRecord](report: Report,
+                                 submission: Submission[T]): Either[String, Unit]
 
+  def backupForQuarterReport(report: Report): Either[String, Unit]
 }
 
 trait PersistenceServiceProvider extends SPI[PersistenceService]
