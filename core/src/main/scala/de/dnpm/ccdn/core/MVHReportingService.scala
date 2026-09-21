@@ -471,9 +471,9 @@ with BatchingUtil
   def backupSubmissions(minNumDownloads:Int, validSites: Seq[Code[Site]],
                         availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport]):Future[Any] = {
     val numDownloads:Int = minNumDownloads match {
-      //download and store at least as many submissions as reports were fetched, but at least 25
-      case n if n >= 25 => n //TODO outsource "25" into a externally configurable variable
-      case _ => 25
+      //download and store at least as many submissions as reports were fetched, but at least config.polling.minNumSubmissionDownloads
+      case n if n >= config.polling.minNumSubmissionDownloads => n
+      case _ => config.polling.minNumSubmissionDownloads
     }
     batchTraverse[Report, Seq, Future, Either[String, Report]](
       pollingQueue.entries(_.status == Status.ConfirmedToSource)

@@ -55,7 +55,8 @@ object Config extends Logging
   (
     period: Long,
     timeUnit: TimeUnit,
-    startTime: Option[LocalTime]
+    startTime: Option[LocalTime],
+    minNumSubmissionDownloads: Int = 25
   )
 
   implicit val readsTimeUnit: Reads[TimeUnit] =
@@ -65,7 +66,7 @@ object Config extends Logging
     Json.reads[SiteInfo]
 
   implicit val readsPolling: Reads[Polling] =
-    Json.reads[Polling]
+    Json.using[Json.WithDefaultValues].reads[Polling]
 
   implicit val reads: Reads[Config] =
     Json.reads[Config]
