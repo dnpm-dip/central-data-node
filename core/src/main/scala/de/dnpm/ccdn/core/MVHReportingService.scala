@@ -11,6 +11,7 @@ import de.dnpm.dip.coding.Code
 import de.dnpm.dip.model.{NGSReport, PatientRecord, Site}
 import de.dnpm.dip.mtb.model.MTBPatientRecord
 import de.dnpm.dip.rd.model.RDPatientRecord
+import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
 import de.dnpm.dip.service.mvh.{Submission, UseCase}
 import de.dnpm.dip.util.Logging
 
@@ -75,6 +76,9 @@ with BatchingUtil
    * Serves local time. Abstracted for the purpose of unit tests
    */
   private[core] var clock: Clock = Clock.systemUTC()
+
+  private[core] val deletionEventService: DeletionEventService =
+    new DeletionEventService(config, dipConnector)
 
   /**
    * Executes the runnable in [[pollingTask]] in regular intervals
@@ -342,7 +346,6 @@ with BatchingUtil
               }
           }
       }
-
   }
 
 
@@ -399,7 +402,6 @@ with BatchingUtil
    * batching is applied to avoid deadlock in case more than 200
    * SubmissionReports were processed in parallel here.
    */
-
   private[core] def confirmReports(availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport])
   :Future[Seq[Either[String,Report]]] =
     batchTraverse[Report, Seq, Future, Either[String, Report]](
@@ -489,21 +491,23 @@ with BatchingUtil
     )
   }
 
-  def archiveReports = {
+  def archiveReports:Seq[Either[String,Report]] = {
     pollingQueue.entries(_.status == Status.SubmissionBackedup).map(
+
       report => persistenceService.backup(report) match {
         case Right(_) => {
           //backup saved successful
-          val asBackedUp = report.copy(status = Status.ReportBackedup)
-          pollingQueue.replace(asBackedUp).map(_ => asBackedUp)
+          val asBackedUp: Report = report.copy(status = Status.ReportBackedup)
+          pollingQueue.replace(asBackedUp).map(_ => asBackedUp:Report)
         }
         case Left(storeError) => {
           (s"Problem storing submission for backup: Site ${report.site.code}, " +
-            s"TAN ${report.id} - $storeError").asLeft[Submission.Report]
+            s"TAN ${report.id} - $storeError").asLeft[Report]
         }
           //TODO danach noch fürn Quartalsbericht archivieren
         //TODO testen, dass diese Funktion mit bereits existierenden Dokumenten umgehen kann (werden einfach so belassen)
       }
+
     )
   }
 
@@ -517,13 +521,25 @@ with BatchingUtil
   }
 
   /**
-   * Iterates over all [[validSites]] and fetches the deletions since the time that ??? considers the minimum time
-   * @param validSites
-   * @param availabilityBuffer
-   * @return
+   * Iterates over all [[validSites]] and fetches every [[DeletionEvent]] that
+   * occurred since each site was last queried, via [[deletionEventService]]
    */
   def downloadDeletions(validSites: Seq[Code[Site]],
-                        availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport]):Future[Any] = {
-    Future.successful() //TODO
-  }
+                        availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport]):Future[Seq[DeletionEvent]] =
+    Future.traverse(validSites)(
+      site =>
+        deletionEventService.deletionEvents(site)
+          .andThen {
+            case Success(Left(err)) =>
+              log.error(s"Problem polling DeletionEvents of site $site: $err")
+              availabilityBuffer.add(ResponsivityReport(site,Responsivity.failure))
+          }
+          .recover {
+            case t =>
+              log.error(s"Error(s) occurred polling DeletionEvents of site $site", t)
+              availabilityBuffer.add(ResponsivityReport(site,Responsivity.failure))
+              t.getMessage.asLeft
+          }
+    )
+    .map(_.collect { case Right(events) => events }.flatten)
 }

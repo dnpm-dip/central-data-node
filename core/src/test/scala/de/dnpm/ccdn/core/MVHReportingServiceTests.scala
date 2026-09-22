@@ -9,11 +9,12 @@ import org.slf4j.LoggerFactory
 
 import java.util.concurrent.{ConcurrentLinkedQueue, Executors}
 import scala.concurrent.ExecutionContext
-import java.time.{Clock, Instant, ZoneOffset}
+import java.time.{Clock, Instant, LocalDateTime, ZoneOffset}
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.Future
 import de.dnpm.dip.coding.Code
 import de.dnpm.dip.model.{PatientRecord, Site}
+import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
 import de.dnpm.dip.service.mvh.{Submission, UseCase}
 
 
@@ -73,6 +74,10 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     override def confirmSubmitted(report: Report)(implicit ec: ExecutionContext)
     : Future[Either[String, Report]] =
       Future.successful(Right(report))
+
+    override def deletionEvents(site: Code[Site], useCase: UseCase.Value, since: Option[LocalDateTime])
+        (implicit ec: ExecutionContext): Future[Either[String, Seq[DeletionEvent]]] =
+      Future.successful(Right(Seq.empty))
 
     override def downloadSubmission[T <: PatientRecord](report: Report)(implicit env: ExecutionContext): Future[Either[String, Submission[T]]] = ???
   }
@@ -172,6 +177,10 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       override def confirmSubmitted(report: Report)(implicit ec: ExecutionContext)
       : Future[Either[String, Report]] =
         Future.successful(Right(report))
+
+      override def deletionEvents(site: Code[Site], useCase: UseCase.Value, since: Option[LocalDateTime])
+          (implicit ec: ExecutionContext): Future[Either[String, Seq[DeletionEvent]]] =
+        Future.successful(Right(Seq.empty))
 
       override def downloadSubmission[T <: PatientRecord](report: Report)(implicit env: ExecutionContext): Future[Either[String, Submission[T]]] = ???
     }

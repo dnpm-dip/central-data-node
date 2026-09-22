@@ -10,6 +10,7 @@ import cats.syntax.either._
 import de.dnpm.ccdn.core.dip.Report
 import de.dnpm.dip.coding.{Code, Coding}
 import de.dnpm.dip.model.{HealthInsurance, Id, NGSReport, Patient, PatientRecord, Site}
+import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
 import de.dnpm.dip.service.mvh.{Submission, TransferTAN, UseCase}
 import de.dnpm.dip.service.mvh.Submission.Type
 
@@ -74,6 +75,15 @@ class FakeDIPConnector extends dip.DipConnector
     Future.successful(
       Seq.fill(nSubmissions)(rndReport(site,useCase)).asRight
     )
+
+  override def deletionEvents(
+    site: Code[Site],
+    useCase: UseCase.Value,
+    since: Option[LocalDateTime]
+  )(
+    implicit ec: ExecutionContext
+  ): Future[Either[String,Seq[DeletionEvent]]] =
+    Future.successful(Seq.empty.asRight)
 
   override def confirmSubmitted(
     report: Report

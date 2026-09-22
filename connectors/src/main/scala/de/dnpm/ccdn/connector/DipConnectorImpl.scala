@@ -14,8 +14,11 @@ import play.api.libs.ws.JsonBodyReadables._
 import de.dnpm.dip.util.{Logging, Retry}
 import de.dnpm.dip.coding.Code
 import de.dnpm.dip.model.{PatientRecord, Site}
+import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
 import de.dnpm.dip.service.mvh.{Submission, UseCase}
 import de.dnpm.ccdn.core.dip.{DipConnector, DipConnectorProvider, Report}
+
+import java.time.LocalDateTime
 
 final case class Collection[T](entries: List[T])
 
@@ -211,6 +214,34 @@ with Logging
       resp => resp.status match {
         case 200 => resp.body[JsValue].as[Collection[Report]].entries.asRight
         case _   => s"Site ${site}, Use Case $useCase: SubmissionReport polling failed with status ${resp.status} ${resp.statusText}".asLeft
+      }
+    )
+    .recover {
+      case t => t.getMessage.asLeft
+    }
+
+
+  override def deletionEvents(
+    site: Code[Site],
+    useCase: UseCase.Value,
+    since: Option[LocalDateTime]
+  )(
+    implicit ec: ExecutionContext
+  ): Future[Either[String,Seq[DeletionEvent]]] =
+    request(
+      site, s"/api/${useCase.toString.toLowerCase}/peer2peer/mvh/deletion-events"
+    )
+    .pipe(
+      req => since match {
+        case Some(t) => req.addQueryStringParameters("after" -> t.format(ISO_LOCAL_DATE_TIME))
+        case None    => req
+      }
+    )
+    .get()
+    .map(
+      resp => resp.status match {
+        case 200 => resp.body[JsValue].as[Collection[DeletionEvent]].entries.asRight
+        case _   => s"Site ${site}, Use Case $useCase: DeletionEvent polling failed with status ${resp.status} ${resp.statusText}".asLeft
       }
     )
     .recover {
