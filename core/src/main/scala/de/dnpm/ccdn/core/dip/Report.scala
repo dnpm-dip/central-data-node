@@ -9,8 +9,12 @@ import play.api.libs.json.{Format, Json, OFormat}
 import java.time.LocalDateTime
 
 
+/**
+ * Copied from [[de.dnpm.dip.service.mvh.Submission.Report]], without some further
+ * classes, but with extended number of processing statuses.
+ */
 final case class Report(
-     id: Id[TransferTAN],
+    id: Id[TransferTAN],
     createdAt: LocalDateTime,
     patient: Id[Patient],
     episodeOfCare: Option[Id[EpisodeOfCare]],  // Optional for backwards compatibility. Default would be the patient's chronologically first EpisodeOfCare
@@ -25,6 +29,7 @@ final case class Report(
     consentStatus: Option[Map[Consent.Category.Value,Boolean]],      // For quarter report (appendix 2): Is the respective Consent given in the submission?
     consentRevocation: Option[Map[Consent.Category.Value,Boolean]] , // For quarter report (appendix 2): Has the respective Consent been revoked (compared to previous submission)?
     reasonResearchConsentMissing: Option[BroadConsent.ReasonMissing.Value])
+
 object Report extends JsonEnumKeyHelpers
 {
 

@@ -473,7 +473,7 @@ with BatchingUtil
     val numDownloads:Int = minNumDownloads match {
       //download and store at least as many submissions as reports were fetched, but at least config.polling.minNumSubmissionDownloads
       case n if n >= config.polling.minNumSubmissionDownloads => n
-      case _ => config.polling.minNumSubmissionDownloads
+      case _ => config.polling.minNumSubmissionDownloads //in turn up to as many as there are in pollingQueue
     }
     batchTraverse[Report, Seq, Future, Either[String, Report]](
       pollingQueue.entries(_.status == Status.ConfirmedToSource)
