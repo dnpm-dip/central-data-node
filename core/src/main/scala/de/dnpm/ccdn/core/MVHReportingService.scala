@@ -11,6 +11,7 @@ import de.dnpm.dip.coding.Code
 import de.dnpm.dip.model.{NGSReport, PatientRecord, Site}
 import de.dnpm.dip.mtb.model.MTBPatientRecord
 import de.dnpm.dip.rd.model.RDPatientRecord
+import de.dnpm.dip.service.mvh.Consent.Category
 import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
 import de.dnpm.dip.service.mvh.{Submission, UseCase}
 import de.dnpm.dip.util.Logging
@@ -480,6 +481,7 @@ with BatchingUtil
     batchTraverse[Report, Seq, Future, Either[String, Report]](
       pollingQueue.entries(_.status == Status.ConfirmedToSource)
         .filter(report => validSites.contains(report.site.code))
+        .filter(report => report.consentStatus.exists(it => it.getOrElse(Category.ModelProject, false)))
         .take(numDownloads),
       nSimultaneousSubmissionDownloads
     )(
