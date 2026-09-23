@@ -13,9 +13,10 @@ import java.time.{Clock, Instant, LocalDateTime, ZoneOffset}
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.Future
 import de.dnpm.dip.coding.Code
-import de.dnpm.dip.model.{PatientRecord, Site}
+import de.dnpm.dip.model.Site
 import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
-import de.dnpm.dip.service.mvh.{Submission, UseCase}
+import de.dnpm.dip.service.mvh.UseCase
+import play.api.libs.json.JsValue
 
 
 
@@ -56,7 +57,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       _ <- service.uploadReports
       freshConfirmations <- service.confirmReports(responseLog)
       _ <- service.backupSubmissions(freshConfirmations.concat(oldConfirmations).count(_.isRight),validSites,responseLog) //should process as at least as many submissions
-      _ = service.archiveReports
+      _ = service.backupReports
       _ = service.flushReportQueue
       _ <- service.downloadDeletions(validSites,responseLog)
 
@@ -79,7 +80,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
         (implicit ec: ExecutionContext): Future[Either[String, Seq[DeletionEvent]]] =
       Future.successful(Right(Seq.empty))
 
-    override def downloadSubmission[T <: PatientRecord](report: Report)(implicit env: ExecutionContext): Future[Either[String, Submission[T]]] = ???
+    override def downloadSubmission(report: Report)(implicit env: ExecutionContext): Future[Either[String, JsValue]] = ???
   }
 
   it must "record Responsivity.success for every reachable site in conductPollingCycle and capture the correct timestamp" in {
@@ -96,7 +97,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       }
 
       override def backup(report: Report): Either[String, Unit] = ???
-      override def backup[T <: PatientRecord](report: Report, submission: Submission[T]): Either[String, Unit] = ???
+      override def backup(report: Report, submission: JsValue): Either[String, Unit] = ???
       override def backupForQuarterReport(report: Report): Either[String, Unit] = ???
     }
 
@@ -182,7 +183,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
           (implicit ec: ExecutionContext): Future[Either[String, Seq[DeletionEvent]]] =
         Future.successful(Right(Seq.empty))
 
-      override def downloadSubmission[T <: PatientRecord](report: Report)(implicit env: ExecutionContext): Future[Either[String, Submission[T]]] = ???
+      override def downloadSubmission(report: Report)(implicit env: ExecutionContext): Future[Either[String, JsValue]] = ???
     }
 
     val capturedResponsivityReports = ListBuffer.empty[ResponsivityReport]
@@ -191,7 +192,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
         capturedResponsivityReports ++= reports
 
       override def backup(report: Report): Either[String, Unit] = ???
-      override def backup[T <: PatientRecord](report: Report, submission: Submission[T]): Either[String, Unit] = ???
+      override def backup(report: Report, submission: JsValue): Either[String, Unit] = ???
 
       override def backupForQuarterReport(report: Report): Either[String, Unit] = ???
     }

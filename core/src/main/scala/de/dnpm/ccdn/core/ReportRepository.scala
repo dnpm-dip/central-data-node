@@ -38,6 +38,9 @@ trait Repository[T]
   /**
    * Actually stores t in this repository. If something goes wrong in this,
    * Left(someError) is returned, else Right(Unit)
+   *
+   * The report entry is identified by [[Report.site]] and [[Report.id]].
+   * If the queue already contains a matching entry, it is replaced
    * @param t
    * @return
    */

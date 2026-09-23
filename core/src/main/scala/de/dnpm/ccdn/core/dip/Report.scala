@@ -2,6 +2,7 @@ package de.dnpm.ccdn.core.dip
 
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.{EpisodeOfCare, HealthInsurance, Id, NGSReport, Patient, Period, Site}
+import de.dnpm.dip.service.mvh.Consent.Category
 import de.dnpm.dip.service.mvh.Submission.{DiagnosticExtent, SequenceType, Type}
 import de.dnpm.dip.service.mvh.{BroadConsent, Consent, JsonEnumKeyHelpers, TransferTAN, UseCase}
 import play.api.libs.json.{Format, Json, OFormat}
@@ -29,10 +30,17 @@ final case class Report(
     consentStatus: Option[Map[Consent.Category.Value,Boolean]],      // For quarter report (appendix 2): Is the respective Consent given in the submission?
     consentRevocation: Option[Map[Consent.Category.Value,Boolean]] , // For quarter report (appendix 2): Has the respective Consent been revoked (compared to previous submission)?
     reasonResearchConsentMissing: Option[BroadConsent.ReasonMissing.Value])
+{
+  lazy val hasMvhConsent:Boolean = this.consentStatus.exists(it => it.getOrElse(Category.ModelProject, false))
+}
 
 object Report extends JsonEnumKeyHelpers
 {
 
+  /**
+   * The processing state of a report that develops between the time a report was
+   * downloaded into the zKDK from a DIP node until it was removed from the queue again.
+   */
   object Status extends Enumeration
   {
     /**
@@ -47,6 +55,8 @@ object Report extends JsonEnumKeyHelpers
     /**
      * 3rd state. When submission to BfArM has been reported back to
      * the source DIP node.
+     *
+     * If no MVH consent is given [[Report.hasMvhConsent]], this is the final state
      */
     val ConfirmedToSource: Value = Value("confirmed")
     /**
@@ -55,16 +65,10 @@ object Report extends JsonEnumKeyHelpers
      */
     val SubmissionBackedup: Value = Value("submissionbackedup")
     /**
-     * 5th state. The report was also backed up.
+     * 5th and final state. The report was also backed up.
      */
     val ReportBackedup: Value = Value("reportbackedup")
 
-    /**
-     * 6th and final state. The report has been stored for quarter reports
-     *
-     * Subsequently, in this state a report may be removed
-     */
-    val ReportArchived: Value = Value("archived")
 
 
 

@@ -9,10 +9,11 @@ import scala.concurrent.{ExecutionContext, Future}
 import cats.syntax.either._
 import de.dnpm.ccdn.core.dip.Report
 import de.dnpm.dip.coding.{Code, Coding}
-import de.dnpm.dip.model.{HealthInsurance, Id, NGSReport, Patient, PatientRecord, Site}
+import de.dnpm.dip.model.{HealthInsurance, Id, NGSReport, Patient, Site}
 import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
-import de.dnpm.dip.service.mvh.{Submission, TransferTAN, UseCase}
+import de.dnpm.dip.service.mvh.{TransferTAN, UseCase}
 import de.dnpm.dip.service.mvh.Submission.Type
+import play.api.libs.json.JsValue
 
 
 final class FakeDIPConnectorProvider extends dip.DipConnectorProvider
@@ -113,10 +114,9 @@ class FakeDIPConnector extends dip.DipConnector
   : Future[Either[String, String]] =
     Future.successful(Right("1.3.0"))
 
-  override def downloadSubmission[T <: PatientRecord]
-                                 (report: Report)
+  override def downloadSubmission(report: Report)
                                  (implicit env: ExecutionContext)
-  : Future[Either[String, Submission[T]]] = {
+  : Future[Either[String, JsValue]] = {
     //TODO implement
     Future.successful("asdbest".asLeft)
   }

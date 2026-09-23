@@ -7,8 +7,7 @@ import de.dnpm.ccdn.core.dip.Report
 import org.bson.Document
 import de.dnpm.dip.util.Logging
 import de.dnpm.ccdn.core.{PersistenceService, PersistenceServiceProvider, ResponsivityReport}
-import de.dnpm.dip.model.PatientRecord
-import de.dnpm.dip.service.mvh.Submission
+import play.api.libs.json.JsValue
 
 import scala.util.Properties.{envOrNone, propOrNone}
 
@@ -71,7 +70,7 @@ final class MongodbPersistenceServiceImpl(
 
   override def backup(report: Report): Either[String, Unit] = ???
 
-  override def backup[T <: PatientRecord](report: Report, submission: Submission[T]): Either[String, Unit] = ???
+  override def backup(report: Report, submission: JsValue): Either[String, Unit] = ???
 
   override def backupForQuarterReport(report:Report):Either[String,Unit] = ???
 }

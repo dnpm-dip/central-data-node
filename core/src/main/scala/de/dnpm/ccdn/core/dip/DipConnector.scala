@@ -7,9 +7,10 @@ import java.time.LocalDateTime
 import scala.concurrent.{ExecutionContext, Future}
 import de.dnpm.dip.util.{SPI, SPILoader}
 import de.dnpm.dip.coding.Code
-import de.dnpm.dip.model.{PatientRecord, Site}
+import de.dnpm.dip.model.Site
 import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
-import de.dnpm.dip.service.mvh.{Submission, UseCase}
+import de.dnpm.dip.service.mvh.UseCase
+import play.api.libs.json.JsValue
 
 
 trait DipConnectorOps[F[_],Env,Err]
@@ -50,11 +51,14 @@ trait DipConnectorOps[F[_],Env,Err]
    */
   def getApiVersion(site:Code[Site])(implicit env: Env): F[Either[Err,String]]
 
-  def downloadSubmission[T <: PatientRecord](
+  /**
+   * Downloads the Submission belonging to the given Report as raw JSON
+   */
+  def downloadSubmission(
     report: Report
   )(
     implicit env: Env
-  ): F[Either[Err,Submission[T]]]
+  ): F[Either[Err,JsValue]]
 
 }
 

@@ -8,9 +8,7 @@ import de.dnpm.ccdn.core.dip.{DipConnector, Report}
 import de.dnpm.ccdn.core.dip.Report.Filter
 import de.dnpm.ccdn.core.dip.Report.Status
 import de.dnpm.dip.coding.Code
-import de.dnpm.dip.model.{NGSReport, PatientRecord, Site}
-import de.dnpm.dip.mtb.model.MTBPatientRecord
-import de.dnpm.dip.rd.model.RDPatientRecord
+import de.dnpm.dip.model.{NGSReport, Site}
 import de.dnpm.dip.service.mvh.Consent.Category
 import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
 import de.dnpm.dip.service.mvh.{Submission, UseCase}
@@ -203,7 +201,7 @@ with BatchingUtil
       _ <- uploadReports
       freshConfirmations <- confirmReports(responseLog)
       _ <- backupSubmissions(freshConfirmations.concat(oldConfirmations).count(_.isRight),validSites,responseLog) //should process as at least as many submissions
-      _ = archiveReports
+      _ = backupReports
       _ = flushReportQueue
       _ <- downloadDeletions(validSites,responseLog)
     } yield {
@@ -441,36 +439,6 @@ with BatchingUtil
 
     )
 
-  /**
-   * Downloads the [[Submission]] for one [[Report]] and hands it to
-   * [[persistenceService]] for backup. Generic in the concrete [[PatientRecord]]
-   * subtype [[T]], which [[backupSubmissions]] selects based on
-   * [[Report.useCase]], since that is the only place where the static type
-   * corresponding to a given [[Report]] is known.
-   */
-  private def downloadAndBackupSubmission[T <: PatientRecord](
-    report: Report,
-    availabilityBuffer: ConcurrentLinkedQueue[ResponsivityReport]
-  ): Future[Either[String,Report]] =
-    dipConnector.downloadSubmission[T](report).map {
-      case Right(submission) =>
-        persistenceService.backup(report,submission) match {
-          case Right(_) => {
-            //backup saved successful
-            val asBackedUp = report.copy(status = Status.SubmissionBackedup)
-            pollingQueue.replace(asBackedUp).map(_ => asBackedUp)
-          }
-          case Left(storeError) =>
-            (s"Problem storing submission for backup: Site ${report.site.code}, " +
-              s"TAN ${report.id} - $storeError").asLeft[Report]
-        }
-
-      case Left(downloadError) =>
-        availabilityBuffer.add(ResponsivityReport(report.site.code,Responsivity.failure))
-        (s"Problem downloading submission for backup: Site ${report.site.code}, " +
-          s"TAN ${report.id} - $downloadError").asLeft[Report]
-    }
-
   def backupSubmissions(minNumDownloads:Int, validSites: Seq[Code[Site]],
                         availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport]):Future[Any] = {
     val numDownloads:Int = minNumDownloads match {
@@ -479,21 +447,38 @@ with BatchingUtil
       case _ => config.polling.minNumSubmissionDownloads //in turn up to as many as there are in pollingQueue
     }
     batchTraverse[Report, Seq, Future, Either[String, Report]](
-      pollingQueue.entries(_.status == Status.ConfirmedToSource)
+      pollingQueue.entries(report => report.status == Status.ConfirmedToSource)
         .filter(report => validSites.contains(report.site.code))
-        .filter(report => report.consentStatus.exists(it => it.getOrElse(Category.ModelProject, false)))
+        .filter(report => report.hasMvhConsent)
         .take(numDownloads),
       nSimultaneousSubmissionDownloads
     )(
-      report =>
-        report.useCase match {
-          case UseCase.MTB => downloadAndBackupSubmission[MTBPatientRecord](report,availabilityBuffer)
-          case UseCase.RD  => downloadAndBackupSubmission[RDPatientRecord](report,availabilityBuffer)
-        }
+      report => dipConnector.downloadSubmission(report).map {
+        case Right(submission) =>
+          persistenceService.backup(report,submission) match {
+            case Right(_) => {
+              //backup saved successful
+              val asBackedUp = report.copy(status = Status.SubmissionBackedup)
+              pollingQueue.replace(asBackedUp).map(_ => asBackedUp)
+            }
+            case Left(storeError) =>
+              (s"Problem storing submission for backup: Site ${report.site.code}, " +
+                s"TAN ${report.id} - $storeError").asLeft[Report]
+          }
+
+        case Left(downloadError) =>
+          availabilityBuffer.add(ResponsivityReport(report.site.code,Responsivity.failure))
+          (s"Problem downloading submission for backup: Site ${report.site.code}, " +
+            s"TAN ${report.id} - $downloadError").asLeft[Report]
+      }
     )
   }
 
-  def archiveReports:Seq[Either[String,Report]] = {
+  /**
+   * Stores the reports (with MVH consent) after their submission was stored
+   * @return
+   */
+  def backupReports:Seq[Either[String,Report]] = {
     pollingQueue.entries(_.status == Status.SubmissionBackedup).map(
 
       report => persistenceService.backup(report) match {
@@ -506,24 +491,27 @@ with BatchingUtil
           (s"Problem storing submission for backup: Site ${report.site.code}, " +
             s"TAN ${report.id} - $storeError").asLeft[Report]
         }
-          //TODO danach noch fürn Quartalsbericht archivieren
         //TODO testen, dass diese Funktion mit bereits existierenden Dokumenten umgehen kann (werden einfach so belassen)
       }
 
     )
   }
 
-  def flushReportQueue:Unit = { //TODO schlechter name, muss ein anderes Wort für "archive" finden
-    //TODO reports im Status reportBackedup für den Quartalsbericht archivieren, erst danach löschen
+  /**
+   * Checks the queue for submissions the final state and removes them from the queue.
+   * Right now, using ArchivingReportRepository this means, that they are archived in the filesystem
+   */
+  def flushReportQueue():Unit = {
 
-    pollingQueue.entries(_.status == Status.ReportBackedup).foreach(report =>
-      pollingQueue.removeFromQueue(report)
-
+    pollingQueue.entries(
+        report => report.status == Status.ReportBackedup ||
+          (report.status == Status.ConfirmedToSource && !report.hasMvhConsent))
+      .foreach(report => pollingQueue.removeFromQueue(report)
     )
   }
 
   /**
-   * Iterates over all [[validSites]] and fetches every [[DeletionEvent]] that
+   * Iterates over all `validSites` and fetches every [[DeletionEvent]] that
    * occurred since each site was last queried, via [[deletionEventService]]
    */
   def downloadDeletions(validSites: Seq[Code[Site]],

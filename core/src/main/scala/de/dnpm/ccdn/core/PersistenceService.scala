@@ -2,8 +2,7 @@ package de.dnpm.ccdn.core
 
 
 import de.dnpm.ccdn.core.dip.Report
-import de.dnpm.dip.model.PatientRecord
-import de.dnpm.dip.service.mvh.Submission
+import play.api.libs.json.JsValue
 
 import java.time.Instant
 import de.dnpm.dip.util.{SPI, SPILoader}
@@ -22,8 +21,7 @@ trait PersistenceService
 
   def backup(report: Report): Either[String, Unit]
 
-  def backup[T <: PatientRecord](report: Report,
-                                 submission: Submission[T]): Either[String, Unit]
+  def backup(report: Report, submission: JsValue): Either[String, Unit]
 
   def backupForQuarterReport(report: Report): Either[String, Unit]
 }

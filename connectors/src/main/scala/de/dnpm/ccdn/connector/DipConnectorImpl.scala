@@ -13,9 +13,9 @@ import play.api.libs.ws.{StandaloneWSClient => WSClient, StandaloneWSRequest => 
 import play.api.libs.ws.JsonBodyReadables._
 import de.dnpm.dip.util.{Logging, Retry}
 import de.dnpm.dip.coding.Code
-import de.dnpm.dip.model.{PatientRecord, Site}
+import de.dnpm.dip.model.Site
 import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
-import de.dnpm.dip.service.mvh.{Submission, UseCase}
+import de.dnpm.dip.service.mvh.UseCase
 import de.dnpm.ccdn.core.dip.{DipConnector, DipConnectorProvider, Report}
 
 import java.time.LocalDateTime
@@ -287,5 +287,41 @@ with Logging
         case t => t.getMessage.asLeft
       }
 
-  override def downloadSubmission[T <: PatientRecord](report: Report)(implicit env: ExecutionContext): Future[Either[String, Submission[T]]] = ???
+  /**
+   * Downloads the Submission belonging to the given [[Report]] as raw JSON,
+   * since it is only archived and never processed within the CCDN
+   */
+  override def downloadSubmission(
+    report: Report
+  )(
+    implicit env: ExecutionContext
+  ): Future[Either[String,JsValue]] =
+    request(
+      report.site.code,
+      s"/api/${report.useCase.toString.toLowerCase}/peer2peer/mvh/submissions/${report.id.value}"
+    )
+    .get()
+    .map(
+      resp => resp.status match {
+        case 200 =>
+          validateSubmission(report,resp.body[JsValue])
+        case _ =>
+          s"Download of submission ${report.id.value} from site ${report.site.code} failed with status ${resp.status} ${resp.statusText}".asLeft
+      }
+    )
+    .recover {
+      case t => t.getMessage.asLeft
+    }
+
+
+  /**
+   * Checks the downloaded Submission JSON before it is handed on for archiving.
+   * TODO: implement actual validation, currently accepts any JSON
+   */
+  private[connector] def validateSubmission(
+    report: Report,
+    json: JsValue
+  ): Either[String,JsValue] =
+    json.asRight
+
 }
