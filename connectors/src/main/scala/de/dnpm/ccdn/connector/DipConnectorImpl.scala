@@ -1,10 +1,10 @@
 package de.dnpm.ccdn.connector
 
 
-import java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME
+import java.time.format.DateTimeFormatter.{ISO_DATE, ISO_DATE_TIME, ISO_LOCAL_DATE_TIME}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
-import scala.util.{Either, Failure, Success}
+import scala.util.{Either, Failure, Success, Try}
 import scala.util.chaining._
 import cats.syntax.either._
 import de.dnpm.ccdn.core.dip.Report.Filter
@@ -316,12 +316,34 @@ with Logging
 
   /**
    * Checks the downloaded Submission JSON before it is handed on for archiving.
-   * TODO: implement actual validation, currently accepts any JSON
+   * Only the fields needed for archiving are checked, the rest is kept as-is:
+   *  - "submittedAt" must be an ISO-8601 date or date-time (with or without offset/zone)
+   *  - "metadata.transferTAN" must be a non-empty string equal to the report ID
    */
   private[connector] def validateSubmission(
     report: Report,
     json: JsValue
-  ): Either[String,JsValue] =
-    json.asRight
+  ): Either[String,JsValue] = {
+    val context = s"Submission ${report.id.value} from site ${report.site.code}"
+
+    def isIsoDate(s: String): Boolean =
+      Try(ISO_DATE_TIME.parse(s)).orElse(Try(ISO_DATE.parse(s))).isSuccess
+
+    for {
+      submittedAt <- (json \ "submittedAt").asOpt[String]
+                       .toRight(s"$context has no string field 'submittedAt'")
+      _           <- Either.cond(
+                       isIsoDate(submittedAt), (),
+                       s"$context has 'submittedAt' value '$submittedAt', which is not an ISO-8601 date"
+                     )
+      transferTAN <- (json \ "metadata" \ "transferTAN").asOpt[String]
+                       .toRight(s"$context has no string field 'metadata.transferTAN'")
+      _           <- Either.cond(transferTAN.nonEmpty, (), s"$context has an empty 'metadata.transferTAN'")
+      _           <- Either.cond(
+                       transferTAN == report.id.value, (),
+                       s"$context has 'metadata.transferTAN' value '$transferTAN', which does not match the report ID"
+                     )
+    } yield json
+  }
 
 }

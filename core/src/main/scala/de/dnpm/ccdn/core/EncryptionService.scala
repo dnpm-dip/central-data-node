@@ -7,7 +7,7 @@ import de.dnpm.dip.util.{
 }
 import play.api.libs.json.{
   Json,
-  JsObject,
+  JsValue,
   OWrites
 }
 
@@ -24,7 +24,7 @@ import play.api.libs.json.{
  */
 trait EncryptionService
 {
-  def encryptObject(payload: JsObject): EncryptionService.Encrypted
+  def encrypt(payload: JsValue): EncryptionService.Encrypted
 }
 
 
@@ -32,7 +32,7 @@ object EncryptionService extends SPILoader[EncryptionServiceProvider]
 {
 
   /**
-   * Result of [[EncryptionService.encryptObject]]: a JSON payload encrypted
+   * Result of [[EncryptionService.encrypt]]: a JSON payload encrypted
    * with a hybrid RSA/AES scheme, i.e. a single-use AES key encrypts the
    * payload and is itself encrypted with an RSA public key. All binary
    * fields are base64-encoded.

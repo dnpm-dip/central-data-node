@@ -200,10 +200,11 @@ with BatchingUtil
       _ <- pollReports(validSites,responseLog)
       _ <- uploadReports
       freshConfirmations <- confirmReports(responseLog)
-      _ <- backupSubmissions(freshConfirmations.concat(oldConfirmations).count(_.isRight),validSites,responseLog) //should process as at least as many submissions
+      numReportsThisIteration = freshConfirmations.concat(oldConfirmations).count(_.isRight)
+      _ <- backupSubmissions(numReportsThisIteration,validSites,responseLog) //should process as at least as many submissions
       _ = backupReports
       _ = flushReportQueue
-      _ <- downloadDeletions(validSites,responseLog)
+      newDeletions <- downloadDeletions(validSites,responseLog)
     } yield {
       persistenceService.writeSiteAvailabilityReports(
         coalesceResponsivityReports(responseLog.asScala), Instant.now(clock))

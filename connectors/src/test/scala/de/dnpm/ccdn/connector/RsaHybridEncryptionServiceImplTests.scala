@@ -10,7 +10,7 @@ import java.util.Base64
 import javax.crypto.spec.{IvParameterSpec, SecretKeySpec}
 import javax.crypto.Cipher
 import org.scalatest.flatspec.AnyFlatSpec
-import play.api.libs.json.{JsObject, Json}
+import play.api.libs.json.Json
 
 
 class RsaHybridEncryptionServiceImplTests extends AnyFlatSpec
@@ -64,7 +64,7 @@ class RsaHybridEncryptionServiceImplTests extends AnyFlatSpec
   it must "produce a result that the matching RSA private key can decrypt back to the original payload" in {
     val payload = Json.obj("foo" -> "bar", "n" -> 42, "nested" -> Json.obj("a" -> Json.arr(1, 2, 3)))
 
-    val encrypted = toTest.encryptObject(payload)
+    val encrypted = toTest.encrypt(payload)
 
     val decrypted = decrypt(encrypted, keyPair.getPrivate)
 
@@ -72,10 +72,10 @@ class RsaHybridEncryptionServiceImplTests extends AnyFlatSpec
   }
 
   it must "encrypt the same payload differently each time (fresh AES key/IV per call)" in {
-    val payload: JsObject = Json.obj("same" -> "payload")
+    val payload = Json.obj("same" -> "payload")
 
-    val first  = toTest.encryptObject(payload)
-    val second = toTest.encryptObject(payload)
+    val first  = toTest.encrypt(payload)
+    val second = toTest.encrypt(payload)
 
     assert(first.encryptedKey != second.encryptedKey)
     assert(first.iv != second.iv)
@@ -88,7 +88,7 @@ class RsaHybridEncryptionServiceImplTests extends AnyFlatSpec
 
   it must "fail to decrypt with the wrong RSA private key" in {
     val payload = Json.obj("secret" -> "value")
-    val encrypted = toTest.encryptObject(payload)
+    val encrypted = toTest.encrypt(payload)
 
     val otherKeyPair = {
       val gen = KeyPairGenerator.getInstance("RSA")

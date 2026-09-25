@@ -2,6 +2,10 @@ package de.dnpm.ccdn.core
 
 
 import de.dnpm.ccdn.core.dip.Report
+import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.model.Site
+import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
+import de.dnpm.dip.service.mvh.UseCase
 import play.api.libs.json.JsValue
 
 import java.time.Instant
@@ -22,6 +26,8 @@ trait PersistenceService
   def backup(report: Report): Either[String, Unit]
 
   def backup(report: Report, submission: JsValue): Either[String, Unit]
+
+  def backup(site:Coding[Site],usecase:UseCase.Value,deletionEvent:DeletionEvent): Either[String, Unit]
 
   def backupForQuarterReport(report: Report): Either[String, Unit]
 }

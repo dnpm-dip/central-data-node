@@ -9,7 +9,7 @@ import java.util.Base64
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.{Cipher, KeyGenerator}
 import scala.util.Properties.{envOrNone, propOrNone}
-import play.api.libs.json.{JsObject, Json}
+import play.api.libs.json.{JsValue, Json}
 import de.dnpm.dip.util.Logging
 import de.dnpm.ccdn.core.{EncryptionService, EncryptionServiceProvider}
 
@@ -65,7 +65,7 @@ object RsaHybridEncryptionServiceImpl extends Logging
  * Encrypts JSON payloads with a hybrid RSA/AES scheme:
  *
  *  1. A fresh, random AES-256 key is generated for every call to
- *     [[encryptObject]]
+ *     [[encrypt]]
  *  2. The payload is encrypted with that key using AES-256-CBC and a
  *     random 16-byte IV
  *  3. The AES key itself is encrypted with the configured RSA public key
@@ -86,7 +86,7 @@ object RsaHybridEncryptionServiceImpl extends Logging
  *
  * =Decrypting a result on the linux shell (OpenSSL >= 1.1.1, incl. 3.0.2)=
  *
- * Given the JSON output of [[encryptObject]] - `{"algorithm": ..., "encryptedKey": "<b64>",
+ * Given the JSON output of [[encrypt]] - `{"algorithm": ..., "encryptedKey": "<b64>",
  * "iv": "<b64>", "ciphertext": "<b64>"}` - and the private key in `private.pem`:
  *
  * {{{
@@ -115,7 +115,7 @@ final class RsaHybridEncryptionServiceImpl(publicKey: PublicKey) extends Encrypt
   private def encode(bytes: Array[Byte]): String =
     Base64.getEncoder.encodeToString(bytes)
 
-  override def encryptObject(payload: JsObject): EncryptionService.Encrypted = {
+  override def encrypt(payload: JsValue): EncryptionService.Encrypted = {
 
     val aesKey = {
       val keyGen = KeyGenerator.getInstance("AES")
