@@ -12,7 +12,7 @@ import scala.concurrent.ExecutionContext
 import java.time.{Clock, Instant, LocalDateTime, ZoneOffset}
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.Future
-import de.dnpm.dip.coding.Code
+import de.dnpm.dip.coding.{Code, Coding}
 import de.dnpm.dip.model.Site
 import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
 import de.dnpm.dip.service.mvh.UseCase
@@ -98,6 +98,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
       override def backup(report: Report): Either[String, Unit] = ???
       override def backup(report: Report, submission: JsValue): Either[String, Unit] = ???
+      override def backup(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = ???
       override def backupForQuarterReport(report: Report): Either[String, Unit] = ???
     }
 
@@ -195,6 +196,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       override def backup(report: Report, submission: JsValue): Either[String, Unit] = ???
 
       override def backupForQuarterReport(report: Report): Either[String, Unit] = ???
+
+      override def backup(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = ???
     }
 
     val testService = new MVHReportingService(

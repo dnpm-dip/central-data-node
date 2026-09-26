@@ -4,14 +4,12 @@ package de.dnpm.ccdn.core
 import cats.syntax.either._
 import cats.syntax.traverse._
 import de.dnpm.ccdn.core.bfarm.BfarmConnector
+import de.dnpm.ccdn.core.dip.Report.{Filter, Status}
 import de.dnpm.ccdn.core.dip.{DipConnector, Report}
-import de.dnpm.ccdn.core.dip.Report.Filter
-import de.dnpm.ccdn.core.dip.Report.Status
 import de.dnpm.dip.coding.Code
 import de.dnpm.dip.model.{NGSReport, Site}
-import de.dnpm.dip.service.mvh.Consent.Category
 import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
-import de.dnpm.dip.service.mvh.{Submission, UseCase}
+import de.dnpm.dip.service.mvh.Submission
 import de.dnpm.dip.util.Logging
 
 import java.time.temporal.ChronoUnit
@@ -533,4 +531,5 @@ with BatchingUtil
           }
     )
     .map(_.collect { case Right(events) => events }.flatten)
+    //TODO handle deletions
 }

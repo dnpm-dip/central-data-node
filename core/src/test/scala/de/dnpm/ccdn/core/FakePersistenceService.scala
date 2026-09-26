@@ -2,6 +2,9 @@ package de.dnpm.ccdn.core
 
 
 import de.dnpm.ccdn.core.dip.Report
+import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.model.Site
+import de.dnpm.dip.service.mvh.{MVHService, UseCase}
 import play.api.libs.json.JsValue
 
 import java.time.Instant
@@ -25,4 +28,6 @@ class FakePersistenceService extends PersistenceService
   override def backup(report: Report, submission: JsValue): Either[String, Unit] = ???
 
   override def backupForQuarterReport(report: Report): Either[String, Unit] = ???
+
+  override def backup(site: Coding[Site], usecase: UseCase.Value, deletionEvent: MVHService.DeletionEvent): Either[String, Unit] = ???
 }

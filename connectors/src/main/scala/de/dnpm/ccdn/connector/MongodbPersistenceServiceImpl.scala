@@ -3,8 +3,9 @@ package de.dnpm.ccdn.connector
 
 import java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME
 import java.time.{Instant, LocalDate, LocalDateTime}
+import com.mongodb.{ErrorCategory, MongoWriteException}
 import com.mongodb.client.MongoClients
-import com.mongodb.client.model.Indexes
+import com.mongodb.client.model.{Filters, IndexOptions, Indexes}
 import de.dnpm.ccdn.core.dip.Report
 import org.bson.Document
 import de.dnpm.dip.util.Logging
@@ -129,34 +130,62 @@ final class MongodbPersistenceServiceImpl(
   /**
    * Common scheme of all backup documents: "tan", "site", "usecase", "type", "submittedAt"
    * in plain text, and `content` encrypted.
-   * The index over "tan" is ensured on every connect; createIndex is a no-op if it already exists.
+   * ("tan", "type", "site", "usecase") identifies a backup, whose data never changes, so if
+   * such a document already exists, nothing is encrypted or inserted.
+   * A unique index over these fields is ensured on every connect (createIndex is a no-op if it
+   * already exists) for safety against concurrent inserts; a resulting duplicate key error
+   * is a failure like any other database error, and logged as error.
    */
   private def storeBackup(tan: String,site: Coding[Site],usecase: UseCase.Value,
                           submittedAt: LocalDateTime,documentType: String,
                           content: JsValue, context: String
   ): Either[String, Unit] =
     for {
-      uri <- mongoUri.toRight(s"MongoDB URI is not configured; cannot back up $context")
-      _   <- Try {
-               val doc =
-                 new Document("tan", tan)
-                   .append("site", site.code.value)
-                   .append("usecase", usecase.toString)
-                   .append("type", documentType)
-                   .append("content", Document.parse(Json.stringify(Json.toJson(encryptionService.encrypt(content)))))
-                   .append("submittedAt", submittedAt.format(ISO_LOCAL_DATE_TIME))
-               val client = MongoClients.create(uri)
-               try {
-                 val coll = client.getDatabase(DATABASE).getCollection(BACKUP_COLLECTION)
-                 coll.createIndex(Indexes.ascending("tan"))
-                 coll.insertOne(doc)
-               } finally {
-                 client.close()
-               }
-             }
-             .toEither
-             .left.map(exc => s"Failed to back up $context: ${exc.getMessage}")
-    } yield log.debug(s"Backed up $context")
+      uri      <- mongoUri.toRight(s"MongoDB URI is not configured; cannot back up $context")
+      inserted <- Try {
+                    val client = MongoClients.create(uri)
+                    try {
+                      val coll = client.getDatabase(DATABASE).getCollection(BACKUP_COLLECTION)
+                      coll.createIndex(
+                        Indexes.ascending("tan", "type", "site", "usecase"),
+                        new IndexOptions().unique(true)
+                      )
+                      val existing =
+                        coll.find(
+                          Filters.and(
+                            Filters.eq("tan", tan),
+                            Filters.eq("type", documentType),
+                            Filters.eq("site", site.code.value),
+                            Filters.eq("usecase", usecase.toString)
+                          )
+                        )
+                        .first()
+                      if (existing == null) {
+                        val doc =
+                          new Document("tan", tan)
+                            .append("site", site.code.value)
+                            .append("usecase", usecase.toString)
+                            .append("type", documentType)
+                            .append("content", Document.parse(Json.stringify(Json.toJson(encryptionService.encrypt(content)))))
+                            .append("submittedAt", submittedAt.format(ISO_LOCAL_DATE_TIME))
+                        coll.insertOne(doc)
+                        true
+                      } else false
+                    } finally {
+                      client.close()
+                    }
+                  }
+                  .toEither
+                  .left.map {
+                    case exc: MongoWriteException if exc.getError.getCategory == ErrorCategory.DUPLICATE_KEY =>
+                      s"Failed to back up $context: backup was inserted concurrently (${exc.getMessage})"
+                    case exc =>
+                      s"Failed to back up $context: ${exc.getMessage}"
+                  }
+                  .left.map { msg => log.error(msg); msg }
+    } yield
+      if (inserted) log.debug(s"Backed up $context")
+      else log.info(s"Backup of $context already exists; skipped")
 
   override def backupForQuarterReport(report:Report):Either[String,Unit] = ???
 }
