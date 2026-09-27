@@ -23,11 +23,17 @@ trait PersistenceService
     now: Instant
   ): Unit
 
-  def backup(report: Report): Either[String, Unit]
+  def backupReport(report: Report): Either[String, Unit]
 
-  def backup(report: Report, submission: JsValue): Either[String, Unit]
+  def backupSubmission(report: Report, submission: JsValue): Either[String, Unit]
 
-  def backup(site:Coding[Site],usecase:UseCase.Value,deletionEvent:DeletionEvent): Either[String, Unit]
+  def backupDeletion(site:Coding[Site], usecase:UseCase.Value, deletionEvent:DeletionEvent): Either[String, Unit]
+
+  /**
+   * Removes all backed up submissions and reports matching the deletion event's tan, site
+   * and usecase, then backs up the deletion event itself (unless already present).
+   */
+  def applyDeletion(site:Coding[Site], usecase:UseCase.Value, deletionEvent:DeletionEvent): Either[String, Unit]
 
   def backupForQuarterReport(report: Report): Either[String, Unit]
 }

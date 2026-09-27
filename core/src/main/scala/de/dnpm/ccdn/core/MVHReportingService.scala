@@ -6,10 +6,9 @@ import cats.syntax.traverse._
 import de.dnpm.ccdn.core.bfarm.BfarmConnector
 import de.dnpm.ccdn.core.dip.Report.{Filter, Status}
 import de.dnpm.ccdn.core.dip.{DipConnector, Report}
-import de.dnpm.dip.coding.Code
+import de.dnpm.dip.coding.{Code, Coding}
 import de.dnpm.dip.model.{NGSReport, Site}
 import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
-import de.dnpm.dip.service.mvh.Submission
 import de.dnpm.dip.util.Logging
 
 import java.time.temporal.ChronoUnit
@@ -197,12 +196,13 @@ with BatchingUtil
       oldConfirmations <- if (pollingQueue.exists(_.status == Status.SubmittedToBfarm)) confirmReports(responseLog) else Future.successful(Seq.empty)
       _ <- pollReports(validSites,responseLog)
       _ <- uploadReports
+      //TODO sicherstellen, dass das alles hier auch dann funktioniert, wenn der zKDK wieder auf multiUsecase gestellt wird. Der Usecase sollte zum sitecode immer mitgegeben werden.
       freshConfirmations <- confirmReports(responseLog)
       numReportsThisIteration = freshConfirmations.concat(oldConfirmations).count(_.isRight)
       _ <- backupSubmissions(numReportsThisIteration,validSites,responseLog) //should process as at least as many submissions
       _ = backupReports
       _ = flushReportQueue
-      newDeletions <- downloadDeletions(validSites,responseLog)
+      _ <- syncDeletions(validSites,responseLog)
     } yield {
       persistenceService.writeSiteAvailabilityReports(
         coalesceResponsivityReports(responseLog.asScala), Instant.now(clock))
@@ -454,7 +454,7 @@ with BatchingUtil
     )(
       report => dipConnector.downloadSubmission(report).map {
         case Right(submission) =>
-          persistenceService.backup(report,submission) match {
+          persistenceService.backupSubmission(report,submission) match {
             case Right(_) => {
               //backup saved successful
               val asBackedUp = report.copy(status = Status.SubmissionBackedup)
@@ -480,7 +480,7 @@ with BatchingUtil
   def backupReports:Seq[Either[String,Report]] = {
     pollingQueue.entries(_.status == Status.SubmissionBackedup).map(
 
-      report => persistenceService.backup(report) match {
+      report => persistenceService.backupReport(report) match {
         case Right(_) => {
           //backup saved successful
           val asBackedUp: Report = report.copy(status = Status.ReportBackedup)
@@ -510,26 +510,38 @@ with BatchingUtil
   }
 
   /**
-   * Iterates over all `validSites` and fetches every [[DeletionEvent]] that
-   * occurred since each site was last queried, via [[deletionEventService]]
+   * Iterates over all `validSites` and their active UseCases, fetches every
+   * [[DeletionEvent]] that occurred since each was last queried, via [[deletionEventService]],
+   * and applies each of them to the backups via [[PersistenceService.applyDeletion]]
    */
-  def downloadDeletions(validSites: Seq[Code[Site]],
-                        availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport]):Future[Seq[DeletionEvent]] =
-    Future.traverse(validSites)(
-      site =>
-        deletionEventService.deletionEvents(site)
+  def syncDeletions(validSites: Seq[Code[Site]],
+                    availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport]):Future[Seq[DeletionEvent]] =
+    Future.traverse(
+      for {
+        site    <- validSites
+        useCase <- config.sites.get(site)
+                     .map(_.useCases.intersect(config.activeUseCases).toSeq)
+                     .getOrElse(Seq.empty)
+      } yield site -> useCase
+    ){
+      case (site,useCase) =>
+        deletionEventService.deletionEvents(site,useCase)
           .andThen {
             case Success(Left(err)) =>
-              log.error(s"Problem polling DeletionEvents of site $site: $err")
+              log.error(s"Problem polling $useCase DeletionEvents of site $site: $err")
               availabilityBuffer.add(ResponsivityReport(site,Responsivity.failure))
           }
           .recover {
             case t =>
-              log.error(s"Error(s) occurred polling DeletionEvents of site $site", t)
+              log.error(s"Error(s) occurred polling $useCase DeletionEvents of site $site", t)
               availabilityBuffer.add(ResponsivityReport(site,Responsivity.failure))
               t.getMessage.asLeft
           }
-    )
+          .map(_.map(_.map { event =>
+            persistenceService.applyDeletion(Coding[Site](site.value),useCase,event)
+              .left.foreach(err => log.error(s"Failed to apply DeletionEvent ${event.tan.value} of site $site: $err"))
+            event
+          }))
+    }
     .map(_.collect { case Right(events) => events }.flatten)
-    //TODO handle deletions
 }

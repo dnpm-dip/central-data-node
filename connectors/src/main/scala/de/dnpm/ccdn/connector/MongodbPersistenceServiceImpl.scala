@@ -89,7 +89,7 @@ final class MongodbPersistenceServiceImpl(
   /**
    * Stores the report, encrypted, in collection [[BACKUP_COLLECTION]].
    */
-  override def backup(report: Report): Either[String, Unit] =
+  override def backupReport(report: Report): Either[String, Unit] =
     storeBackup(
       report,
       "report",
@@ -100,7 +100,7 @@ final class MongodbPersistenceServiceImpl(
   /**
    * Stores the submission, encrypted, in collection [[BACKUP_COLLECTION]].
    */
-  override def backup(report: Report, submission: JsValue): Either[String, Unit] =
+  override def backupSubmission(report: Report, submission: JsValue): Either[String, Unit] =
     storeBackup(
       report,
       "submission",
@@ -112,7 +112,7 @@ final class MongodbPersistenceServiceImpl(
    * Stores the deletion event, encrypted, in collection [[BACKUP_COLLECTION]].
    * Its "submittedAt" is the time of deletion.
    */
-  override def backup(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] =
+  override def backupDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] =
     storeBackup(
       deletionEvent.tan.value,
       site,
@@ -187,5 +187,46 @@ final class MongodbPersistenceServiceImpl(
       if (inserted) log.debug(s"Backed up $context")
       else log.info(s"Backup of $context already exists; skipped")
 
+
+  /**
+   * Removes all backed up submissions and reports in collection [[BACKUP_COLLECTION]] whose
+   * "tan", "site" and "usecase" match, then backs up the deletion event itself via
+   * [[backupDeletion]] (which skips the insert if it is already present).
+   */
+  override def applyDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = {
+    val tan     = deletionEvent.tan.value
+    val context = s"DeletionEvent $tan from site ${site.code}"
+    for {
+      uri     <- mongoUri.toRight(s"MongoDB URI is not configured; cannot apply $context")
+      deleted <- Try {
+        val client = MongoClients.create(uri)
+        try {
+          client.getDatabase(DATABASE).getCollection(BACKUP_COLLECTION)
+            .deleteMany(
+              Filters.and(
+                Filters.eq("tan", tan),
+                Filters.eq("site", site.code.value),
+                Filters.eq("usecase", usecase.toString),
+                Filters.in("type", "submission", "report")
+              )
+            )
+            .getDeletedCount
+        } finally {
+          client.close()
+        }
+      }
+        .toEither
+        .left.map { exc =>
+          val msg = s"Failed to apply $context: ${exc.getMessage}"
+          log.error(msg)
+          msg
+        }
+      _        = log.debug(s"Removed $deleted backup document(s) for $context")
+      _       <- backupDeletion(site, usecase, deletionEvent)
+    } yield ()
+  }
+
+
+  //TODO should eventually replace ArchivingReportRepository
   override def backupForQuarterReport(report:Report):Either[String,Unit] = ???
 }

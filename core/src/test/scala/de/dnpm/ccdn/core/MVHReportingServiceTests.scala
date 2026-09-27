@@ -59,7 +59,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       _ <- service.backupSubmissions(freshConfirmations.concat(oldConfirmations).count(_.isRight),validSites,responseLog) //should process as at least as many submissions
       _ = service.backupReports
       _ = service.flushReportQueue
-      _ <- service.downloadDeletions(validSites,responseLog)
+      _ <- service.syncDeletions(validSites,responseLog)
 
     } yield service.pollingQueue.entries(_ => true) must be (empty)
   }
@@ -96,9 +96,10 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
         capturedInstant = Some(now)
       }
 
-      override def backup(report: Report): Either[String, Unit] = ???
-      override def backup(report: Report, submission: JsValue): Either[String, Unit] = ???
-      override def backup(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = ???
+      override def backupReport(report: Report): Either[String, Unit] = ???
+      override def backupSubmission(report: Report, submission: JsValue): Either[String, Unit] = ???
+      override def backupDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = ???
+      override def applyDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = ???
       override def backupForQuarterReport(report: Report): Either[String, Unit] = ???
     }
 
@@ -192,12 +193,13 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       override def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport], now: Instant): Unit =
         capturedResponsivityReports ++= reports
 
-      override def backup(report: Report): Either[String, Unit] = ???
-      override def backup(report: Report, submission: JsValue): Either[String, Unit] = ???
+      override def backupReport(report: Report): Either[String, Unit] = ???
+      override def backupSubmission(report: Report, submission: JsValue): Either[String, Unit] = ???
 
       override def backupForQuarterReport(report: Report): Either[String, Unit] = ???
 
-      override def backup(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = ???
+      override def backupDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = ???
+      override def applyDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = ???
     }
 
     val testService = new MVHReportingService(
