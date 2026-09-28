@@ -16,6 +16,8 @@ final class FakePersistenceServiceProvider extends PersistenceServiceProvider
     new FakePersistenceService
 }
 
+// Only implements the methods the tests need, the rest is left as ???
+//noinspection NotImplementedCode
 class FakePersistenceService extends PersistenceService
 {
   override def writeSiteAvailabilityReports(

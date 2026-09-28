@@ -42,7 +42,7 @@ object MVHReportingService
     
     Runtime.getRuntime.addShutdownHook(
       new Thread {
-        override def run: Unit = {
+        override def run(): Unit = {
           println("Shutting down MVH Reporting service...")
           service.stop()
         }
@@ -92,7 +92,7 @@ with BatchingUtil
    * which are processed before polling for new items in [[pollReports]]
    *
    * The state of this process is stored in the [[pollingQueue]] and in the
-   * [[Submission.Report.status]] of it's items.
+   * [[Report.status]] of it's items.
    *
    * Managed by [[pollingExecutor]]
    */
@@ -201,7 +201,7 @@ with BatchingUtil
       numReportsThisIteration = freshConfirmations.concat(oldConfirmations).count(_.isRight)
       _ <- backupSubmissions(numReportsThisIteration,validSites,responseLog) //should process as at least as many submissions
       _ = backupReports
-      _ = flushReportQueue
+      _ = flushReportQueue()
       _ <- syncDeletions(validSites,responseLog)
     } yield {
       persistenceService.writeSiteAvailabilityReports(
@@ -299,7 +299,7 @@ with BatchingUtil
 
   /**
    * Communicates with all the configured DIP nodes, queries them for
-   * new  [[Submission.Reports]], i.e. with status [[Status.Unsubmitted]], and stores
+   * new  [[Report]]s, i.e. with status [[Status.Unsubmitted]], and stores
    * them in the [[pollingQueue]]
    */
   private[core] def pollReports(validSites: Seq[Code[Site]],
@@ -349,7 +349,7 @@ with BatchingUtil
 
   /**
    * Communicates with the BfArM, sends them [[BfarmReport]] entities, each based
-   * on one of all the [[Submission.Report]] entities in the [[pollingQueue]]
+   * on one of all the [[Report]] entities in the [[pollingQueue]]
    * that are in status [[Status.Unsubmitted]]. After this upload their status is
    * changed to [[Status.SubmittedToBfarm]]
    */
@@ -455,11 +455,11 @@ with BatchingUtil
       report => dipConnector.downloadSubmission(report).map {
         case Right(submission) =>
           persistenceService.backupSubmission(report,submission) match {
-            case Right(_) => {
+            case Right(_) =>
               //backup saved successful
               val asBackedUp = report.copy(status = Status.SubmissionBackedup)
               pollingQueue.replace(asBackedUp).map(_ => asBackedUp)
-            }
+
             case Left(storeError) =>
               (s"Problem storing submission for backup: Site ${report.site.code}, " +
                 s"TAN ${report.id} - $storeError").asLeft[Report]
@@ -481,15 +481,14 @@ with BatchingUtil
     pollingQueue.entries(_.status == Status.SubmissionBackedup).map(
 
       report => persistenceService.backupReport(report) match {
-        case Right(_) => {
+        case Right(_) =>
           //backup saved successful
           val asBackedUp: Report = report.copy(status = Status.ReportBackedup)
           pollingQueue.replace(asBackedUp).map(_ => asBackedUp:Report)
-        }
-        case Left(storeError) => {
-          (s"Problem storing submission for backup: Site ${report.site.code}, " +
+
+        case Left(storeError) =>
+          (s"Problem storing report for backup: Site ${report.site.code}, " +
             s"TAN ${report.id} - $storeError").asLeft[Report]
-        }
       }
 
     )

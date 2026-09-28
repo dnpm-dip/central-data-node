@@ -21,11 +21,13 @@ import play.api.libs.json.JsValue
 
 
 
+// Fakes only implement the methods the respective test needs, the rest is left as ???
+//noinspection NotImplementedCode
 final class MVHReportingServiceTests extends AsyncFlatSpec
 {
   override implicit def executionContext: ExecutionContext =
     ExecutionContext.fromExecutor(Executors.newFixedThreadPool(50))
-  val log = LoggerFactory.getLogger(MVHReportingServiceTests.super.getClass)
+  private val log = LoggerFactory.getLogger(MVHReportingServiceTests.super.getClass)
 
   behavior of "MVHReportingService"
 
@@ -41,7 +43,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       new FakePersistenceService
     )
 
-  val sites = Config.instance.sites.keys.toSeq
+  private val sites = Config.instance.sites.keys.toSeq
 
   it must "handle multiple uploads from every DIP node in one go" in {
     log.info("FakeDipConnector sending "+fakeDipConnector.nSubmissions+ " submissions per site")
@@ -59,7 +61,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       freshConfirmations <- service.confirmReports(responseLog)
       _ <- service.backupSubmissions(freshConfirmations.concat(oldConfirmations).count(_.isRight),validSites,responseLog) //should process as at least as many submissions
       _ = service.backupReports
-      _ = service.flushReportQueue
+      _ = service.flushReportQueue()
       _ <- service.syncDeletions(validSites,responseLog)
 
     } yield service.pollingQueue.entries(_ => true) must be (empty)
