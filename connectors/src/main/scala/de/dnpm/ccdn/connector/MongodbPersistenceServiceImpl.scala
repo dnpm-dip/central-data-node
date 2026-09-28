@@ -2,12 +2,15 @@ package de.dnpm.ccdn.connector
 
 
 import java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME
-import java.time.{Instant, LocalDate, LocalDateTime}
-import com.mongodb.{ErrorCategory, MongoWriteException}
-import com.mongodb.client.MongoClients
-import com.mongodb.client.model.{Filters, IndexOptions, Indexes}
+import java.time.{Instant, LocalDateTime, ZoneOffset}
+import java.util.Date
+import com.mongodb.{ErrorCategory, MongoCommandException, MongoWriteException}
+import com.mongodb.client.{MongoClients, MongoDatabase}
+import com.mongodb.client.model.{CreateCollectionOptions, Filters, IndexOptions, Indexes, ValidationOptions}
+import com.mongodb.client.model.mql.MqlValues
 import de.dnpm.ccdn.core.dip.Report
-import org.bson.Document
+import org.bson.{BsonType, Document}
+import org.bson.conversions.Bson
 import de.dnpm.dip.util.Logging
 import de.dnpm.ccdn.core.{EncryptionService, PersistenceService, PersistenceServiceProvider, ResponsivityReport}
 import de.dnpm.dip.coding.Coding
@@ -33,6 +36,83 @@ object MongodbPersistenceServiceImpl
 
   private val DATABASE          = "ccdn"
   private val BACKUP_COLLECTION = "backup"
+  private val QUARTER_REPORT_COLLECTION = "quarter-reports"
+
+  /**
+   * Index names of [[QUARTER_REPORT_COLLECTION]]. When changing an index definition,
+   * give it a new name (e.g. bump the version), since a changed definition under an existing
+   * name makes createIndex fail.
+   */
+  private val QUARTER_REPORT_IDENTITY_INDEX   = "identity_v1"
+  private val QUARTER_REPORT_BY_QUARTER_INDEX = "by_quarter_v1"
+
+  /** MongoDB error code for creating a collection that already exists */
+  private val NAMESPACE_EXISTS = 48
+
+  /**
+   * Reports carry German wall-clock time without zone information. They are stored as
+   * "floating" UTC dates: the local date time is interpreted as if it were UTC. Thus MongoDB
+   * date operators ($year, $month, ...), which default to UTC, yield the original wall-clock
+   * values. The stored instants must not be compared with real instants (e.g. $$NOW).
+   */
+  private[connector] def toFloatingUtc(dateTime: LocalDateTime): Date =
+    Date.from(dateTime.toInstant(ZoneOffset.UTC))
+
+  private[connector] def quarterOf(dateTime: LocalDateTime): Int =
+    (dateTime.getMonthValue - 1) / 3 + 1
+
+  /**
+   * Field names of documents in [[QUARTER_REPORT_COLLECTION]], shared by the document,
+   * its validator, indexes and queries
+   */
+  private[connector] object QuarterReportField
+  {
+    val Id        = "id"
+    val SiteCode  = "site.code"
+    val UseCase   = "useCase"
+    val CreatedAt = "createdAt"
+    val Year      = "year"
+    val Quarter   = "quarter"
+  }
+
+  /**
+   * The report in plain JSON, with "createdAt" replaced by a floating UTC date, and
+   * "year" and "quarter" derived from it.
+   */
+  private[connector] def quarterReportDocument(report: Report): Document = {
+    val doc = Document.parse(Json.stringify(Json.toJson(report)))
+    doc.put(QuarterReportField.CreatedAt, toFloatingUtc(report.createdAt)) // replaces the ISO string
+    doc
+      .append(QuarterReportField.Year, report.createdAt.getYear)
+      .append(QuarterReportField.Quarter, quarterOf(report.createdAt))
+  }
+
+  /**
+   * Requires the identifying fields, "createdAt" as date, and rejects documents whose
+   * "year" and "quarter" do not match their "createdAt". The quarter check
+   * 3*quarter-2 <= month <= 3*quarter also restricts "quarter" to 1..4.
+   * Date parts are taken in UTC, matching the floating UTC dates, see [[toFloatingUtc]].
+   */
+  private val quarterReportValidator: Bson = {
+    import QuarterReportField.{UseCase => UseCaseField, _}
+    val doc     = MqlValues.current()
+    val utc     = MqlValues.of("UTC")
+    val month   = doc.getDate(CreatedAt).month(utc)
+    val quarter = doc.getInteger(Quarter)
+    Filters.and(
+      Filters.`type`(Id, BsonType.STRING),
+      Filters.`type`(SiteCode, BsonType.STRING),
+      Filters.`type`(UseCaseField, BsonType.STRING),
+      Filters.`type`(CreatedAt, BsonType.DATE_TIME),
+      Filters.`type`(Year, BsonType.INT32),
+      Filters.`type`(Quarter, BsonType.INT32),
+      Filters.expr(
+        doc.getInteger(Year).eq(doc.getDate(CreatedAt).year(utc))
+          .and(quarter.multiply(3).subtract(2).lte(month))
+          .and(quarter.multiply(3).gte(month))
+      )
+    )
+  }
 
   lazy val instance = new MongodbPersistenceServiceImpl(
     envOrNone(MONGODBURIENVVAR).orElse(propOrNone(MONGODBURIJVMPROP))
@@ -49,7 +129,7 @@ final class MongodbPersistenceServiceImpl(
 ) extends PersistenceService with Logging
 {
 
-  import MongodbPersistenceServiceImpl.{DATABASE, BACKUP_COLLECTION}
+  import MongodbPersistenceServiceImpl._
 
   mongoUri match {
     case Some(uri) => log.debug(s"MongoDB URI: $uri")
@@ -227,6 +307,76 @@ final class MongodbPersistenceServiceImpl(
   }
 
 
+  /**
+   * Stores the report, unencrypted, in collection [[QUARTER_REPORT_COLLECTION]], see
+   * [[quarterReportDocument]]. Like in [[storeBackup]], ("id", "site.code", "useCase")
+   * identifies a report, and an already existing one is left untouched.
+   * An index over ("year", "quarter") serves fetching the reports of a quarter.
+   */
   //TODO should eventually replace ArchivingReportRepository
-  override def backupForQuarterReport(report:Report):Either[String,Unit] = ???
+  override def backupForQuarterReport(report: Report): Either[String, Unit] = {
+    val context = s"Report ${report.id.value} from site ${report.site.code} for quarter report"
+    for {
+      uri      <- mongoUri.toRight(s"MongoDB URI is not configured; cannot store $context")
+      inserted <- Try {
+                    val client = MongoClients.create(uri)
+                    try {
+                      val coll = quarterReportCollection(client.getDatabase(DATABASE))
+                      val existing =
+                        coll.find(
+                          Filters.and(
+                            Filters.eq(QuarterReportField.Id, report.id.value),
+                            Filters.eq(QuarterReportField.SiteCode, report.site.code.value),
+                            Filters.eq(QuarterReportField.UseCase, report.useCase.toString)
+                          )
+                        )
+                        .first()
+                      if (existing == null) {
+                        coll.insertOne(quarterReportDocument(report))
+                        true
+                      } else false
+                    } finally {
+                      client.close()
+                    }
+                  }
+                  .toEither
+                  .left.map {
+                    case exc: MongoWriteException if exc.getError.getCategory == ErrorCategory.DUPLICATE_KEY =>
+                      s"Failed to store $context: report was inserted concurrently (${exc.getMessage})"
+                    case exc =>
+                      s"Failed to store $context: ${exc.getMessage}"
+                  }
+                  .left.map { msg => log.error(msg); msg }
+    } yield
+      if (inserted) log.debug(s"Stored $context")
+      else log.info(s"$context already exists; skipped")
+  }
+
+  /**
+   * Creates collection [[QUARTER_REPORT_COLLECTION]] with [[quarterReportValidator]] if it
+   * does not exist yet, and ensures its indexes (createIndex is a no-op if an index exists).
+   */
+  private def quarterReportCollection(db: MongoDatabase) = {
+    try {
+      db.createCollection(
+        QUARTER_REPORT_COLLECTION,
+        new CreateCollectionOptions().validationOptions(
+          new ValidationOptions().validator(quarterReportValidator)
+        )
+      )
+    } catch {
+      case exc: MongoCommandException if exc.getErrorCode == NAMESPACE_EXISTS => ()
+    }
+    import QuarterReportField.{UseCase => UseCaseField, _}
+    val coll = db.getCollection(QUARTER_REPORT_COLLECTION)
+    coll.createIndex(
+      Indexes.ascending(Id, SiteCode, UseCaseField),
+      new IndexOptions().name(QUARTER_REPORT_IDENTITY_INDEX).unique(true)
+    )
+    coll.createIndex(
+      Indexes.ascending(Year, Quarter),
+      new IndexOptions().name(QUARTER_REPORT_BY_QUARTER_INDEX)
+    )
+    coll
+  }
 }

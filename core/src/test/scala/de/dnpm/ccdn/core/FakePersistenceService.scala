@@ -27,7 +27,7 @@ class FakePersistenceService extends PersistenceService
 
   override def backupSubmission(report: Report, submission: JsValue): Either[String, Unit] = ???
 
-  override def backupForQuarterReport(report: Report): Either[String, Unit] = ???
+  override def backupForQuarterReport(report: Report): Either[String, Unit] = Right(())
 
   override def backupDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: MVHService.DeletionEvent): Either[String, Unit] = ???
   override def applyDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: MVHService.DeletionEvent): Either[String, Unit] = ???

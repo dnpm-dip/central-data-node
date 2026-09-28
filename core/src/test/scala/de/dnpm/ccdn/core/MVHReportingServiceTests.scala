@@ -13,9 +13,10 @@ import java.time.{Clock, Instant, LocalDateTime, ZoneOffset}
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.Future
 import de.dnpm.dip.coding.{Code, Coding}
-import de.dnpm.dip.model.Site
+import de.dnpm.dip.model.{HealthInsurance, Id, Patient, Site}
 import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
-import de.dnpm.dip.service.mvh.UseCase
+import de.dnpm.dip.service.mvh.Submission.Type
+import de.dnpm.dip.service.mvh.{TransferTAN, UseCase}
 import play.api.libs.json.JsValue
 
 
@@ -275,6 +276,44 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
       assertResult(service.nSimultaneousSubmissionConfirmations)(
         fakeDipConnector.maxSimultaneousConfirmationWaits.get())
+    }
+  }
+
+  it must "only remove reports from the queue that were stored for the quarter report" in {
+    def report(tan: String) =
+      Report(
+        Id[TransferTAN](tan),
+        LocalDateTime.of(2026, 7, 1, 12, 0),
+        Id[Patient]("42"),
+        None,
+        Status.ConfirmedToSource,
+        Coding[Site](sites.head.value),
+        UseCase.MTB,
+        Type.Initial,
+        None, None, None,
+        HealthInsurance.Type.GKV,
+        None, None, None
+      )
+    val stored = report("stored")
+    val failing = report("failing")
+
+    val queue = FakeReportRepository()
+    queue.saveIfAbsent(Seq(stored, failing))
+    val testService = new MVHReportingService(
+      Config.instance,
+      queue,
+      fakeDipConnector,
+      fakeBfarmConnector,
+      new FakePersistenceService {
+        override def backupForQuarterReport(report: Report): Either[String, Unit] =
+          if (report.id == failing.id) Left("simulated storage failure") else Right(())
+      }
+    )
+
+    testService.flushReportQueue()
+
+    Future.successful {
+      queue.entries(_ => true).map(_.id) must contain only failing.id
     }
   }
 }

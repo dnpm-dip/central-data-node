@@ -490,22 +490,26 @@ with BatchingUtil
           (s"Problem storing submission for backup: Site ${report.site.code}, " +
             s"TAN ${report.id} - $storeError").asLeft[Report]
         }
-        //TODO testen, dass diese Funktion mit bereits existierenden Dokumenten umgehen kann (werden einfach so belassen)
       }
 
     )
   }
 
   /**
-   * Checks the queue for submissions the final state and removes them from the queue.
-   * Right now, using ArchivingReportRepository this means, that they are archived in the filesystem
+   * Checks the queue for submissions the final state, stores them for the quarter report
+   * via [[PersistenceService.backupForQuarterReport]] and removes them from the queue.
+   * If storing fails, the report stays in the queue and is retried in the next cycle.
+   * Right now, using ArchivingReportRepository removal additionally means, that they are
+   * archived in the filesystem
    */
   def flushReportQueue():Unit = {
 
     pollingQueue.entries(
         report => report.status == Status.ReportBackedup ||
           (report.status == Status.ConfirmedToSource && !report.hasMvhConsent))
-      .foreach(report => pollingQueue.removeFromQueue(report)
+      .foreach(report =>
+        persistenceService.backupForQuarterReport(report)
+          .foreach(_ => pollingQueue.removeFromQueue(report))
     )
   }
 
