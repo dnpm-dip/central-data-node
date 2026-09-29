@@ -9,7 +9,6 @@ import org.slf4j.LoggerFactory
 import ch.qos.logback.classic.{Level, Logger}
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
-import ch.qos.logback.core.spi.FilterReply
 import de.dnpm.ccdn.core.dip.Report
 import de.dnpm.ccdn.core.dip.Report.Status
 import de.dnpm.dip.service.mvh.Submission.Type
@@ -140,37 +139,36 @@ class ArchivingReportRepositoryTests extends AnyFlatSpec
   }
 
 
-  it should "warn on file name collision" in {
+  it should "warn on file name collision and remove the report from the queue" in {
     val logger = LoggerFactory.getLogger(classOf[ArchivingReportRepository]).asInstanceOf[Logger]
     val logAppender = new ListAppender[ILoggingEvent]()
-    logAppender.addFilter((event: ILoggingEvent) =>
-      if (event.getLevel == Level.ERROR) {
-        FilterReply.ACCEPT
-      }
-      else {
-        FilterReply.DENY
-      }
-    )
     logAppender.start()
     logger.addAppender(logAppender)
 
-    putOneIntoBackup()
+    try {
+      putOneIntoBackup()
 
+      val toTest = makeFixture()
+      //recreate the submission created during putOneIntoBackup()
+      val collidingSubmission = makeFakeReport(1, creationDate=dateIn(2028,3))
+      toTest.saveIfAbsent(collidingSubmission)
 
-    val toTest = makeFixture()
-    //recreate the submission created during putOneIntoBackup()
-    val collidingSubmission = makeFakeReport(1, creationDate=dateIn(2028,3))
-    toTest.saveIfAbsent(collidingSubmission)
+      //file is already present in the backup. Should keep that and just delete it from the queue
+      val removalResult = toTest.removeFromQueue(collidingSubmission)
 
-    //file is already present. Should not take it out of the queue
-    val removalResult = toTest.removeFromQueue(collidingSubmission)
-
-    assert(removalResult.isLeft)
-    assert(! logAppender.list.isEmpty) //given filter, some error must have happened
-    assertResult(1)(toTest.entries(_ => true).length)
-    assert(! queueDir.listFiles().isEmpty,
-      "Since the removal was aborted, the file should still be in the queue directory")
-
+      assert(removalResult.isRight)
+      assert(logAppender.list.stream().anyMatch(_.getLevel == Level.WARN),
+        "The collision should have been logged as warning")
+      assert(!logAppender.list.stream().anyMatch(_.getLevel == Level.ERROR))
+      assert(toTest.entries(_ => true).isEmpty)
+      assert(queueDir.listFiles().isEmpty,
+        "The file should have been deleted from the queue directory")
+      new File(backupDir,"Q1_2028").tap {it =>
+        assertResult(1)(it.listFiles().length)
+      }
+    } finally {
+      logger.detachAppender(logAppender): Unit
+    }
   }
 
   before{

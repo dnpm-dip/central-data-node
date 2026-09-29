@@ -48,7 +48,7 @@ extends Logging
   /**
    * Serves local time. Abstracted for the purpose of unit tests
    */
-  private[core] var clock: Clock = Clock.systemUTC()
+  private[core] var clock: Clock = Clock.systemDefaultZone()
 
   // Per-site-and-UseCase high-water mark of the last successful query. Intentionally
   // kept in memory only: losing it on restart just means the next query re-fetches

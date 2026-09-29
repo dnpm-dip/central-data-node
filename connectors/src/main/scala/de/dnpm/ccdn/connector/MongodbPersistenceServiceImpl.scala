@@ -349,7 +349,7 @@ final class MongodbPersistenceServiceImpl(
                   .left.map { msg => log.error(msg); msg }
     } yield
       if (inserted) log.debug(s"Stored $context")
-      else log.info(s"$context already exists; skipped")
+      else log.warn(s"$context already exists; skipped")
   }
 
   /**

@@ -61,8 +61,8 @@ object ArchivingReportRepository extends Logging {
  * The backup folder organizes stored submissions into year quarters,
  * based on the creation date of the submission.
  *
- * Should there be file collisions in the backup folder, an error message logged
- * and the deletion is rejected. Manual intervention would be required.
+ * Should there be file collisions in the backup folder, a warning is logged
+ * and the file is only deleted from the queue, keeping the existing backup.
  * @param queueDir a handle for storing reports that are being processed
  *                 (received from DIP node, to be sent to BfArM and subsequently
  *                 confirmed as submitted back to it's DIP node). This is directly
@@ -97,8 +97,12 @@ class ArchivingReportRepository(queueDir:File, val quarterRepoDir:File)
 
     Try{
       if(moveTarget.exists()) {
-        log.error(s"File ${reportFileName} already exists in backup folder")
-        false
+        log.warn(s"File ${reportFileName} already exists in backup folder ${into}; deleting it from the queue")
+        val wasDeleted = toMove.delete()
+        if(!wasDeleted) {
+          log.error(s"Failed to delete ${reportFileName} from the queue")
+        }
+        wasDeleted
       }else{
 
         val wasSuccess = Files.move(toMove.toPath,moveTarget.toPath).toFile.exists
