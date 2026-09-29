@@ -44,7 +44,7 @@ final class SPITests extends AnyFlatSpec
   System.setProperty("ccdn.bfarm.api.client.secret","dummy")
   System.setProperty("ccdn.queue.dir",queueDir.getAbsolutePath)
   System.setProperty("ccdn.quarterBackup.dir",backupDir.getAbsolutePath)
-  System.setProperty("ccdn.encryption.publicKey.path",publicKeyFile.toString)
+  System.setProperty("ccdn.backup.encryption.publicKey.path",publicKeyFile.toString)
 
 
   private val dipConnector =
