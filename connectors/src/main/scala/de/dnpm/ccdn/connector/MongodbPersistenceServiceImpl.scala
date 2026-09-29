@@ -265,7 +265,7 @@ final class MongodbPersistenceServiceImpl(
                   .left.map { msg => log.error(msg); msg }
     } yield
       if (inserted) log.debug(s"Backed up $context")
-      else log.info(s"Backup of $context already exists; skipped")
+      else log.warn(s"Backup of $context already exists; skipped")
 
 
   /**

@@ -24,7 +24,7 @@ final class RsaHybridEncryptionServiceProviderImpl extends EncryptionServiceProv
 object RsaHybridEncryptionServiceImpl extends Logging
 {
 
-  private val PUBLIC_KEY_PATH_ENV  = "BACKUP_CCDN_ENCRYPTION_PUBLIC_KEY_PATH"
+  private val PUBLIC_KEY_PATH_ENV  = "CCDN_BACKUP_ENCRYPTION_PUBLIC_KEY_PATH"
   private val PUBLIC_KEY_PATH_PROP = "ccdn.backup.encryption.publicKey.path"
 
   /**
