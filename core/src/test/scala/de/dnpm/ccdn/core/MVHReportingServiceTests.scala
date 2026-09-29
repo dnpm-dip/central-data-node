@@ -8,6 +8,7 @@ import org.scalatest.matchers.must.Matchers._
 import org.slf4j.LoggerFactory
 
 import java.util.concurrent.{ConcurrentLinkedQueue, Executors}
+import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.ExecutionContext
 import java.time.{Clock, Instant, LocalDateTime, ZoneOffset}
 import scala.collection.mutable.ListBuffer
@@ -16,8 +17,8 @@ import de.dnpm.dip.coding.{Code, Coding}
 import de.dnpm.dip.model.{HealthInsurance, Id, Patient, Site}
 import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
 import de.dnpm.dip.service.mvh.Submission.Type
-import de.dnpm.dip.service.mvh.{TransferTAN, UseCase}
-import play.api.libs.json.JsValue
+import de.dnpm.dip.service.mvh.{Consent, TransferTAN, UseCase}
+import play.api.libs.json.{JsValue, Json}
 
 
 
@@ -278,6 +279,80 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
       assertResult(service.nSimultaneousSubmissionConfirmations)(
         fakeDipConnector.maxSimultaneousConfirmationWaits.get())
+    }
+  }
+
+  it must "not download more submissions simultaneously than the download batch size" in {
+    val batchSize = 4
+    val downloadDurationMsec = 1000L
+    val site = sites.head
+
+    // Mocks a DIP node whose download connections each stay open for 1 second
+    // and records the maximum number of simultaneously open connections
+    val nOpenDownloads = new AtomicInteger(0)
+    val maxSimultaneousDownloads = new AtomicInteger(0)
+    val nDownloads = new AtomicInteger(0)
+    val countingConnector = new dip.DipConnector {
+      override def getApiVersion(site: Code[Site])(implicit env: ExecutionContext)
+      : Future[Either[String, String]] = ???
+      override def submissionReports(site: Code[Site], useCase: UseCase.Value, filter: Report.Filter)
+          (implicit ec: ExecutionContext): Future[Either[String, Seq[Report]]] = ???
+      override def confirmSubmitted(report: Report)(implicit ec: ExecutionContext)
+      : Future[Either[String, Report]] = ???
+      override def deletionEvents(site: Code[Site], useCase: UseCase.Value, since: Option[LocalDateTime])
+          (implicit ec: ExecutionContext): Future[Either[String, Seq[DeletionEvent]]] = ???
+
+      override def downloadSubmission(report: Report)(implicit env: ExecutionContext)
+      : Future[Either[String, JsValue]] =
+        Future {
+          val nOpen = nOpenDownloads.incrementAndGet()
+          maxSimultaneousDownloads.accumulateAndGet(nOpen, Math.max)
+          Thread.sleep(downloadDurationMsec)
+          nOpenDownloads.decrementAndGet()
+          nDownloads.incrementAndGet()
+          Right(Json.obj("tan" -> report.id.value))
+        }(env)
+    }
+
+    def report(tan: String) =
+      Report(
+        Id[TransferTAN](tan),
+        LocalDateTime.of(2026, 7, 1, 12, 0),
+        Id[Patient]("42"),
+        None,
+        Status.ConfirmedToSource,
+        Coding[Site](site.value),
+        UseCase.MTB,
+        Type.Initial,
+        None, None, None,
+        HealthInsurance.Type.GKV,
+        Some(Map(Consent.Category.ModelProject -> true)),
+        None, None
+      )
+
+    // Enough reports for several batches
+    val nReports = 3 * batchSize
+    val queue = FakeReportRepository()
+    queue.saveIfAbsent((1 to nReports).map(i => report(s"tan-$i")))
+
+    val testService = new MVHReportingService(
+      Config.instance,
+      queue,
+      countingConnector,
+      fakeBfarmConnector,
+      new FakePersistenceService {
+        override def backupSubmission(report: Report, submission: JsValue): Either[String, Unit] =
+          Right(())
+      }
+    ) {
+      override private[core] val nSimultaneousSubmissionDownloads: Int = batchSize
+    }
+
+    for {
+      _ <- testService.backupSubmissions(nReports, Seq(site), new ConcurrentLinkedQueue())
+    } yield {
+      assertResult(nReports, "Setup assertion failed: not all submissions were downloaded")(nDownloads.get)
+      assert(maxSimultaneousDownloads.get <= batchSize)
     }
   }
 

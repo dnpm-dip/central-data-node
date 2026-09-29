@@ -6,8 +6,9 @@ import de.dnpm.ccdn.core.EncryptionService
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
 import java.security.{KeyPairGenerator, PrivateKey}
+import java.security.spec.MGF1ParameterSpec
 import java.util.Base64
-import javax.crypto.spec.{IvParameterSpec, SecretKeySpec}
+import javax.crypto.spec.{IvParameterSpec, OAEPParameterSpec, PSource, SecretKeySpec}
 import javax.crypto.Cipher
 import org.scalatest.flatspec.AnyFlatSpec
 import play.api.libs.json.Json
@@ -44,8 +45,14 @@ class RsaHybridEncryptionServiceImplTests extends AnyFlatSpec
    * payload with that AES key and the transmitted IV
    */
   private def decrypt(encrypted: EncryptionService.Encrypted, privateKey: PrivateKey): String = {
-    val rsaCipher = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding")
-    rsaCipher.init(Cipher.DECRYPT_MODE, privateKey)
+    // Parameters spelled out as in the documented openssl call (rsa_oaep_md:sha256, rsa_mgf1_md:sha256),
+    // not taken from the JCE defaults, which use MGF1 with SHA-1
+    val rsaCipher = Cipher.getInstance("RSA/ECB/OAEPPadding")
+    rsaCipher.init(
+      Cipher.DECRYPT_MODE,
+      privateKey,
+      new OAEPParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT)
+    )
     val aesKeyBytes = rsaCipher.doFinal(Base64.getDecoder.decode(encrypted.encryptedKey))
 
     val aesCipher = Cipher.getInstance("AES/CBC/PKCS5Padding")

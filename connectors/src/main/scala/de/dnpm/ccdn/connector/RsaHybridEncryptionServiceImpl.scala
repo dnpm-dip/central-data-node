@@ -3,10 +3,10 @@ package de.dnpm.ccdn.connector
 
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.{Files, Paths}
-import java.security.spec.X509EncodedKeySpec
+import java.security.spec.{MGF1ParameterSpec, X509EncodedKeySpec}
 import java.security.{KeyFactory, PublicKey, SecureRandom}
 import java.util.Base64
-import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.{IvParameterSpec, OAEPParameterSpec, PSource}
 import javax.crypto.{Cipher, KeyGenerator}
 import scala.util.Properties.{envOrNone, propOrNone}
 import play.api.libs.json.{JsValue, Json}
@@ -80,7 +80,7 @@ object RsaHybridEncryptionServiceImpl extends Logging
  * {{{
  *   # private key, AES-256-encrypted with a passphrase (will prompt for one)
  *   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -aes256 -out private.pem
- *   # public key, deployed to this application via CCDN_ENCRYPTION_PUBLIC_KEY_PATH
+ *   # public key, deployed to this application via CCDN_BACKUP_ENCRYPTION_PUBLIC_KEY_PATH
  *   openssl pkey -in private.pem -pubout -out public.pem
  * }}}
  *
@@ -112,6 +112,11 @@ final class RsaHybridEncryptionServiceImpl(publicKey: PublicKey) extends Encrypt
 
   private val secureRandom = new SecureRandom
 
+  // Explicit, because the JCE default of "OAEPWithSHA-256AndMGF1Padding" is MGF1 with SHA-1,
+  // which does not match the documented openssl decryption (rsa_mgf1_md:sha256)
+  private val OaepParams =
+    new OAEPParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT)
+
   private def encode(bytes: Array[Byte]): String =
     Base64.getEncoder.encodeToString(bytes)
 
@@ -130,8 +135,8 @@ final class RsaHybridEncryptionServiceImpl(publicKey: PublicKey) extends Encrypt
     aesCipher.init(Cipher.ENCRYPT_MODE, aesKey, new IvParameterSpec(iv))
     val ciphertext = aesCipher.doFinal(Json.stringify(payload).getBytes(UTF_8))
 
-    val rsaCipher = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding")
-    rsaCipher.init(Cipher.ENCRYPT_MODE, publicKey)
+    val rsaCipher = Cipher.getInstance("RSA/ECB/OAEPPadding")
+    rsaCipher.init(Cipher.ENCRYPT_MODE, publicKey, OaepParams)
     val encryptedKey = rsaCipher.doFinal(aesKey.getEncoded)
 
     EncryptionService.Encrypted(
