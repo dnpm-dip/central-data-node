@@ -1,7 +1,7 @@
 package de.dnpm.ccdn.connector
 
+import de.dnpm.ccdn.core.dip.Report
 import de.dnpm.ccdn.core.{ReportRepository, ReportRepositoryProvider}
-import de.dnpm.dip.service.mvh.Submission
 import de.dnpm.dip.util.Logging
 
 import java.io.File
@@ -10,13 +10,14 @@ import java.time.LocalDateTime
 import scala.util.Properties.{envOrNone, propOrNone}
 import scala.util.{Failure, Try}
 
+// @Deprecated //TODO to be deleted next month, quarter reports can then be made from the mongoDB archive, deactivated because x-fatal-warnings prevents build
 final class ArchivingReportRepositoryProviderImpl extends ReportRepositoryProvider
 {
   override def getInstance: ReportRepository =
     ArchivingReportRepository.instance
 }
 
-
+// @Deprecated //TODO to be deleted next month, quarter reports can then be made from the mongoDB archive, deactivated because x-fatal-warnings prevents build
 object ArchivingReportRepository extends Logging {
   private val QUEUE_PROP = "ccdn.queue.dir"
   private val QUEUE_ENV = "CCDN_QUEUE_DIR"
@@ -60,8 +61,8 @@ object ArchivingReportRepository extends Logging {
  * The backup folder organizes stored submissions into year quarters,
  * based on the creation date of the submission.
  *
- * Should there be file collisions in the backup folder, an error message logged
- * and the deletion is rejected. Manual intervention would be required.
+ * Should there be file collisions in the backup folder, a warning is logged
+ * and the file is only deleted from the queue, keeping the existing backup.
  * @param queueDir a handle for storing reports that are being processed
  *                 (received from DIP node, to be sent to BfArM and subsequently
  *                 confirmed as submitted back to it's DIP node). This is directly
@@ -88,7 +89,7 @@ class ArchivingReportRepository(queueDir:File, val quarterRepoDir:File)
     }
   }
 
-  override protected def reportDisposer(report: Submission.Report):Try[Boolean] ={
+  override protected def reportDisposer(report: Report):Try[Boolean] ={
     val toMove = this.queueFile(report)
     val into = getArchiveFolder(report.createdAt)
     val reportFileName = filenameOf(report)
@@ -96,8 +97,12 @@ class ArchivingReportRepository(queueDir:File, val quarterRepoDir:File)
 
     Try{
       if(moveTarget.exists()) {
-        log.error(s"File ${reportFileName} already exists in backup folder")
-        false
+        log.warn(s"File ${reportFileName} already exists in backup folder ${into}; deleting it from the queue")
+        val wasDeleted = toMove.delete()
+        if(!wasDeleted) {
+          log.error(s"Failed to delete ${reportFileName} from the queue")
+        }
+        wasDeleted
       }else{
 
         val wasSuccess = Files.move(toMove.toPath,moveTarget.toPath).toFile.exists

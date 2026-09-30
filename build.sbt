@@ -44,7 +44,9 @@ lazy val core = project
       dependencies.scalatest,
       dependencies.logback,
       dependencies.service_base,
-      dependencies.bfarm_dto_base
+      dependencies.bfarm_dto_base,
+      dependencies.mtb_dto_model,
+      dependencies.rd_dto_model
     ),
     assembly / assemblyJarName := "dnpm-ccdn-core.jar",
     assembly / mainClass       := Some("de.dnpm.ccdn.core.MVHReportingService")
@@ -59,7 +61,8 @@ lazy val connectors = project
       dependencies.scalamock,
       dependencies.play_ahc,
       dependencies.play_ahc_js,
-      dependencies.mongodb_driver
+      dependencies.mongodb_driver,
+      dependencies.jsr305
     ),
     assembly / assemblyJarName := "dnpm-ccdn-connectors.jar",
   )
@@ -79,9 +82,13 @@ lazy val dependencies =
     val logback        = "ch.qos.logback"    %  "logback-classic"         % "1.5.18"
     val play_ahc       = "org.playframework" %% "play-ahc-ws-standalone"  % "3.0.7"
     val play_ahc_js    = "org.playframework" %% "play-ws-standalone-json" % "3.0.7"
-    val service_base   = "de.dnpm.dip"       %% "service-base"            % "1.3.1"
+    val service_base   = "de.dnpm.dip"       %% "service-base"            % "1.5.0"
     val bfarm_dto_base = "de.dnpm"           %% "dnpm-bfarm-model-base"   % "1.0.1"
+    val mtb_dto_model  = "de.dnpm.dip"       %% "mtb-dto-model"           % "1.2.3"
+    val rd_dto_model   = "de.dnpm.dip"       %% "rd-dto-model"            % "1.2.1"
     val mongodb_driver = "org.mongodb" % "mongodb-driver-sync" % "5.3.0"
+    // Compile-only: resolves JSR-305 annotations used by the MongoDB driver (e.g. com.mongodb.lang.Nullable), which results in a compiler warning
+    val jsr305         = "com.google.code.findbugs" % "jsr305" % "3.0.2" % Provided
   }
 
 

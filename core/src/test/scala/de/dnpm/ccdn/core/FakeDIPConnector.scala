@@ -7,9 +7,13 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.util.Random
 import scala.concurrent.{ExecutionContext, Future}
 import cats.syntax.either._
+import de.dnpm.ccdn.core.dip.Report
 import de.dnpm.dip.coding.{Code, Coding}
 import de.dnpm.dip.model.{HealthInsurance, Id, NGSReport, Patient, Site}
-import de.dnpm.dip.service.mvh.{Submission, TransferTAN, UseCase}
+import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
+import de.dnpm.dip.service.mvh.{TransferTAN, UseCase}
+import de.dnpm.dip.service.mvh.Submission.Type
+import play.api.libs.json.JsValue
 
 
 final class FakeDIPConnectorProvider extends dip.DipConnectorProvider
@@ -45,16 +49,16 @@ class FakeDIPConnector extends dip.DipConnector
   private def rndReport(
     site: Code[Site],
     useCase: UseCase.Value
-  ): Submission.Report =
-    Submission.Report(
+  ): Report =
+    Report(
       Id[TransferTAN](randomUUID.toString),
       LocalDateTime.now,
       Id[Patient](randomUUID.toString),
       None,
-      Submission.Report.Status.Unsubmitted,
+      Report.Status.Unsubmitted,
       Coding[Site](site.value),
       useCase,
-      Submission.Type.Initial,
+      Type.Initial,
       Some(NGSReport.Type.GenomeLongRead),
       None,None,
       HealthInsurance.Type.UNK,
@@ -65,19 +69,28 @@ class FakeDIPConnector extends dip.DipConnector
   override def submissionReports(
     site: Code[Site],
     useCase: UseCase.Value,
-    filter: Submission.Report.Filter
+    filter: Report.Filter
   )(
     implicit ec: ExecutionContext
-  ): Future[Either[String,Seq[Submission.Report]]] =
+  ): Future[Either[String,Seq[Report]]] =
     Future.successful(
       Seq.fill(nSubmissions)(rndReport(site,useCase)).asRight
     )
 
-  override def confirmSubmitted(
-    report: Submission.Report
+  override def deletionEvents(
+    site: Code[Site],
+    useCase: UseCase.Value,
+    since: Option[LocalDateTime]
   )(
     implicit ec: ExecutionContext
-  ): Future[Either[String,Submission.Report]] =
+  ): Future[Either[String,Seq[DeletionEvent]]] =
+    Future.successful(Seq.empty.asRight)
+
+  override def confirmSubmitted(
+    report: Report
+  )(
+    implicit ec: ExecutionContext
+  ): Future[Either[String,Report]] =
     if (confirmationsTakeTime) {
       Future {
         nActiveConfirmationWaits.updateAndGet(oldCount => {
@@ -100,4 +113,11 @@ class FakeDIPConnector extends dip.DipConnector
   override def getApiVersion(site: Code[Site])(implicit env: ExecutionContext)
   : Future[Either[String, String]] =
     Future.successful(Right("1.3.0"))
+
+  override def downloadSubmission(report: Report)
+                                 (implicit env: ExecutionContext)
+  : Future[Either[String, JsValue]] = {
+    //TODO implement
+    Future.successful("asdbest".asLeft)
+  }
 }

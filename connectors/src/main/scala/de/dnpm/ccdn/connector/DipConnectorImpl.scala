@@ -1,19 +1,21 @@
 package de.dnpm.ccdn.connector
 
 
-import java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME
+import java.time.format.DateTimeFormatter.{ISO_DATE, ISO_DATE_TIME, ISO_LOCAL_DATE_TIME}
 import scala.concurrent.{
   Future,
   ExecutionContext
 }
 import scala.concurrent.duration._
 import scala.util.{
+  Try,
   Either,
   Success,
   Failure
 }
 import scala.util.chaining._
 import cats.syntax.either._
+import de.dnpm.ccdn.core.dip.Report.Filter
 import play.api.libs.json.{
   Json,
   JsValue,
@@ -21,7 +23,7 @@ import play.api.libs.json.{
 }
 import play.api.libs.ws.{
   StandaloneWSClient => WSClient,
-  StandaloneWSRequest => WSRequest,
+  StandaloneWSRequest => WSRequest
 }
 import play.api.libs.ws.JsonBodyReadables._
 import de.dnpm.dip.util.{
@@ -30,15 +32,15 @@ import de.dnpm.dip.util.{
 }
 import de.dnpm.dip.coding.Code
 import de.dnpm.dip.model.Site
-import de.dnpm.dip.service.mvh.{
-  Submission,
-  UseCase
-}
+import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
+import de.dnpm.dip.service.mvh.UseCase
 import de.dnpm.ccdn.core.dip.{
   DipConnector,
-  DipConnectorProvider
+  DipConnectorProvider,
+  Report
 }
 
+import java.time.LocalDateTime
 
 final case class Collection[T](entries: List[T])
 
@@ -202,10 +204,10 @@ with Logging
   override def submissionReports(
     site: Code[Site],
     useCase: UseCase.Value,
-    filter: Submission.Report.Filter
+    filter: Filter
   )(
     implicit ec: ExecutionContext
-  ): Future[Either[String,Seq[Submission.Report]]] =
+  ): Future[Either[String,Seq[Report]]] =
     request(
       site, s"/api/${useCase.toString.toLowerCase}/peer2peer/mvh/submission-reports"
     )
@@ -232,7 +234,7 @@ with Logging
     .get()
     .map(
       resp => resp.status match {
-        case 200 => resp.body[JsValue].as[Collection[Submission.Report]].entries.asRight
+        case 200 => resp.body[JsValue].as[Collection[Report]].entries.asRight
         case _   => s"Site ${site}, Use Case $useCase: SubmissionReport polling failed with status ${resp.status} ${resp.statusText}".asLeft
       }
     )
@@ -241,11 +243,39 @@ with Logging
     }
 
 
+  override def deletionEvents(
+    site: Code[Site],
+    useCase: UseCase.Value,
+    since: Option[LocalDateTime]
+  )(
+    implicit ec: ExecutionContext
+  ): Future[Either[String,Seq[DeletionEvent]]] =
+    request(
+      site, s"/api/${useCase.toString.toLowerCase}/peer2peer/mvh/deletion-events"
+    )
+    .pipe(
+      req => since match {
+        case Some(t) => req.addQueryStringParameters("after" -> t.format(ISO_LOCAL_DATE_TIME))
+        case None    => req
+      }
+    )
+    .get()
+    .map(
+      resp => resp.status match {
+        case 200 => resp.body[JsValue].as[Collection[DeletionEvent]].entries.asRight
+        case _   => s"Site ${site}, Use Case $useCase: DeletionEvent polling failed with status ${resp.status} ${resp.statusText}".asLeft
+      }
+    )
+    .recover {
+      case t => t.getMessage.asLeft
+    }
+
+
   override def confirmSubmitted(
-    report: Submission.Report
+    report: Report
   )(
     implicit env: ExecutionContext
-  ): Future[Either[String,Submission.Report]] =
+  ): Future[Either[String,Report]] =
     request(
       report.site.code,
       s"/api/${report.useCase.toString.toLowerCase}/peer2peer/mvh/submission-reports/${report.id.value}:submitted"
@@ -278,4 +308,64 @@ with Logging
       .recover {
         case t => t.getMessage.asLeft
       }
+
+  /**
+   * Downloads the Submission belonging to the given [[Report]] as raw JSON,
+   * since it is only archived and never processed within the CCDN
+   */
+  override def downloadSubmission(
+    report: Report
+  )(
+    implicit env: ExecutionContext
+  ): Future[Either[String,JsValue]] =
+    request(
+      report.site.code,
+      s"/api/${report.useCase.toString.toLowerCase}/peer2peer/mvh/submissions/${report.id.value}"
+    )
+    .get()
+    .map(
+      resp => resp.status match {
+        case 200 =>
+          validateSubmission(report,resp.body[JsValue])
+        case _ =>
+          s"Download of submission ${report.id.value} from site ${report.site.code} failed with status ${resp.status} ${resp.statusText}".asLeft
+      }
+    )
+    .recover {
+      case t => t.getMessage.asLeft
+    }
+
+
+  /**
+   * Checks the downloaded Submission JSON before it is handed on for archiving.
+   * Only the fields needed for archiving are checked, the rest is kept as-is:
+   *  - "submittedAt" must be an ISO-8601 date or date-time (with or without offset/zone)
+   *  - "metadata.transferTAN" must be a non-empty string equal to the report ID
+   */
+  private[connector] def validateSubmission(
+    report: Report,
+    json: JsValue
+  ): Either[String,JsValue] = {
+    val context = s"Submission ${report.id.value} from site ${report.site.code}"
+
+    def isIsoDate(s: String): Boolean =
+      Try(ISO_DATE_TIME.parse(s)).orElse(Try(ISO_DATE.parse(s))).isSuccess
+
+    for {
+      submittedAt <- (json \ "submittedAt").asOpt[String]
+                       .toRight(s"$context has no string field 'submittedAt'")
+      _           <- Either.cond(
+                       isIsoDate(submittedAt), (),
+                       s"$context has 'submittedAt' value '$submittedAt', which is not an ISO-8601 date"
+                     )
+      transferTAN <- (json \ "metadata" \ "transferTAN").asOpt[String]
+                       .toRight(s"$context has no string field 'metadata.transferTAN'")
+      _           <- Either.cond(transferTAN.nonEmpty, (), s"$context has an empty 'metadata.transferTAN'")
+      _           <- Either.cond(
+                       transferTAN == report.id.value, (),
+                       s"$context has 'metadata.transferTAN' value '$transferTAN', which does not match the report ID"
+                     )
+    } yield json
+  }
+
 }

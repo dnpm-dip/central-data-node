@@ -6,7 +6,7 @@ import scala.collection.concurrent.{
   TrieMap
 }
 import cats.data.EitherNel
-import de.dnpm.dip.service.mvh.Submission
+import de.dnpm.ccdn.core.dip.Report
 
 
 final class FakeReportRepositoryProvider extends ReportRepositoryProvider
@@ -18,36 +18,36 @@ final class FakeReportRepositoryProvider extends ReportRepositoryProvider
 case class FakeReportRepository() extends ReportRepository
 {
 
-  private val cache: Map[Key,Submission.Report] =
+  private val cache: Map[Key,Report] =
     TrieMap.empty
 
 
   override def saveIfAbsent(
-    report: Submission.Report
+    report: Report
   ): Either[String,Unit] = {
     cache.putIfAbsent(key(report),report)
     Right(())
   }
 
   override def saveIfAbsent(
-    reports: Seq[Submission.Report],
-  ): EitherNel[Submission.Report,Unit] = {
+    reports: Seq[Report],
+  ): EitherNel[Report,Unit] = {
     reports.foreach(saveIfAbsent)
     Right(())
   }
 
   override def replace(
-    report: Submission.Report
+    report: Report
   ): Either[String,Unit] = {
     cache += key(report) -> report
     Right(())
   }
 
-  override def entries(f: Submission.Report => Boolean): Seq[Submission.Report] =
+  override def entries(f: Report => Boolean): Seq[Report] =
     cache.values.filter(f).toSeq
 
 
-  override def removeFromQueue(report: Submission.Report): Either[String,Unit] = {
+  override def removeFromQueue(report: Report): Either[String,Unit] = {
     cache -= key(report)
     Right(())
   }
