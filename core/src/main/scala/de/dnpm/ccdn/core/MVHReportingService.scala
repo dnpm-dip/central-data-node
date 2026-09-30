@@ -174,7 +174,8 @@ with BatchingUtil
   /**
    * Executes one full cycle of the reporting workflow: checks site API versions,
    * drains any pre-existing queue entries, polls new reports, uploads them to
-   * BfArM, and confirms back. Logs responsivity via [[PersistenceService]]
+   * BfArM, and confirms back. Logs responsivity via [[PersistenceService]].
+   * All persistence operations share one session, see [[PersistenceService.withSession]]
    */
   private[core] def conductReportingWorkflow(): Future[Unit] = {
 
@@ -186,7 +187,7 @@ with BatchingUtil
     // checkSiteApiVersion will store a success item for every site that was
     // available, so it is sufficient for the other functions to merely report
     // failures. The endresult is reduced into a single value per site after the for loop.
-    for {
+    persistenceService.withSession { persistence => for {
       responseLog <- Future.successful(new ConcurrentLinkedQueue[ResponsivityReport])
       validSites <- getApiCompatibleDipSites(responseLog)
       // Start by draining the report queue, if non-empty (in case the service
@@ -199,15 +200,15 @@ with BatchingUtil
       //TODO sicherstellen, dass das alles hier auch dann funktioniert, wenn der zKDK wieder auf multiUsecase gestellt wird. Der Usecase sollte zum sitecode immer mitgegeben werden.
       freshConfirmations <- confirmReports(responseLog)
       numReportsThisIteration = freshConfirmations.concat(oldConfirmations).count(_.isRight)
-      _ <- backupSubmissions(numReportsThisIteration,validSites,responseLog) //should process as at least as many submissions
-      _ = backupReports
-      _ = flushReportQueue()
-      _ <- syncDeletions(validSites,responseLog)
+      _ <- backupSubmissions(numReportsThisIteration,validSites,responseLog,persistence) //should process as at least as many submissions
+      _ = backupReports(persistence)
+      _ = flushReportQueue(persistence)
+      _ <- syncDeletions(validSites,responseLog,persistence)
     } yield {
-      persistenceService.writeSiteAvailabilityReports(
+      persistence.writeSiteAvailabilityReports(
         coalesceResponsivityReports(responseLog.asScala), Instant.now(clock))
       log.debug("Reporting workflow completed")
-    }
+    }}
   }
 
   def stop(): Unit = {
@@ -439,7 +440,8 @@ with BatchingUtil
     )
 
   def backupSubmissions(minNumDownloads:Int, validSites: Seq[Code[Site]],
-                        availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport]):Future[Any] = {
+                        availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport],
+                        persistence: PersistenceService = persistenceService):Future[Any] = {
     val numDownloads:Int = minNumDownloads match {
       //download and store at least as many submissions as reports were fetched, but at least config.polling.minNumSubmissionDownloads
       case n if n >= config.polling.minNumSubmissionDownloads => n
@@ -454,7 +456,7 @@ with BatchingUtil
     )(
       report => dipConnector.downloadSubmission(report).map {
         case Right(submission) =>
-          persistenceService.backupSubmission(report,submission) match {
+          persistence.backupSubmission(report,submission) match {
             case Right(_) =>
               //backup saved successful
               val asBackedUp = report.copy(status = Status.SubmissionBackedup)
@@ -477,10 +479,10 @@ with BatchingUtil
    * Stores the reports (with MVH consent) after their submission was stored
    * @return
    */
-  def backupReports:Seq[Either[String,Report]] = {
+  def backupReports(persistence: PersistenceService = persistenceService):Seq[Either[String,Report]] = {
     pollingQueue.entries(_.status == Status.SubmissionBackedup).map(
 
-      report => persistenceService.backupReport(report) match {
+      report => persistence.backupReport(report) match {
         case Right(_) =>
           //backup saved successful
           val asBackedUp: Report = report.copy(status = Status.ReportBackedup)
@@ -501,13 +503,13 @@ with BatchingUtil
    * Right now, using ArchivingReportRepository removal additionally means, that they are
    * archived in the filesystem
    */
-  def flushReportQueue():Unit = {
+  def flushReportQueue(persistence: PersistenceService = persistenceService):Unit = {
 
     pollingQueue.entries(
         report => report.status == Status.ReportBackedup ||
           (report.status == Status.ConfirmedToSource && !report.hasMvhConsent))
       .foreach(report =>
-        persistenceService.backupForQuarterReport(report)
+        persistence.backupForQuarterReport(report)
           .foreach(_ => pollingQueue.removeFromQueue(report))
     )
   }
@@ -521,7 +523,8 @@ with BatchingUtil
    * @return all successfully applied DeletionEvents
    */
   def syncDeletions(validSites: Seq[Code[Site]],
-                    availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport]):Future[Seq[DeletionEvent]] =
+                    availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport],
+                    persistence: PersistenceService = persistenceService):Future[Seq[DeletionEvent]] =
     Future.traverse(
       for {
         site    <- validSites
@@ -532,7 +535,7 @@ with BatchingUtil
     ){
       case (site,useCase) =>
         deletionEventService.deletionEvents(site,useCase) { event =>
-          persistenceService.applyDeletion(Coding[Site](site.value),useCase,event)
+          persistence.applyDeletion(Coding[Site](site.value),useCase,event)
             .left.map { err =>
               log.error(s"Failed to apply DeletionEvent ${event.tan.value} of site $site: $err")
               err

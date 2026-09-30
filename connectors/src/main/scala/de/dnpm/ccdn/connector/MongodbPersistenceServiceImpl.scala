@@ -5,7 +5,7 @@ import java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME
 import java.time.{Instant, LocalDateTime, ZoneOffset}
 import java.util.Date
 import com.mongodb.{ErrorCategory, MongoCommandException, MongoWriteException}
-import com.mongodb.client.{MongoClients, MongoDatabase}
+import com.mongodb.client.{MongoClient, MongoClients, MongoDatabase}
 import com.mongodb.client.model.{CreateCollectionOptions, Filters, IndexOptions, Indexes, ValidationOptions}
 import com.mongodb.client.model.mql.MqlValues
 import de.dnpm.ccdn.core.dip.Report
@@ -24,7 +24,8 @@ import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
 import de.dnpm.dip.service.mvh.UseCase
 import play.api.libs.json.{JsValue, Json}
 
-import scala.util.Try
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success, Try}
 import scala.util.Properties.{envOrNone, propOrNone}
 
 
@@ -127,19 +128,57 @@ object MongodbPersistenceServiceImpl
 /**
  * @param encryptionService by-name, so that a missing public key only fails
  *                          the backups, not the construction of this service
+ * @param sharedClient      if defined, used by all operations (and not closed by them), see
+ *                          [[withSession]]; otherwise each operation creates and closes its own client
  */
-final class MongodbPersistenceServiceImpl(
+final class MongodbPersistenceServiceImpl private (
   val mongoUri: Option[String],
-  encryptionService: => EncryptionService = RsaHybridEncryptionServiceImpl.instance
+  encryptionService: => EncryptionService,
+  sharedClient: Option[MongoClient]
 ) extends PersistenceService with Logging
 {
 
   import MongodbPersistenceServiceImpl._
 
-  mongoUri match {
+  def this(
+    mongoUri: Option[String],
+    encryptionService: => EncryptionService = RsaHybridEncryptionServiceImpl.instance
+  ) = this(mongoUri, encryptionService, None)
+
+  if (sharedClient.isEmpty) mongoUri match {
     case Some(uri) => log.debug(s"MongoDB URI: $uri")
     case None      => log.warn("MongoDB URI is not configured; site availability reports will not be persisted")
   }
+
+  /**
+   * Runs `f` with the shared client if there is one, otherwise with a new one closed afterwards
+   */
+  private def withClient[T](uri: String)(f: MongoClient => T): T =
+    sharedClient match {
+      case Some(client) => f(client)
+      case None =>
+        val client = MongoClients.create(uri)
+        try f(client) finally client.close()
+    }
+
+  /**
+   * Runs `f` with a view of this service whose operations all use one MongoClient (which is
+   * thread safe), closed once the returned Future completes. If the client cannot be created,
+   * `f` runs with this service, whose operations then each try (and report failures) on their own.
+   */
+  override def withSession[T](f: PersistenceService => Future[T])(implicit ec: ExecutionContext): Future[T] =
+    (sharedClient, mongoUri) match {
+      case (None, Some(uri)) =>
+        Try(MongoClients.create(uri)) match {
+          case Success(client) =>
+            Future.delegate(f(new MongodbPersistenceServiceImpl(mongoUri, encryptionService, Some(client))))
+              .andThen { case _ => client.close() }
+          case Failure(exc) =>
+            log.error(s"Failed to create MongoDB client for session: ${exc.getMessage}")
+            f(this)
+        }
+      case _ => f(this)
+    }
 
   override def writeSiteAvailabilityReports(
     reports: Iterable[ResponsivityReport],
@@ -147,8 +186,7 @@ final class MongodbPersistenceServiceImpl(
   ): Unit =
     if (reports.nonEmpty) mongoUri.foreach { uri =>
       try {
-        val client = MongoClients.create(uri)
-        try {
+        withClient(uri) { client =>
           val coll = client.getDatabase(DATABASE).getCollection("siteAvailabilityReports")
           val docs = new java.util.ArrayList[Document]()
           reports.foreach { r =>
@@ -161,8 +199,6 @@ final class MongodbPersistenceServiceImpl(
           }
           coll.insertMany(docs)
           log.debug("Successfully persisted responsivity logs")
-        } finally {
-          client.close()
         }
       } catch {
         case exc: Exception =>
@@ -228,8 +264,7 @@ final class MongodbPersistenceServiceImpl(
     for {
       uri      <- mongoUri.toRight(s"MongoDB URI is not configured; cannot back up $context")
       inserted <- Try {
-                    val client = MongoClients.create(uri)
-                    try {
+                    withClient(uri) { client =>
                       val coll = client.getDatabase(DATABASE).getCollection(BACKUP_COLLECTION)
                       coll.createIndex(
                         Indexes.ascending("tan", "type", "site", "usecase"),
@@ -256,8 +291,6 @@ final class MongodbPersistenceServiceImpl(
                         coll.insertOne(doc)
                         true
                       } else false
-                    } finally {
-                      client.close()
                     }
                   }
                   .toEither
@@ -284,8 +317,7 @@ final class MongodbPersistenceServiceImpl(
     for {
       uri     <- mongoUri.toRight(s"MongoDB URI is not configured; cannot apply $context")
       deleted <- Try {
-        val client = MongoClients.create(uri)
-        try {
+        withClient(uri) { client =>
           client.getDatabase(DATABASE).getCollection(BACKUP_COLLECTION)
             .deleteMany(
               Filters.and(
@@ -296,8 +328,6 @@ final class MongodbPersistenceServiceImpl(
               )
             )
             .getDeletedCount
-        } finally {
-          client.close()
         }
       }
         .toEither
@@ -324,8 +354,7 @@ final class MongodbPersistenceServiceImpl(
     for {
       uri      <- mongoUri.toRight(s"MongoDB URI is not configured; cannot store $context")
       inserted <- Try {
-                    val client = MongoClients.create(uri)
-                    try {
+                    withClient(uri) { client =>
                       val coll = quarterReportCollection(client.getDatabase(DATABASE))
                       val existing =
                         coll.find(
@@ -340,8 +369,6 @@ final class MongodbPersistenceServiceImpl(
                         coll.insertOne(quarterReportDocument(report))
                         true
                       } else false
-                    } finally {
-                      client.close()
                     }
                   }
                   .toEither

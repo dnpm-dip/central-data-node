@@ -61,7 +61,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       _ <- service.uploadReports
       freshConfirmations <- service.confirmReports(responseLog)
       _ <- service.backupSubmissions(freshConfirmations.concat(oldConfirmations).count(_.isRight),validSites,responseLog) //should process as at least as many submissions
-      _ = service.backupReports
+      _ = service.backupReports()
       _ = service.flushReportQueue()
       _ <- service.syncDeletions(validSites,responseLog)
 

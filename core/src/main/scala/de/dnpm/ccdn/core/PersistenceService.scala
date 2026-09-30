@@ -9,6 +9,8 @@ import de.dnpm.dip.service.mvh.UseCase
 import play.api.libs.json.JsValue
 
 import java.time.Instant
+import scala.annotation.unused
+import scala.concurrent.{ExecutionContext, Future}
 import de.dnpm.dip.util.{
   SPI,
   SPILoader
@@ -39,6 +41,14 @@ trait PersistenceService
   def applyDeletion(site:Coding[Site], usecase:UseCase.Value, deletionEvent:DeletionEvent): Either[String, Unit]
 
   def backupForQuarterReport(report: Report): Either[String, Unit]
+
+  /**
+   * Runs `f` with a PersistenceService whose operations all share the same underlying
+   * resources (e.g. a database client), which are released once the returned Future completes.
+   * By default, `f` is simply run with this service itself.
+   */
+  def withSession[T](f: PersistenceService => Future[T])(implicit @unused ec: ExecutionContext): Future[T] =
+    f(this)
 }
 
 trait PersistenceServiceProvider extends SPI[PersistenceService]
