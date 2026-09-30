@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/dnpm-dip/central-data-node/compare/v1.2.0...v1.3.0) (2026-09-30)
+
+
+### Features
+
+* Central backups ([#22](https://github.com/dnpm-dip/central-data-node/issues/22)) ([0728b40](https://github.com/dnpm-dip/central-data-node/commit/0728b40a3c318747f984099ffeae58c9b4e8c0f1))
+
 ## [1.2.0](https://github.com/dnpm-dip/central-data-node/compare/v1.1.0...v1.2.0) (2026-05-21)
 
 
