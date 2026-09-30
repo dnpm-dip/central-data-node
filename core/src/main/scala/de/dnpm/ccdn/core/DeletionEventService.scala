@@ -12,6 +12,7 @@ import de.dnpm.dip.util.Logging
 import java.time.{Clock, LocalDateTime}
 import java.util.concurrent.ConcurrentHashMap
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Try
 
 
 object DeletionEventService
@@ -56,12 +57,21 @@ extends Logging
   private val lastQueried = new ConcurrentHashMap[(Code[Site],UseCase.Value),LocalDateTime]
 
   /**
-   * Queries all [[DeletionEvent]]s of the given site and UseCase. Only on success
-   * is the last-queried timestamp advanced, so that a failed attempt is simply
+   * Queries all [[DeletionEvent]]s of the given site and UseCase and passes each of them
+   * to `applyDeletion`. The last-queried timestamp is only advanced if the query succeeded
+   * AND every event was applied successfully, so that a failed attempt is simply
    * retried (with the same or wider time window) on the next call instead of
-   * silently losing events.
+   * silently losing events. `applyDeletion` must therefore be idempotent.
+   *
+   * @return Left in case the query itself failed, otherwise the events that were
+   *         applied successfully
    */
-  def deletionEvents(site: Code[Site], useCase: UseCase.Value): Future[Either[String,Seq[DeletionEvent]]] = {
+  def deletionEvents(
+    site: Code[Site],
+    useCase: UseCase.Value
+  )(
+    applyDeletion: DeletionEvent => Either[String,Unit]
+  ): Future[Either[String,Seq[DeletionEvent]]] = {
 
     val since = Option(lastQueried.get(site -> useCase))
     val queriedAt = LocalDateTime.now(clock)
@@ -73,8 +83,20 @@ extends Logging
           err.asLeft
 
         case Right(events) =>
-          lastQueried.put(site -> useCase,queriedAt)
-          events.asRight
+          val (failed,applied) = events.partition { event =>
+            Try(applyDeletion(event)).fold(
+              t => { log.error(s"Error applying DeletionEvent ${event.tan.value} of site $site", t); true },
+              _.isLeft
+            )
+          }
+          if (failed.isEmpty)
+            lastQueried.put(site -> useCase,queriedAt)
+          else
+            log.warn(
+              s"${failed.size} of ${events.size} $useCase DeletionEvent(s) of site $site could not be applied, " +
+              s"not advancing last-queried timestamp so they are retried on the next query"
+            )
+          applied.asRight
       }
   }
 

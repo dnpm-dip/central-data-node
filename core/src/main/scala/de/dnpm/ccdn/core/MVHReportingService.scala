@@ -515,7 +515,10 @@ with BatchingUtil
   /**
    * Iterates over all `validSites` and their active UseCases, fetches every
    * [[DeletionEvent]] that occurred since each was last queried, via [[deletionEventService]],
-   * and applies each of them to the backups via [[PersistenceService.applyDeletion]]
+   * and applies each of them to the backups via [[PersistenceService.applyDeletion]].
+   * A site's last-queried timestamp is only advanced if all of its events were applied successfully.
+   *
+   * @return all successfully applied DeletionEvents
    */
   def syncDeletions(validSites: Seq[Code[Site]],
                     availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport]):Future[Seq[DeletionEvent]] =
@@ -528,7 +531,13 @@ with BatchingUtil
       } yield site -> useCase
     ){
       case (site,useCase) =>
-        deletionEventService.deletionEvents(site,useCase)
+        deletionEventService.deletionEvents(site,useCase) { event =>
+          persistenceService.applyDeletion(Coding[Site](site.value),useCase,event)
+            .left.map { err =>
+              log.error(s"Failed to apply DeletionEvent ${event.tan.value} of site $site: $err")
+              err
+            }
+        }
           .andThen {
             case Success(Left(err)) =>
               log.error(s"Problem polling $useCase DeletionEvents of site $site: $err")
@@ -540,11 +549,6 @@ with BatchingUtil
               availabilityBuffer.add(ResponsivityReport(site,Responsivity.failure))
               t.getMessage.asLeft
           }
-          .map(_.map(_.map { event =>
-            persistenceService.applyDeletion(Coding[Site](site.value),useCase,event)
-              .left.foreach(err => log.error(s"Failed to apply DeletionEvent ${event.tan.value} of site $site: $err"))
-            event
-          }))
     }
     .map(_.collect { case Right(events) => events }.flatten)
 }
