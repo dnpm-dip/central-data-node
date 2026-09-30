@@ -1,18 +1,40 @@
 package de.dnpm.ccdn.connector
 
 
-import java.io.{File, FileInputStream, FileWriter}
-import scala.collection.concurrent.{Map, TrieMap}
-import scala.util.{Failure, Try, Using}
+import java.io.{File,
+  FileInputStream,
+  FileWriter
+}
+import scala.collection.concurrent.{
+  Map,
+  TrieMap
+}
+import scala.util.{
+  Try,
+  Failure,
+  Using
+}
 import scala.util.chaining._
-import cats.data.{EitherNel, NonEmptyList}
+import cats.data.{
+  EitherNel,
+  NonEmptyList
+}
 import cats.syntax.either._
 import de.dnpm.ccdn.core.dip.Report
 
-import scala.util.Properties.{envOrNone, propOrNone}
-import play.api.libs.json.{Json, Writes}
+import scala.util.Properties.{
+  envOrNone,
+  propOrNone
+}
+import play.api.libs.json.{
+  Json,
+  Writes
+}
 import de.dnpm.dip.util.Logging
-import de.dnpm.ccdn.core.{ReportRepository, ReportRepositoryProvider}
+import de.dnpm.ccdn.core.{
+  ReportRepository,
+  ReportRepositoryProvider
+}
 
 
 final class ReportRepositoryProviderImpl extends ReportRepositoryProvider

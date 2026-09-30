@@ -12,7 +12,12 @@ import de.dnpm.ccdn.core.dip.Report
 import org.bson.{BsonType, Document}
 import org.bson.conversions.Bson
 import de.dnpm.dip.util.Logging
-import de.dnpm.ccdn.core.{EncryptionService, PersistenceService, PersistenceServiceProvider, ResponsivityReport}
+import de.dnpm.ccdn.core.{
+  ResponsivityReport,
+  PersistenceService,
+  PersistenceServiceProvider,
+  EncryptionService
+}
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.Site
 import de.dnpm.dip.service.mvh.MVHService.DeletionEvent

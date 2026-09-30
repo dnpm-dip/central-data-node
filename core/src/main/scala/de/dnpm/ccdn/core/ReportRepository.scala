@@ -3,9 +3,15 @@ package de.dnpm.ccdn.core
 
 import cats.data.EitherNel
 import de.dnpm.ccdn.core.dip.Report
-import de.dnpm.dip.util.{SPI, SPILoader}
+import de.dnpm.dip.util.{
+  SPI,
+  SPILoader
+}
 import de.dnpm.dip.coding.Code
-import de.dnpm.dip.model.{Id, Site}
+import de.dnpm.dip.model.{
+  Id,
+  Site
+}
 import de.dnpm.dip.service.mvh.TransferTAN
 
 

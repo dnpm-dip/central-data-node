@@ -4,8 +4,14 @@ package de.dnpm.ccdn.core.dip
 import de.dnpm.ccdn.core.dip.Report.Filter
 
 import java.time.LocalDateTime
-import scala.concurrent.{ExecutionContext, Future}
-import de.dnpm.dip.util.{SPI, SPILoader}
+import scala.concurrent.{
+  Future,
+  ExecutionContext
+}
+import de.dnpm.dip.util.{
+  SPI,
+  SPILoader
+}
 import de.dnpm.dip.coding.Code
 import de.dnpm.dip.model.Site
 import de.dnpm.dip.service.mvh.MVHService.DeletionEvent

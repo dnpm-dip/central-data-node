@@ -1,7 +1,10 @@
 package de.dnpm.ccdn.core
 
 
-import scala.collection.concurrent.{Map, TrieMap}
+import scala.collection.concurrent.{
+  Map,
+  TrieMap
+}
 import cats.data.EitherNel
 import de.dnpm.ccdn.core.dip.Report
 

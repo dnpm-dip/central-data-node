@@ -10,14 +10,14 @@ import java.time.LocalDateTime
 import scala.util.Properties.{envOrNone, propOrNone}
 import scala.util.{Failure, Try}
 
-@Deprecated
+// @Deprecated //TODO to be deleted next month, quarter reports can then be made from the mongoDB archive, deactivated because x-fatal-warnings prevents build
 final class ArchivingReportRepositoryProviderImpl extends ReportRepositoryProvider
 {
   override def getInstance: ReportRepository =
     ArchivingReportRepository.instance
 }
 
-@Deprecated
+// @Deprecated //TODO to be deleted next month, quarter reports can then be made from the mongoDB archive, deactivated because x-fatal-warnings prevents build
 object ArchivingReportRepository extends Logging {
   private val QUEUE_PROP = "ccdn.queue.dir"
   private val QUEUE_ENV = "CCDN_QUEUE_DIR"

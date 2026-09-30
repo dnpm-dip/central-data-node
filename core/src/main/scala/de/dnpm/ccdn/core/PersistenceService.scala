@@ -9,7 +9,10 @@ import de.dnpm.dip.service.mvh.UseCase
 import play.api.libs.json.JsValue
 
 import java.time.Instant
-import de.dnpm.dip.util.{SPI, SPILoader}
+import de.dnpm.dip.util.{
+  SPI,
+  SPILoader
+}
 
 
 /**
