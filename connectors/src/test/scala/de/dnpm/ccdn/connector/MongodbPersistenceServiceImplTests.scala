@@ -9,6 +9,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers._
 import org.slf4j.LoggerFactory
 import scala.jdk.CollectionConverters._
+import de.dnpm.ccdn.core.EncryptionService.Encrypted
 import de.dnpm.ccdn.core.dip.Report
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.{HealthInsurance, Id, Site}
@@ -84,6 +85,34 @@ final class MongodbPersistenceServiceImplTests extends AnyFlatSpec
     doc.getString("id") mustBe "123"
     doc.get("site", classOf[Document]).getString("code") mustBe "UKT"
     doc.getString("useCase") mustBe UseCase.MTB.toString
+  }
+
+  private def encryptedWithCiphertextLength(length: Int): Encrypted =
+    Encrypted("RSA/AES", "key", "iv", "A" * length)
+
+  it must "keep a ciphertext of the maximum length in the backup document" in {
+    val max = MongodbPersistenceServiceImpl.MAX_CIPHERTEXT_LENGTH
+    val (content, parts) = MongodbPersistenceServiceImpl.splitEncrypted(encryptedWithCiphertextLength(max))
+
+    parts mustBe empty
+    content.getString("ciphertext").length mustBe max
+    content.containsKey("ciphertextParts") mustBe false
+  }
+
+  it must "split a ciphertext exceeding the maximum length into parts pointed to by the backup document" in {
+    val max       = MongodbPersistenceServiceImpl.MAX_CIPHERTEXT_LENGTH
+    val encrypted = encryptedWithCiphertextLength(max + 1)
+    val (content, parts) = MongodbPersistenceServiceImpl.splitEncrypted(encrypted)
+
+    content.containsKey("ciphertext") mustBe false
+    content.getString("algorithm") mustBe encrypted.algorithm
+    content.getString("encryptedKey") mustBe encrypted.encryptedKey
+    content.getString("iv") mustBe encrypted.iv
+
+    parts.map(_.getString("ciphertext").length) mustBe Seq(max, 1)
+    parts.map(_.getInteger("index").intValue) mustBe Seq(0, 1)
+    content.getList("ciphertextParts", classOf[org.bson.types.ObjectId]).asScala mustBe parts.map(_.getObjectId("_id"))
+    parts.map(_.getString("ciphertext")).mkString mustBe encrypted.ciphertext
   }
 
 }

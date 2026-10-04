@@ -10,6 +10,7 @@ import com.mongodb.client.model.{CreateCollectionOptions, Filters, IndexOptions,
 import com.mongodb.client.model.mql.MqlValues
 import de.dnpm.ccdn.core.dip.Report
 import org.bson.{BsonType, Document}
+import org.bson.types.ObjectId
 import org.bson.conversions.Bson
 import de.dnpm.dip.util.Logging
 import de.dnpm.ccdn.core.{
@@ -23,6 +24,7 @@ import de.dnpm.dip.model.Site
 import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
 import de.dnpm.dip.service.mvh.UseCase
 import play.api.libs.json.{JsValue, Json}
+import scala.jdk.CollectionConverters._
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
@@ -42,6 +44,7 @@ object MongodbPersistenceServiceImpl
 
   private val DATABASE          = "ccdn"
   private val BACKUP_COLLECTION = "backup"
+  private val LARGE_BACKUP_PARTS_COLLECTION = "largeBackupParts"
   private val QUARTER_REPORT_COLLECTION = "quarter-reports"
 
   /**
@@ -119,6 +122,44 @@ object MongodbPersistenceServiceImpl
       )
     )
   }
+
+  /**
+   * MongoDB rejects documents larger than 16 MiB. A ciphertext longer than this (in bytes,
+   * equal to its length since base64 is ASCII) is split, leaving a safety margin for the
+   * other fields of the backup document.
+   */
+  private[connector] val MAX_CIPHERTEXT_LENGTH = 15 * 1024 * 1024
+
+  /**
+   * Converts `encrypted` to the "content" of a backup document and, if its ciphertext is
+   * longer than `maxCiphertextLength`, the documents to store in [[LARGE_BACKUP_PARTS_COLLECTION]].
+   * In that case the ciphertext is cut into consecutive segments of at most `maxCiphertextLength`,
+   * each stored as "ciphertext" of a part document (with "_id" and "index"), and "content"
+   * contains, instead of "ciphertext", "ciphertextParts": the "_id"s of the parts in order.
+   * The concatenation of the parts' "ciphertext" in this order is the original ciphertext.
+   */
+  private[connector] def splitEncrypted(
+    encrypted: EncryptionService.Encrypted,
+    maxCiphertextLength: Int = MAX_CIPHERTEXT_LENGTH
+  ): (Document, Seq[Document]) =
+    if (encrypted.ciphertext.length <= maxCiphertextLength)
+      (Document.parse(Json.stringify(Json.toJson(encrypted))), Seq.empty)
+    else {
+      val parts =
+        encrypted.ciphertext
+          .grouped(maxCiphertextLength)
+          .zipWithIndex
+          .map { case (segment, index) =>
+            new Document("_id", new ObjectId())
+              .append("index", index)
+              .append("ciphertext", segment)
+          }
+          .toSeq
+      val content =
+        Document.parse(Json.stringify(Json.toJsObject(encrypted) - "ciphertext"))
+          .append("ciphertextParts", parts.map(_.getObjectId("_id")).asJava)
+      (content, parts)
+    }
 
   lazy val instance = new MongodbPersistenceServiceImpl(
     envOrNone(MONGODBURIENVVAR).orElse(propOrNone(MONGODBURIJVMPROP))
@@ -249,8 +290,18 @@ final class MongodbPersistenceServiceImpl private (
     storeBackup(report.id.value, report.site, report.useCase, report.createdAt, documentType, content, context)
 
   /**
+   * Encrypts `content` and splits it if it is too large for a single document, see [[splitEncrypted]]
+   */
+  private def encryptContent(content: JsValue): (Document, Seq[Document]) =
+    splitEncrypted(encryptionService.encrypt(content))
+
+  /**
    * Common scheme of all backup documents: "tan", "site", "usecase", "type", "submittedAt"
    * in plain text, and `content` encrypted.
+   * If the encrypted content is too large, its ciphertext is stored in parts in collection
+   * [[LARGE_BACKUP_PARTS_COLLECTION]], see [[splitEncrypted]]. The parts carry the identifying
+   * fields of their backup document, too, and are inserted before it; if inserting the backup
+   * document fails, they are removed again.
    * ("tan", "type", "site", "usecase") identifies a backup, whose data never changes, so if
    * such a document already exists, nothing is encrypted or inserted.
    * A unique index over these fields is ensured on every connect (createIndex is a no-op if it
@@ -281,14 +332,34 @@ final class MongodbPersistenceServiceImpl private (
                         )
                         .first()
                       if (existing == null) {
+                        val (encrypted, parts) = encryptContent(content)
                         val doc =
                           new Document("tan", tan)
                             .append("site", site.code.value)
                             .append("usecase", usecase.toString)
                             .append("type", documentType)
-                            .append("content", Document.parse(Json.stringify(Json.toJson(encryptionService.encrypt(content)))))
+                            .append("content", encrypted)
                             .append("submittedAt", submittedAt.format(ISO_LOCAL_DATE_TIME))
-                        coll.insertOne(doc)
+                        if (parts.isEmpty) coll.insertOne(doc)
+                        else {
+                          val partsColl = largeBackupPartsCollection(client.getDatabase(DATABASE))
+                          parts.foreach { part =>
+                            part
+                              .append("tan", tan)
+                              .append("site", site.code.value)
+                              .append("usecase", usecase.toString)
+                              .append("type", documentType)
+                          }
+                          // one by one, since a single insert command is limited to 48 MB
+                          parts.foreach(partsColl.insertOne)
+                          try coll.insertOne(doc)
+                          catch {
+                            case exc: Exception =>
+                              partsColl.deleteMany(Filters.in("_id", parts.map(_.getObjectId("_id")).asJava))
+                              throw exc
+                          }
+                          log.info(s"Stored ciphertext of $context in ${parts.size} parts")
+                        }
                         true
                       } else false
                     }
@@ -307,8 +378,18 @@ final class MongodbPersistenceServiceImpl private (
 
 
   /**
+   * Ensures the index over the identifying fields of collection [[LARGE_BACKUP_PARTS_COLLECTION]]
+   * (not unique, since a backup may consist of several parts)
+   */
+  private def largeBackupPartsCollection(db: MongoDatabase) = {
+    val coll = db.getCollection(LARGE_BACKUP_PARTS_COLLECTION)
+    coll.createIndex(Indexes.ascending("tan", "type", "site", "usecase"))
+    coll
+  }
+
+  /**
    * Removes all backed up submissions and reports in collection [[BACKUP_COLLECTION]] whose
-   * "tan", "site" and "usecase" match, then backs up the deletion event itself via
+   * "tan", "site" and "usecase" match, and their parts in [[LARGE_BACKUP_PARTS_COLLECTION]], then backs up the deletion event itself via
    * [[backupDeletion]] (which skips the insert if it is already present).
    */
   override def applyDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = {
@@ -318,16 +399,18 @@ final class MongodbPersistenceServiceImpl private (
       uri     <- mongoUri.toRight(s"MongoDB URI is not configured; cannot apply $context")
       deleted <- Try {
         withClient(uri) { client =>
-          client.getDatabase(DATABASE).getCollection(BACKUP_COLLECTION)
-            .deleteMany(
-              Filters.and(
-                Filters.eq("tan", tan),
-                Filters.eq("site", site.code.value),
-                Filters.eq("usecase", usecase.toString),
-                Filters.in("type", "submission", "report")
-              )
+          val db = client.getDatabase(DATABASE)
+          val filter =
+            Filters.and(
+              Filters.eq("tan", tan),
+              Filters.eq("site", site.code.value),
+              Filters.eq("usecase", usecase.toString),
+              Filters.in("type", "submission", "report")
             )
-            .getDeletedCount
+          val deleted = db.getCollection(BACKUP_COLLECTION).deleteMany(filter).getDeletedCount
+          // after the backup documents, so that none is left pointing to removed parts
+          db.getCollection(LARGE_BACKUP_PARTS_COLLECTION).deleteMany(filter)
+          deleted
         }
       }
         .toEither
