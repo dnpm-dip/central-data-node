@@ -515,7 +515,23 @@ with BatchingUtil
   }
 
   /**
-   * Iterates over all `validSites` and their active UseCases, fetches every
+   * First api-gateway version exposing the deletion-events endpoint (major, minor, patch)
+   */
+  private val deletionEndpointMinVersion = (1, 3, 2)
+  private val fullVersionPattern = raw"(\d+)\.(\d+)\.(\d+).*".r
+
+  private[core] def supportsDeletionEndpoint(version: String): Boolean =
+    version match {
+      case fullVersionPattern(major, minor, patch) =>
+        Ordering[(Int,Int,Int)].gteq((major.toInt, minor.toInt, patch.toInt), deletionEndpointMinVersion)
+      case _ => false
+    }
+
+  /**
+   * Iterates over those `validSites` whose API version, as recorded in `availabilityBuffer` by
+   * [[getApiCompatibleDipSites]], supports the deletion-events endpoint (see [[supportsDeletionEndpoint]]),
+   * and their active UseCases. The other sites are skipped, which is logged once at info level.
+   * For each, fetches every
    * [[DeletionEvent]] that occurred since each was last queried, via [[deletionEventService]],
    * and applies each of them to the backups via [[PersistenceService.applyDeletion]].
    * A site's last-queried timestamp is only advanced if all of its events were applied successfully.
@@ -524,10 +540,22 @@ with BatchingUtil
    */
   def syncDeletions(validSites: Seq[Code[Site]],
                     availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport],
-                    persistence: PersistenceService = persistenceService):Future[Seq[DeletionEvent]] =
+                    persistence: PersistenceService = persistenceService):Future[Seq[DeletionEvent]] = {
+    val versions =
+      availabilityBuffer.asScala
+        .collect { case ResponsivityReport(site, _, Some(version)) => site -> version }
+        .toMap
+    val (compatibleSites, outdatedSites) =
+      validSites.partition(site => versions.get(site).exists(supportsDeletionEndpoint))
+    if (outdatedSites.nonEmpty)
+      log.info(
+        s"Not querying DeletionEvents of ${outdatedSites.size} site(s) not yet updated to expose the deletion endpoint " +
+        s"(version >= ${deletionEndpointMinVersion.productIterator.mkString(".")}): " +
+        outdatedSites.map(site => s"$site (${versions.getOrElse(site, "unknown version")})").mkString(", ")
+      )
     Future.traverse(
       for {
-        site    <- validSites
+        site    <- compatibleSites
         useCase <- config.sites.get(site)
                      .map(_.useCases.intersect(config.activeUseCases).toSeq)
                      .getOrElse(Seq.empty)
@@ -554,4 +582,5 @@ with BatchingUtil
           }
     }
     .map(_.collect { case Right(events) => events }.flatten)
+  }
 }

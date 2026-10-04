@@ -112,7 +112,7 @@ class FakeDIPConnector extends dip.DipConnector
    */
   override def getApiVersion(site: Code[Site])(implicit env: ExecutionContext)
   : Future[Either[String, String]] =
-    Future.successful(Right("1.3.0"))
+    Future.successful(Right("1.3.2"))
 
   override def downloadSubmission(report: Report)
                                  (implicit env: ExecutionContext)

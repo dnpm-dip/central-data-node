@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory
 
 import java.util.concurrent.{ConcurrentLinkedQueue, Executors}
 import java.util.concurrent.atomic.AtomicInteger
+import scala.jdk.CollectionConverters._
 import scala.concurrent.ExecutionContext
 import java.time.{Clock, Instant, LocalDateTime, ZoneOffset}
 import scala.collection.mutable.ListBuffer
@@ -391,6 +392,43 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
     Future.successful {
       queue.entries(_ => true).map(_.id) must contain only failing.id
+    }
+  }
+
+  it must "recognize versions supporting the deletion endpoint" in {
+    Future.successful {
+      service.supportsDeletionEndpoint("1.3.2") mustBe true
+      service.supportsDeletionEndpoint("1.3.10") mustBe true
+      service.supportsDeletionEndpoint("1.4.0") mustBe true
+      service.supportsDeletionEndpoint("2.0.0-SNAPSHOT") mustBe true
+      service.supportsDeletionEndpoint("1.3.1") mustBe false
+      service.supportsDeletionEndpoint("1.2.9") mustBe false
+      service.supportsDeletionEndpoint("0.9.0") mustBe false
+      service.supportsDeletionEndpoint("1.3") mustBe false
+    }
+  }
+
+  it must "only query DeletionEvents of sites whose version supports the deletion endpoint" in {
+    val queriedSites = new ConcurrentLinkedQueue[Code[Site]]
+    val connector = new FakeDIPConnector {
+      override def deletionEvents(site: Code[Site], useCase: UseCase.Value, since: Option[LocalDateTime])
+          (implicit ec: ExecutionContext): Future[Either[String, Seq[DeletionEvent]]] = {
+        queriedSites.add(site)
+        Future.successful(Right(Seq.empty))
+      }
+    }
+    val testService = new MVHReportingService(
+      Config.instance, FakeReportRepository(), connector, fakeBfarmConnector, new FakePersistenceService
+    )
+    val Seq(updated, outdated, withoutVersion) = sites.take(3)
+    val responseLog = new ConcurrentLinkedQueue[ResponsivityReport]
+    responseLog.add(ResponsivityReport(updated, Responsivity.success, Some("1.3.2")))
+    responseLog.add(ResponsivityReport(outdated, Responsivity.success, Some("1.3.1")))
+    responseLog.add(ResponsivityReport(withoutVersion, Responsivity.failure))
+
+    testService.syncDeletions(Seq(updated, outdated, withoutVersion), responseLog).map { _ =>
+      queriedSites.asScala.toSet mustBe Set(updated)
+      responseLog.asScala.count(_.responsivity == Responsivity.failure) mustBe 1
     }
   }
 }
