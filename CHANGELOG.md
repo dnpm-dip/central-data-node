@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1](https://github.com/dnpm-dip/central-data-node/compare/v1.3.0...v1.3.1) (2026-10-04)
+
+
+### Bug Fixes
+
+* Deletions are now only queried from compatible DIP sites ([33ccfe2](https://github.com/dnpm-dip/central-data-node/commit/33ccfe22183d1ceaaf490bf7d0c96bc5072c0f64))
+* Submissions larger than 16 MB can now be stored. ([2c3d7ae](https://github.com/dnpm-dip/central-data-node/commit/2c3d7ae0f11e08c87aa2e379b582ae8140f4c1f4))
+
 ## [1.3.0](https://github.com/dnpm-dip/central-data-node/compare/v1.2.0...v1.3.0) (2026-09-30)
 
 
