@@ -389,7 +389,8 @@ final class MongodbPersistenceServiceImpl private (
 
   /**
    * Removes all backed up submissions and reports in collection [[BACKUP_COLLECTION]] whose
-   * "tan", "site" and "usecase" match, and their parts in [[LARGE_BACKUP_PARTS_COLLECTION]], then backs up the deletion event itself via
+   * "tan", "site" and "usecase" match, and their parts in [[LARGE_BACKUP_PARTS_COLLECTION]],
+   * as well as the matching report in [[QUARTER_REPORT_COLLECTION]], then backs up the deletion event itself via
    * [[backupDeletion]] (which skips the insert if it is already present).
    */
   override def applyDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = {
@@ -410,7 +411,16 @@ final class MongodbPersistenceServiceImpl private (
           val deleted = db.getCollection(BACKUP_COLLECTION).deleteMany(filter).getDeletedCount
           // after the backup documents, so that none is left pointing to removed parts
           db.getCollection(LARGE_BACKUP_PARTS_COLLECTION).deleteMany(filter)
-          deleted
+          val deletedQuarterReports =
+            db.getCollection(QUARTER_REPORT_COLLECTION).deleteMany(
+              Filters.and(
+                Filters.eq(QuarterReportField.Id, tan),
+                Filters.eq(QuarterReportField.SiteCode, site.code.value),
+                Filters.eq(QuarterReportField.UseCase, usecase.toString)
+              )
+            )
+            .getDeletedCount
+          (deleted, deletedQuarterReports)
         }
       }
         .toEither
@@ -419,7 +429,7 @@ final class MongodbPersistenceServiceImpl private (
           log.error(msg)
           msg
         }
-      _        = log.debug(s"Removed $deleted backup document(s) for $context")
+      _        = log.info(s"Removed ${deleted._1} backup document(s) and ${deleted._2} quarter report document(s) for $context")
       _       <- backupDeletion(site, usecase, deletionEvent)
     } yield ()
   }
