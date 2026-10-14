@@ -1,6 +1,7 @@
 package de.dnpm.ccdn.core
 
 
+import de.dnpm.ccdn.core.EncryptionService.Encrypted
 import de.dnpm.ccdn.core.dip.Report
 import de.dnpm.ccdn.core.dip.Report.Status
 import org.scalatest.flatspec.AsyncFlatSpec
@@ -42,7 +43,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       ReportRepository.getInstance.get,
       fakeDipConnector,
       fakeBfarmConnector,
-      new FakePersistenceService
+      new FakePersistenceService,
+      new FakeEncryptionService
     )
 
   private val sites = Config.instance.sites.keys.toSeq
@@ -101,10 +103,12 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
         capturedInstant = Some(now)
       }
 
-      override def backupReport(report: Report): Either[String, Unit] = ???
-      override def backupSubmission(report: Report, submission: JsValue): Either[String, Unit] = ???
-      override def backupDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = ???
-      override def applyDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = ???
+      override def backupReport(report: Report, content: => Encrypted): Either[String, Unit] = ???
+      override def backupSubmission(report: Report, content: => Encrypted): Either[String, Unit] = ???
+      override def backupDeletion(site: Coding[Site], usecase: UseCase.Value,
+                                  deletionEvent: DeletionEvent, content: => Encrypted): Either[String, Unit] = ???
+      override def applyDeletion(site: Coding[Site], usecase: UseCase.Value,
+                                 deletionEvent: DeletionEvent, content: => Encrypted): Either[String, Unit] = ???
       override def backupForQuarterReport(report: Report): Either[String, Unit] = ???
     }
 
@@ -113,7 +117,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       FakeReportRepository(),
       connectorReturningVersion("0.9.0"),
       fakeBfarmConnector,
-      capturingReporter
+      capturingReporter,
+      new FakeEncryptionService
     )
     testService.clock = Clock.fixed(fixedInstant, ZoneOffset.UTC)
 
@@ -130,7 +135,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     val preCutover = Instant.parse("2026-05-31T23:59:59Z")
     val testService = new MVHReportingService(
       Config.instance, FakeReportRepository(), connectorReturningVersion("0.9.0"),
-      fakeBfarmConnector, new FakePersistenceService
+      fakeBfarmConnector, new FakePersistenceService, new FakeEncryptionService
     )
     testService.clock = Clock.fixed(preCutover, ZoneOffset.UTC)
 
@@ -146,7 +151,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       FakeReportRepository(),
       connectorReturningVersion("1.3.0-RELEASE_5"),
       fakeBfarmConnector,
-      new FakePersistenceService
+      new FakePersistenceService,
+      new FakeEncryptionService
     )
     testService.clock = Clock.fixed(onCutover, ZoneOffset.UTC)
 
@@ -162,7 +168,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       FakeReportRepository(),
       connectorReturningVersion("1.2.4-BETA5-HOTFIX#133742"),
       fakeBfarmConnector,
-      new FakePersistenceService
+      new FakePersistenceService,
+      new FakeEncryptionService
     )
     testService.clock = Clock.fixed(onCutover, ZoneOffset.UTC)
 
@@ -198,13 +205,15 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       override def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport], now: Instant): Unit =
         capturedResponsivityReports ++= reports
 
-      override def backupReport(report: Report): Either[String, Unit] = ???
-      override def backupSubmission(report: Report, submission: JsValue): Either[String, Unit] = ???
+      override def backupReport(report: Report, content: => Encrypted): Either[String, Unit] = ???
+      override def backupSubmission(report: Report, content: => Encrypted): Either[String, Unit] = ???
 
       override def backupForQuarterReport(report: Report): Either[String, Unit] = ???
 
-      override def backupDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = ???
-      override def applyDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = ???
+      override def backupDeletion(site: Coding[Site], usecase: UseCase.Value,
+                                  deletionEvent: DeletionEvent, content: => Encrypted): Either[String, Unit] = ???
+      override def applyDeletion(site: Coding[Site], usecase: UseCase.Value,
+                                 deletionEvent: DeletionEvent, content: => Encrypted): Either[String, Unit] = ???
     }
 
     val testService = new MVHReportingService(
@@ -212,7 +221,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       FakeReportRepository(),
       failingDataConnector,
       fakeBfarmConnector,
-      capturingReporter
+      capturingReporter,
+      new FakeEncryptionService
     )
     testService.clock = Clock.fixed(preCutover, ZoneOffset.UTC)
 
@@ -342,9 +352,10 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       countingConnector,
       fakeBfarmConnector,
       new FakePersistenceService {
-        override def backupSubmission(report: Report, submission: JsValue): Either[String, Unit] =
+        override def backupSubmission(report: Report, content: => Encrypted): Either[String, Unit] =
           Right(())
-      }
+      },
+      new FakeEncryptionService
     ) {
       override private[core] val nSimultaneousSubmissionDownloads: Int = batchSize
     }
@@ -385,7 +396,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       new FakePersistenceService {
         override def backupForQuarterReport(report: Report): Either[String, Unit] =
           if (report.id == failing.id) Left("simulated storage failure") else Right(())
-      }
+      },
+      new FakeEncryptionService
     )
 
     testService.flushReportQueue()
@@ -418,7 +430,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       }
     }
     val testService = new MVHReportingService(
-      Config.instance, FakeReportRepository(), connector, fakeBfarmConnector, new FakePersistenceService
+      Config.instance, FakeReportRepository(), connector, fakeBfarmConnector,
+      new FakePersistenceService, new FakeEncryptionService
     )
     val Seq(updated, outdated, withoutVersion) = sites.take(3)
     val responseLog = new ConcurrentLinkedQueue[ResponsivityReport]

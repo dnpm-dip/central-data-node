@@ -18,6 +18,7 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.jdk.CollectionConverters.CollectionHasAsScala
 import scala.util.Success
+import play.api.libs.json.Json
 
 
 
@@ -32,7 +33,8 @@ object MVHReportingService
       ReportRepository.getInstance.get,
       dip.DipConnector.getInstance.get,
       bfarm.BfarmConnector.getInstance.get,
-      PersistenceService.getInstance.get
+      PersistenceService.getInstance.get,
+      EncryptionService.getInstance.get
     )
 
   /**
@@ -61,7 +63,8 @@ class MVHReportingService
   private[core] val pollingQueue: ReportRepository,
   private[core] val dipConnector: DipConnector,
   private[core] val bfarmConnector: BfarmConnector,
-  private[core] val persistenceService: PersistenceService
+  private[core] val persistenceService: PersistenceService,
+  encryption: => EncryptionService
 )(
   implicit ec: ExecutionContext
 )
@@ -72,6 +75,12 @@ with BatchingUtil
    * Serves local time. Abstracted for the purpose of unit tests
    */
   private[core] var clock: Clock = Clock.systemUTC()
+
+  /**
+   * Lazy (from a by-name parameter), so that a missing public key only fails
+   * the backups, not the construction of this service
+   */
+  private[core] lazy val encryptionService: EncryptionService = encryption
 
   private[core] val deletionEventService: DeletionEventService =
     new DeletionEventService(config, dipConnector)
@@ -456,7 +465,7 @@ with BatchingUtil
     )(
       report => dipConnector.downloadSubmission(report).map {
         case Right(submission) =>
-          persistence.backupSubmission(report,submission) match {
+          persistence.backupSubmission(report,encryptionService.encrypt(submission)) match {
             case Right(_) =>
               //backup saved successful
               val asBackedUp = report.copy(status = Status.SubmissionBackedup)
@@ -482,7 +491,7 @@ with BatchingUtil
   def backupReports(persistence: PersistenceService = persistenceService):Seq[Either[String,Report]] = {
     pollingQueue.entries(_.status == Status.SubmissionBackedup).map(
 
-      report => persistence.backupReport(report) match {
+      report => persistence.backupReport(report,encryptionService.encrypt(Json.toJson(report))) match {
         case Right(_) =>
           //backup saved successful
           val asBackedUp: Report = report.copy(status = Status.ReportBackedup)
@@ -563,7 +572,7 @@ with BatchingUtil
     ){
       case (site,useCase) =>
         deletionEventService.deletionEvents(site,useCase) { event =>
-          persistence.applyDeletion(Coding[Site](site.value),useCase,event)
+          persistence.applyDeletion(Coding[Site](site.value),useCase,event,encryptionService.encrypt(Json.toJson(event)))
             .left.map { err =>
               log.error(s"Failed to apply DeletionEvent ${event.tan.value} of site $site: $err")
               err

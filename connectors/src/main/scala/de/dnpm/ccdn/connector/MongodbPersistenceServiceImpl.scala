@@ -23,7 +23,7 @@ import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.Site
 import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
 import de.dnpm.dip.service.mvh.UseCase
-import play.api.libs.json.{JsValue, Json}
+import play.api.libs.json.Json
 import scala.jdk.CollectionConverters._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -167,24 +167,18 @@ object MongodbPersistenceServiceImpl
 }
 
 /**
- * @param encryptionService by-name, so that a missing public key only fails
- *                          the backups, not the construction of this service
  * @param sharedClient      if defined, used by all operations (and not closed by them), see
  *                          [[withSession]]; otherwise each operation creates and closes its own client
  */
 final class MongodbPersistenceServiceImpl private (
   val mongoUri: Option[String],
-  encryptionService: => EncryptionService,
   sharedClient: Option[MongoClient]
 ) extends PersistenceService with Logging
 {
 
   import MongodbPersistenceServiceImpl._
 
-  def this(
-    mongoUri: Option[String],
-    encryptionService: => EncryptionService = RsaHybridEncryptionServiceImpl.instance
-  ) = this(mongoUri, encryptionService, None)
+  def this(mongoUri: Option[String]) = this(mongoUri, None)
 
   if (sharedClient.isEmpty) mongoUri match {
     case Some(uri) => log.debug(s"MongoDB URI: $uri")
@@ -212,7 +206,7 @@ final class MongodbPersistenceServiceImpl private (
       case (None, Some(uri)) =>
         Try(MongoClients.create(uri)) match {
           case Success(client) =>
-            Future.delegate(f(new MongodbPersistenceServiceImpl(mongoUri, encryptionService, Some(client))))
+            Future.delegate(f(new MongodbPersistenceServiceImpl(mongoUri, Some(client))))
               .andThen { case _ => client.close() }
           case Failure(exc) =>
             log.error(s"Failed to create MongoDB client for session: ${exc.getMessage}")
@@ -249,68 +243,64 @@ final class MongodbPersistenceServiceImpl private (
     else log.warn("Empty set of reports passed to writeSiteAvailabilityReports")
 
   /**
-   * Stores the report, encrypted, in collection [[BACKUP_COLLECTION]].
+   * Stores the encrypted report in collection [[BACKUP_COLLECTION]].
    */
-  override def backupReport(report: Report): Either[String, Unit] =
+  override def backupReport(report: Report, content: => EncryptionService.Encrypted): Either[String, Unit] =
     storeBackup(
       report,
       "report",
-      Json.toJson(report),
+      content,
       s"Report ${report.id.value} from site ${report.site.code}"
     )
 
   /**
-   * Stores the submission, encrypted, in collection [[BACKUP_COLLECTION]].
+   * Stores the encrypted submission in collection [[BACKUP_COLLECTION]].
    */
-  override def backupSubmission(report: Report, submission: JsValue): Either[String, Unit] =
+  override def backupSubmission(report: Report, content: => EncryptionService.Encrypted): Either[String, Unit] =
     storeBackup(
       report,
       "submission",
-      submission,
+      content,
       s"Submission ${report.id.value} from site ${report.site.code}"
     )
 
   /**
-   * Stores the deletion event, encrypted, in collection [[BACKUP_COLLECTION]].
+   * Stores the encrypted deletion event in collection [[BACKUP_COLLECTION]].
    * Its "submittedAt" is the time of deletion.
    */
-  override def backupDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] =
+  override def backupDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent,
+                              content: => EncryptionService.Encrypted): Either[String, Unit] =
     storeBackup(
       deletionEvent.tan.value,
       site,
       usecase,
       deletionEvent.dateTime,
       "deletion",
-      Json.toJson(deletionEvent),
+      content,
       s"DeletionEvent ${deletionEvent.tan.value} from site ${site.code}"
     )
 
-  private def storeBackup(report: Report,documentType: String,content: JsValue,context: String
+  private def storeBackup(report: Report,documentType: String,content: => EncryptionService.Encrypted,context: String
   ): Either[String, Unit] =
     storeBackup(report.id.value, report.site, report.useCase, report.createdAt, documentType, content, context)
 
   /**
-   * Encrypts `content` and splits it if it is too large for a single document, see [[splitEncrypted]]
-   */
-  private def encryptContent(content: JsValue): (Document, Seq[Document]) =
-    splitEncrypted(encryptionService.encrypt(content))
-
-  /**
    * Common scheme of all backup documents: "tan", "site", "usecase", "type", "submittedAt"
-   * in plain text, and `content` encrypted.
+   * in plain text, and the already encrypted `content`.
    * If the encrypted content is too large, its ciphertext is stored in parts in collection
    * [[LARGE_BACKUP_PARTS_COLLECTION]], see [[splitEncrypted]]. The parts carry the identifying
    * fields of their backup document, too, and are inserted before it; if inserting the backup
    * document fails, they are removed again.
    * ("tan", "type", "site", "usecase") identifies a backup, whose data never changes, so if
-   * such a document already exists, nothing is encrypted or inserted.
+   * such a document already exists, nothing is inserted, and `content` is not evaluated
+   * (i.e. not encrypted).
    * A unique index over these fields is ensured on every connect (createIndex is a no-op if it
    * already exists) for safety against concurrent inserts; a resulting duplicate key error
    * is a failure like any other database error, and logged as error.
    */
   private def storeBackup(tan: String,site: Coding[Site],usecase: UseCase.Value,
                           submittedAt: LocalDateTime,documentType: String,
-                          content: JsValue, context: String
+                          content: => EncryptionService.Encrypted, context: String
   ): Either[String, Unit] =
     for {
       uri      <- mongoUri.toRight(s"MongoDB URI is not configured; cannot back up $context")
@@ -332,7 +322,7 @@ final class MongodbPersistenceServiceImpl private (
                         )
                         .first()
                       if (existing == null) {
-                        val (encrypted, parts) = encryptContent(content)
+                        val (encrypted, parts) = splitEncrypted(content)
                         val doc =
                           new Document("tan", tan)
                             .append("site", site.code.value)
@@ -393,7 +383,8 @@ final class MongodbPersistenceServiceImpl private (
    * as well as the matching report in [[QUARTER_REPORT_COLLECTION]], then backs up the deletion event itself via
    * [[backupDeletion]] (which skips the insert if it is already present).
    */
-  override def applyDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = {
+  override def applyDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent,
+                             content: => EncryptionService.Encrypted): Either[String, Unit] = {
     val tan     = deletionEvent.tan.value
     val context = s"DeletionEvent $tan from site ${site.code}"
     for {
@@ -430,7 +421,7 @@ final class MongodbPersistenceServiceImpl private (
           msg
         }
       _        = log.info(s"Removed ${deleted._1} backup document(s) and ${deleted._2} quarter report document(s) for $context")
-      _       <- backupDeletion(site, usecase, deletionEvent)
+      _       <- backupDeletion(site, usecase, deletionEvent, content)
     } yield ()
   }
 
@@ -441,7 +432,6 @@ final class MongodbPersistenceServiceImpl private (
    * identifies a report, and an already existing one is left untouched.
    * An index over ("year", "quarter") serves fetching the reports of a quarter.
    */
-  //TODO should eventually replace ArchivingReportRepository
   override def backupForQuarterReport(report: Report): Either[String, Unit] = {
     val context = s"Report ${report.id.value} from site ${report.site.code} for quarter report"
     for {

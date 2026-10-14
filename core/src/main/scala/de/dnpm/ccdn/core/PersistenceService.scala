@@ -1,12 +1,12 @@
 package de.dnpm.ccdn.core
 
 
+import de.dnpm.ccdn.core.EncryptionService.Encrypted
 import de.dnpm.ccdn.core.dip.Report
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.Site
 import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
 import de.dnpm.dip.service.mvh.UseCase
-import play.api.libs.json.JsValue
 
 import java.time.Instant
 import scala.annotation.unused
@@ -19,7 +19,7 @@ import de.dnpm.dip.util.{
 
 /**
  * Supposed to longterm persist some data, for example whether DIP
- * sites were available. Single implementation writes into mongoDB
+ * sites were available or backup of submission data
  */
 trait PersistenceService
 {
@@ -28,17 +28,36 @@ trait PersistenceService
     now: Instant
   ): Unit
 
-  def backupReport(report: Report): Either[String, Unit]
+  /*
+   * The backup methods take their content already encrypted, so that backups never
+   * depend on the implementation to encrypt them. Only the identifying metadata
+   * (taken from the report or deletion event) may be stored in plain text.
+   * The content is by-name, so that implementations only evaluate (i.e. encrypt) it
+   * if they actually store it, not e.g. if the backup already exists.
+   */
 
-  def backupSubmission(report: Report, submission: JsValue): Either[String, Unit]
+  /**
+   * @param content the report, encrypted
+   */
+  def backupReport(report: Report, content: => Encrypted): Either[String, Unit]
 
-  def backupDeletion(site:Coding[Site], usecase:UseCase.Value, deletionEvent:DeletionEvent): Either[String, Unit]
+  /**
+   * @param content the submission of the report, encrypted
+   */
+  def backupSubmission(report: Report, content: => Encrypted): Either[String, Unit]
+
+  /**
+   * @param content the deletion event, encrypted
+   */
+  def backupDeletion(site:Coding[Site], usecase:UseCase.Value, deletionEvent:DeletionEvent, content: => Encrypted): Either[String, Unit]
 
   /**
    * Removes all backed up submissions and reports matching the deletion event's tan, site
    * and usecase, then backs up the deletion event itself (unless already present).
+   *
+   * @param content the deletion event, encrypted, see [[backupDeletion]]
    */
-  def applyDeletion(site:Coding[Site], usecase:UseCase.Value, deletionEvent:DeletionEvent): Either[String, Unit]
+  def applyDeletion(site:Coding[Site], usecase:UseCase.Value, deletionEvent:DeletionEvent, content: => Encrypted): Either[String, Unit]
 
   def backupForQuarterReport(report: Report): Either[String, Unit]
 
