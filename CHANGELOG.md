@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.2](https://github.com/dnpm-dip/central-data-node/compare/v1.3.1...v1.3.2) (2026-10-14)
+
+
+### Bug Fixes
+
+* DeletionService now also deletes quarter report file. Also adjusted log level for deletion events. ([a03f0b0](https://github.com/dnpm-dip/central-data-node/commit/a03f0b07ac48078165a4d0ae067ec958811588a1))
+
 ## [1.3.1](https://github.com/dnpm-dip/central-data-node/compare/v1.3.0...v1.3.1) (2026-10-04)
 
 
