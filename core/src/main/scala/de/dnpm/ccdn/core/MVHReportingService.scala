@@ -18,12 +18,13 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.jdk.CollectionConverters.CollectionHasAsScala
 import scala.util.Success
+import scala.util.control.NonFatal
 import play.api.libs.json.Json
 
 
 
 
-object MVHReportingService
+object MVHReportingService extends Logging
 {
   import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -41,7 +42,18 @@ object MVHReportingService
    * Entrypoint of the deployment for the JVM (see entrypoint.sh)
    */
   def main(args: Array[String]): Unit = {
-    
+
+    // Loading the service validates the configuration of all its components. On failure,
+    // exit explicitly, since components loaded before (e.g. the DipConnector's HTTP client)
+    // may have started non-daemon threads that would otherwise keep the JVM running
+    try {
+      val _ = service
+    } catch {
+      case NonFatal(t) =>
+        log.error(s"Invalid configuration, MVH Reporting service not started: ${t.getMessage}", t)
+        System.exit(1)
+    }
+
     Runtime.getRuntime.addShutdownHook(
       new Thread {
         override def run(): Unit = {
@@ -64,7 +76,7 @@ class MVHReportingService
   private[core] val dipConnector: DipConnector,
   private[core] val bfarmConnector: BfarmConnector,
   private[core] val persistenceService: PersistenceService,
-  encryption: => EncryptionService
+  private[core] val encryptionService: EncryptionService
 )(
   implicit ec: ExecutionContext
 )
@@ -75,12 +87,6 @@ with BatchingUtil
    * Serves local time. Abstracted for the purpose of unit tests
    */
   private[core] var clock: Clock = Clock.systemUTC()
-
-  /**
-   * Lazy (from a by-name parameter), so that a missing public key only fails
-   * the backups, not the construction of this service
-   */
-  private[core] lazy val encryptionService: EncryptionService = encryption
 
   private[core] val deletionEventService: DeletionEventService =
     new DeletionEventService(config, dipConnector)

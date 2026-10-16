@@ -106,4 +106,23 @@ class RsaHybridEncryptionServiceImplTests extends AnyFlatSpec
     assertThrows[Exception](decrypt(encrypted, otherKeyPair.getPrivate))
   }
 
+  it must "load from a valid public key file" in {
+    RsaHybridEncryptionServiceImpl.fromPublicKeyFile(publicKeyPemFile.toString)
+  }
+
+  it must "fail to load from a missing public key file" in {
+    assertThrows[Exception](
+      RsaHybridEncryptionServiceImpl.fromPublicKeyFile(publicKeyPemFile.toString + ".missing")
+    )
+  }
+
+  it must "fail to load from a file without a valid public key" in {
+    val file = Files.createTempFile("dnpm_ccdn_test_invalid_pubkey_", ".pem")
+    Files.write(file, "-----BEGIN PUBLIC KEY-----\nbm90IGEga2V5\n-----END PUBLIC KEY-----\n".getBytes(UTF_8))
+
+    assertThrows[Exception](
+      RsaHybridEncryptionServiceImpl.fromPublicKeyFile(file.toString)
+    )
+  }
+
 }

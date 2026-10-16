@@ -9,6 +9,7 @@ import java.util.Base64
 import javax.crypto.spec.{IvParameterSpec, OAEPParameterSpec, PSource}
 import javax.crypto.{Cipher, KeyGenerator}
 import scala.util.Properties.{envOrNone, propOrNone}
+import scala.util.{Failure, Try}
 import play.api.libs.json.{JsValue, Json}
 import de.dnpm.dip.util.Logging
 import de.dnpm.ccdn.core.{EncryptionService, EncryptionServiceProvider}
@@ -44,10 +45,15 @@ object RsaHybridEncryptionServiceImpl extends Logging
       .generatePublic(new X509EncodedKeySpec(der))
   }
 
+  /**
+   * Fails if the path of the public key is not configured, or the key can't be loaded
+   * (see [[fromPublicKeyFile]]), so that the service does not start without being able
+   * to encrypt backups
+   */
   lazy val instance: RsaHybridEncryptionServiceImpl = {
     val path =
-      envOrNone(PUBLIC_KEY_PATH_ENV)
-        .orElse(propOrNone(PUBLIC_KEY_PATH_PROP))
+      envOrNone(PUBLIC_KEY_PATH_ENV).filter(_.nonEmpty)
+        .orElse(propOrNone(PUBLIC_KEY_PATH_PROP).filter(_.nonEmpty))
         .getOrElse {
           val msg = s"Couldn't find RSA public key path, configure it via " +
             s"ENV variable $PUBLIC_KEY_PATH_ENV or system property $PUBLIC_KEY_PATH_PROP"
@@ -55,7 +61,27 @@ object RsaHybridEncryptionServiceImpl extends Logging
           throw new Exception(msg)
         }
 
-    new RsaHybridEncryptionServiceImpl(loadPublicKey(path))
+    fromPublicKeyFile(path)
+  }
+
+  /**
+   * Fails if the file is missing, unreadable or contains no valid RSA public key
+   */
+  private[connector] def fromPublicKeyFile(path: String): RsaHybridEncryptionServiceImpl = {
+    if (!Files.isReadable(Paths.get(path))) {
+      val msg = s"RSA public key file '$path' doesn't exist or isn't readable"
+      log.error(msg)
+      throw new Exception(msg)
+    }
+
+    Try(loadPublicKey(path))
+      .recoverWith {
+        case t =>
+          log.error(s"Couldn't load RSA public key from '$path', expected an X.509 PEM file ('-----BEGIN PUBLIC KEY-----')", t)
+          Failure(t)
+      }
+      .map(new RsaHybridEncryptionServiceImpl(_))
+      .get
   }
 
 }

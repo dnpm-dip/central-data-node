@@ -4,7 +4,7 @@ package de.dnpm.ccdn.connector
 import java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME
 import java.time.{Instant, LocalDateTime, ZoneOffset}
 import java.util.Date
-import com.mongodb.{ErrorCategory, MongoCommandException, MongoWriteException}
+import com.mongodb.{ConnectionString, ErrorCategory, MongoCommandException, MongoWriteException}
 import com.mongodb.client.{MongoClient, MongoClients, MongoDatabase}
 import com.mongodb.client.model.{CreateCollectionOptions, Filters, IndexOptions, Indexes, ValidationOptions}
 import com.mongodb.client.model.mql.MqlValues
@@ -37,7 +37,7 @@ final class PersistenceServiceProviderImpl extends PersistenceServiceProvider
     MongodbPersistenceServiceImpl.instance
 }
 
-object MongodbPersistenceServiceImpl
+object MongodbPersistenceServiceImpl extends Logging
 {
   private val MONGODBURIJVMPROP = "ccdn.mongodb.uri"
   private val MONGODBURIENVVAR  = "CCDN_MONGODB_URI"
@@ -161,38 +161,81 @@ object MongodbPersistenceServiceImpl
       (content, parts)
     }
 
-  lazy val instance = new MongodbPersistenceServiceImpl(
-    envOrNone(MONGODBURIENVVAR).orElse(propOrNone(MONGODBURIJVMPROP))
-  )
+  /**
+   * Fails (like the other connectors) if the MongoDB URI is not configured or malformed,
+   * or if the database cannot be reached with it (see [[MongodbPersistenceServiceImpl#ping]]),
+   * so that the service does not start without being able to persist backups
+   */
+  lazy val instance: MongodbPersistenceServiceImpl = {
+    val uri =
+      envOrNone(MONGODBURIENVVAR).filter(_.nonEmpty)
+        .orElse(propOrNone(MONGODBURIJVMPROP).filter(_.nonEmpty))
+        .getOrElse {
+          val msg = s"Couldn't find MongoDB URI, configure it via " +
+            s"ENV variable $MONGODBURIENVVAR or system property $MONGODBURIJVMPROP"
+          log.error(msg)
+          throw new Exception(msg)
+        }
+
+    Try(new MongodbPersistenceServiceImpl(uri))
+      .recoverWith {
+        case t =>
+          log.error(s"Invalid MongoDB URI configured via ENV variable $MONGODBURIENVVAR or system property $MONGODBURIJVMPROP", t)
+          Failure(t)
+      }
+      .flatMap { service =>
+        Try(service.ping())
+          .map(_ => service)
+          .recoverWith {
+            case t =>
+              log.error(s"Couldn't connect to MongoDB: ${t.getMessage}", t)
+              Failure(t)
+          }
+      }
+      .get
+  }
 }
 
 /**
+ * @param mongoUri          must be a valid MongoDB connection string, otherwise the
+ *                          constructor throws an IllegalArgumentException
  * @param sharedClient      if defined, used by all operations (and not closed by them), see
  *                          [[withSession]]; otherwise each operation creates and closes its own client
  */
 final class MongodbPersistenceServiceImpl private (
-  val mongoUri: Option[String],
+  val mongoUri: String,
   sharedClient: Option[MongoClient]
 ) extends PersistenceService with Logging
 {
 
   import MongodbPersistenceServiceImpl._
 
-  def this(mongoUri: Option[String]) = this(mongoUri, None)
+  def this(mongoUri: String) = this(mongoUri, None)
 
-  if (sharedClient.isEmpty) mongoUri match {
-    case Some(uri) => log.debug(s"MongoDB URI: $uri")
-    case None      => log.warn("MongoDB URI is not configured; site availability reports will not be persisted")
-  }
+  /** Parsing validates the URI */
+  private val connectionString = new ConnectionString(mongoUri)
+
+  if (sharedClient.isEmpty)
+    log.debug(s"MongoDB hosts: ${connectionString.getHosts.asScala.mkString(", ")}")
+
+  /**
+   * Checks that the database is reachable and the credentials are accepted, throws otherwise
+   * (after the client's server selection timeout, 30 s by default, if the server is unreachable)
+   */
+  def ping(): Unit =
+    withClient { client =>
+      val _ = client.getDatabase(DATABASE).runCommand(new Document("ping", 1))
+      log.info("Connected to MongoDB")
+    }
 
   /**
    * Runs `f` with the shared client if there is one, otherwise with a new one closed afterwards
    */
-  private def withClient[T](uri: String)(f: MongoClient => T): T =
+  private def withClient[T](f: MongoClient => T): T =
     sharedClient match {
       case Some(client) => f(client)
       case None =>
-        val client = MongoClients.create(uri)
+        val client = MongoClients.create(connectionString)
         try f(client) finally client.close()
     }
 
@@ -202,9 +245,9 @@ final class MongodbPersistenceServiceImpl private (
    * `f` runs with this service, whose operations then each try (and report failures) on their own.
    */
   override def withSession[T](f: PersistenceService => Future[T])(implicit ec: ExecutionContext): Future[T] =
-    (sharedClient, mongoUri) match {
-      case (None, Some(uri)) =>
-        Try(MongoClients.create(uri)) match {
+    sharedClient match {
+      case None =>
+        Try(MongoClients.create(connectionString)) match {
           case Success(client) =>
             Future.delegate(f(new MongodbPersistenceServiceImpl(mongoUri, Some(client))))
               .andThen { case _ => client.close() }
@@ -212,16 +255,16 @@ final class MongodbPersistenceServiceImpl private (
             log.error(s"Failed to create MongoDB client for session: ${exc.getMessage}")
             f(this)
         }
-      case _ => f(this)
+      case Some(_) => f(this)
     }
 
   override def writeSiteAvailabilityReports(
     reports: Iterable[ResponsivityReport],
     now: Instant
   ): Unit =
-    if (reports.nonEmpty) mongoUri.foreach { uri =>
+    if (reports.nonEmpty) {
       try {
-        withClient(uri) { client =>
+        withClient { client =>
           val coll = client.getDatabase(DATABASE).getCollection("siteAvailabilityReports")
           val docs = new java.util.ArrayList[Document]()
           reports.foreach { r =>
@@ -303,9 +346,8 @@ final class MongodbPersistenceServiceImpl private (
                           content: => EncryptionService.Encrypted, context: String
   ): Either[String, Unit] =
     for {
-      uri      <- mongoUri.toRight(s"MongoDB URI is not configured; cannot back up $context")
       inserted <- Try {
-                    withClient(uri) { client =>
+                    withClient { client =>
                       val coll = client.getDatabase(DATABASE).getCollection(BACKUP_COLLECTION)
                       coll.createIndex(
                         Indexes.ascending("tan", "type", "site", "usecase"),
@@ -388,9 +430,8 @@ final class MongodbPersistenceServiceImpl private (
     val tan     = deletionEvent.tan.value
     val context = s"DeletionEvent $tan from site ${site.code}"
     for {
-      uri     <- mongoUri.toRight(s"MongoDB URI is not configured; cannot apply $context")
       deleted <- Try {
-        withClient(uri) { client =>
+        withClient { client =>
           val db = client.getDatabase(DATABASE)
           val filter =
             Filters.and(
@@ -435,9 +476,8 @@ final class MongodbPersistenceServiceImpl private (
   override def backupForQuarterReport(report: Report): Either[String, Unit] = {
     val context = s"Report ${report.id.value} from site ${report.site.code} for quarter report"
     for {
-      uri      <- mongoUri.toRight(s"MongoDB URI is not configured; cannot store $context")
       inserted <- Try {
-                    withClient(uri) { client =>
+                    withClient { client =>
                       val coll = quarterReportCollection(client.getDatabase(DATABASE))
                       val existing =
                         coll.find(

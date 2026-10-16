@@ -24,10 +24,14 @@ final class MongodbPersistenceServiceImplTests extends AnyFlatSpec
   behavior of "MongodbPersistenceServiceImpl"
 
   it must "log a warning when called with an empty set of reports" in {
-    val impl = new MongodbPersistenceServiceImpl(Some("somewhere"))
+    // While SLF4J is being initialized (possibly concurrently by another suite),
+    // it hands out SubstituteLoggers, so wait for the actual logback Logger
     val logger =
-      LoggerFactory.getLogger(classOf[MongodbPersistenceServiceImpl])
-        .asInstanceOf[Logger]
+      Iterator.continually(LoggerFactory.getLogger(classOf[MongodbPersistenceServiceImpl]))
+        .collectFirst { case l: Logger => l }
+        .get
+    // created afterwards, so that it doesn't get a SubstituteLogger itself
+    val impl = new MongodbPersistenceServiceImpl("mongodb://somewhere")
     val appender = new ListAppender[ILoggingEvent]
     appender.start()
     logger.addAppender(appender)
@@ -39,6 +43,10 @@ final class MongodbPersistenceServiceImplTests extends AnyFlatSpec
     }
 
     appender.list.asScala.filter(_.getLevel == Level.WARN) must not be empty
+  }
+
+  it must "reject a malformed MongoDB URI" in {
+    an [IllegalArgumentException] must be thrownBy new MongodbPersistenceServiceImpl("somewhere")
   }
 
   private def reportCreatedAt(createdAt: LocalDateTime): Report =
