@@ -7,7 +7,6 @@ import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.Site
 import de.dnpm.dip.service.mvh.{MVHService, UseCase}
 
-import java.time.Instant
 
 
 final class FakePersistenceServiceProvider extends PersistenceServiceProvider
@@ -20,10 +19,7 @@ final class FakePersistenceServiceProvider extends PersistenceServiceProvider
 //noinspection NotImplementedCode
 class FakePersistenceService extends PersistenceService
 {
-  override def writeSiteAvailabilityReports(
-    reports: Iterable[ResponsivityReport],
-    now: Instant
-  ): Unit = ()
+  override def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport]): Unit = ()
 
   override def backupReport(report: Report, content: => Encrypted): Either[String, Unit] = ???
 

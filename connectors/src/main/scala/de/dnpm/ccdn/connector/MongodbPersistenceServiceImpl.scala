@@ -2,7 +2,7 @@ package de.dnpm.ccdn.connector
 
 
 import java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME
-import java.time.{Instant, LocalDateTime, ZoneOffset}
+import java.time.{LocalDateTime, ZoneOffset}
 import java.util.Date
 import com.mongodb.{ConnectionString, ErrorCategory, MongoCommandException, MongoWriteException}
 import com.mongodb.client.{MongoClient, MongoClients, MongoDatabase}
@@ -23,7 +23,7 @@ import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.Site
 import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
 import de.dnpm.dip.service.mvh.UseCase
-import play.api.libs.json.Json
+import play.api.libs.json.{Json, OWrites}
 import scala.jdk.CollectionConverters._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -57,6 +57,20 @@ object MongodbPersistenceServiceImpl extends Logging
 
   /** MongoDB error code for creating a collection that already exists */
   private val NAMESPACE_EXISTS = 48
+
+  /**
+   * Serializes a [[ResponsivityReport]] into a document of collection "siteAvailabilityReports".
+   * The timestamp is written as extended JSON date, so that it is stored as BSON date.
+   */
+  private[connector] implicit val responsivityReportWrites: OWrites[ResponsivityReport] =
+    OWrites { report =>
+      Json.obj(
+        "site"         -> report.site.value,
+        "responsivity" -> report.responsivity.toString,
+        "apiVersion"   -> report.versionString.getOrElse[String]("???"),
+        "timestamp"    -> Json.obj("$date" -> Json.obj("$numberLong" -> report.timestamp.toEpochMilli.toString))
+      )
+    }
 
   /**
    * Reports carry German wall-clock time without zone information. They are stored as
@@ -258,24 +272,13 @@ final class MongodbPersistenceServiceImpl private (
       case Some(_) => f(this)
     }
 
-  override def writeSiteAvailabilityReports(
-    reports: Iterable[ResponsivityReport],
-    now: Instant
-  ): Unit =
+  override def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport]): Unit =
     if (reports.nonEmpty) {
       try {
         withClient { client =>
           val coll = client.getDatabase(DATABASE).getCollection("siteAvailabilityReports")
-          val docs = new java.util.ArrayList[Document]()
-          reports.foreach { r =>
-            docs.add(
-              new Document("site", r.site.value)
-                .append("responsivity", r.responsivity.toString)
-                .append("apiVersion", r.versionString.getOrElse("???"))
-                .append("timestamp", java.util.Date.from(now))
-            )
-          }
-          coll.insertMany(docs)
+          val docs = reports.map(r => Document.parse(Json.stringify(Json.toJson(r)))).toList
+          coll.insertMany(docs.asJava)
           log.debug("Successfully persisted responsivity logs")
         }
       } catch {

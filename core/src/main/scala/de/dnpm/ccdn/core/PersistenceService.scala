@@ -8,7 +8,6 @@ import de.dnpm.dip.model.Site
 import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
 import de.dnpm.dip.service.mvh.UseCase
 
-import java.time.Instant
 import scala.annotation.unused
 import scala.concurrent.{ExecutionContext, Future}
 import de.dnpm.dip.util.{
@@ -23,10 +22,7 @@ import de.dnpm.dip.util.{
  */
 trait PersistenceService
 {
-  def writeSiteAvailabilityReports(
-    reports: Iterable[ResponsivityReport],
-    now: Instant
-  ): Unit
+  def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport]): Unit
 
   /*
    * The backup methods take their content already encrypted, so that backups never

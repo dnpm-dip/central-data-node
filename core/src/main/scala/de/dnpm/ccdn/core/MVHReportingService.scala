@@ -163,7 +163,8 @@ with BatchingUtil
    * The functions in the [[DipConnector]] that communicate with external sites
    * return a report about connectivity. To end up with a single report per site
    * per attempt, this function coalesces the information collected in.
-   * [[conductReportingWorkflow]]
+   * [[conductReportingWorkflow]]. The coalesced report carries the latest timestamp
+   * of the site's reports, i.e. the time of the last communication attempt.
    * @param responseLog collected base data
    * @return one report per site
    */
@@ -183,7 +184,7 @@ with BatchingUtil
         // getApiCompatibleDipSites would return a ResponsivityReport with a
         // version and all version info should be consistent anyway
         val version = reports.flatMap(_.versionString).headOption
-        ResponsivityReport(site, responsivity, version)
+        ResponsivityReport(site, responsivity, reports.map(_.timestamp).max, version)
       }
 
   /**
@@ -221,7 +222,7 @@ with BatchingUtil
       _ <- syncDeletions(validSites,responseLog,persistence)
     } yield {
       persistence.writeSiteAvailabilityReports(
-        coalesceResponsivityReports(responseLog.asScala), Instant.now(clock))
+        coalesceResponsivityReports(responseLog.asScala))
       log.debug("Reporting workflow completed")
     }}
   }
@@ -296,18 +297,18 @@ with BatchingUtil
       dipConnector.getApiVersion(site)
         .map {
           case Right(v) if isSiteApiVersionSupported(v) =>
-            availabilityBuffer.add(ResponsivityReport(site, Responsivity.success,Some(v)))
+            availabilityBuffer.add(ResponsivityReport(site, Responsivity.success, Instant.now(clock), Some(v)))
             Some(site)
           case Right(v) =>
-            availabilityBuffer.add(ResponsivityReport(site, Responsivity.success, Some(v)))
+            availabilityBuffer.add(ResponsivityReport(site, Responsivity.success, Instant.now(clock), Some(v)))
             None
           case Left(_) =>
-            availabilityBuffer.add(ResponsivityReport(site, Responsivity.failure))
+            availabilityBuffer.add(ResponsivityReport(site, Responsivity.failure, Instant.now(clock)))
             None
         }
         .recover {
           case _ =>
-            availabilityBuffer.add(ResponsivityReport(site, Responsivity.failure))
+            availabilityBuffer.add(ResponsivityReport(site, Responsivity.failure, Instant.now(clock)))
             None
         }
     }.map(_.flatten)
@@ -348,14 +349,14 @@ with BatchingUtil
                 case Success(Left(err)) =>
                   log.error(s"Problem polling $useCase SubmissionReports of " +
                     s"site $site: $err")
-                  availabilityBuffer.add(ResponsivityReport(site,Responsivity.failure))
+                  availabilityBuffer.add(ResponsivityReport(site, Responsivity.failure, Instant.now(clock)))
               }
               // Recover lest the Future traversal be "short-circuited" into a failed Future
               .recover {
                 case t =>
                   log.error(s"Error(s) occurred polling $useCase " +
                     s"SubmissionReports of $site", t)
-                  availabilityBuffer.add(ResponsivityReport(site,Responsivity.failure))
+                  availabilityBuffer.add(ResponsivityReport(site, Responsivity.failure, Instant.now(clock)))
                   t.getMessage.asLeft
               }
           }
@@ -440,7 +441,7 @@ with BatchingUtil
         //Logs either the error message from the submission confirmation request
         // or from queue removal
         case Success(Left(msg)) =>
-          availabilityBuffer.add(ResponsivityReport(report.site.code,Responsivity.failure))
+          availabilityBuffer.add(ResponsivityReport(report.site.code, Responsivity.failure, Instant.now(clock)))
           log.error(msg)
       }
       // Recover lest the Future traversal be "short-circuited" into a failed Future
@@ -448,7 +449,7 @@ with BatchingUtil
         case t =>
           log.error(s"Problem confirming submission: Site ${report.site.code}, " +
             s"TAN ${report.id} - ${t.getMessage}")
-          availabilityBuffer.add(ResponsivityReport(report.site.code,Responsivity.failure))
+          availabilityBuffer.add(ResponsivityReport(report.site.code, Responsivity.failure, Instant.now(clock)))
           t.getMessage.asLeft[Report]
       }
 
@@ -483,7 +484,7 @@ with BatchingUtil
           }
 
         case Left(downloadError) =>
-          availabilityBuffer.add(ResponsivityReport(report.site.code,Responsivity.failure))
+          availabilityBuffer.add(ResponsivityReport(report.site.code, Responsivity.failure, Instant.now(clock)))
           (s"Problem downloading submission for backup: Site ${report.site.code}, " +
             s"TAN ${report.id} - $downloadError").asLeft[Report]
       }
@@ -558,7 +559,7 @@ with BatchingUtil
                     persistence: PersistenceService = persistenceService):Future[Seq[DeletionEvent]] = {
     val versions =
       availabilityBuffer.asScala
-        .collect { case ResponsivityReport(site, _, Some(version)) => site -> version }
+        .collect { case ResponsivityReport(site, _, _, Some(version)) => site -> version }
         .toMap
     val (compatibleSites, outdatedSites) =
       validSites.partition(site => versions.get(site).exists(supportsDeletionEndpoint))
@@ -587,12 +588,12 @@ with BatchingUtil
           .andThen {
             case Success(Left(err)) =>
               log.error(s"Problem polling $useCase DeletionEvents of site $site: $err")
-              availabilityBuffer.add(ResponsivityReport(site,Responsivity.failure))
+              availabilityBuffer.add(ResponsivityReport(site, Responsivity.failure, Instant.now(clock)))
           }
           .recover {
             case t =>
               log.error(s"Error(s) occurred polling $useCase DeletionEvents of site $site", t)
-              availabilityBuffer.add(ResponsivityReport(site,Responsivity.failure))
+              availabilityBuffer.add(ResponsivityReport(site, Responsivity.failure, Instant.now(clock)))
               t.getMessage.asLeft
           }
     }

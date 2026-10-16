@@ -49,6 +49,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
   private val sites = Config.instance.sites.keys.toSeq
 
+  private val timestamp = Instant.parse("2026-04-30T12:00:00Z")
+
   it must "handle multiple uploads from every DIP node in one go" in {
     log.info("FakeDipConnector sending "+fakeDipConnector.nSubmissions+ " submissions per site")
     for {
@@ -96,12 +98,9 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     val fixedInstant = Instant.parse("2026-04-30T12:00:00Z")
 
     val capturedReports = ListBuffer.empty[ResponsivityReport]
-    var capturedInstant: Option[Instant] = None
     val capturingReporter = new PersistenceService {
-      override def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport], now: Instant): Unit = {
+      override def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport]): Unit =
         capturedReports ++= reports
-        capturedInstant = Some(now)
-      }
 
       override def backupReport(report: Report, content: => Encrypted): Either[String, Unit] = ???
       override def backupSubmission(report: Report, content: => Encrypted): Either[String, Unit] = ???
@@ -125,8 +124,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     for {
       _ <- testService.conductReportingWorkflow()
     } yield {
-      capturedInstant must be(Some(fixedInstant))
       capturedReports must not be empty
+      assert(capturedReports.forall(_.timestamp == fixedInstant))
       assert(capturedReports.forall(_.responsivity == Responsivity.success))
     }
   }
@@ -202,7 +201,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
     val capturedResponsivityReports = ListBuffer.empty[ResponsivityReport]
     val capturingReporter = new PersistenceService {
-      override def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport], now: Instant): Unit =
+      override def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport]): Unit =
         capturedResponsivityReports ++= reports
 
       override def backupReport(report: Report, content: => Encrypted): Either[String, Unit] = ???
@@ -242,8 +241,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     val site = sites.head
     val version = "1.3.0"
     val reports = ListBuffer(
-      ResponsivityReport(site, Responsivity.success, Some(version)),
-      ResponsivityReport(site, Responsivity.failure, None)
+      ResponsivityReport(site, Responsivity.success, timestamp, Some(version)),
+      ResponsivityReport(site, Responsivity.failure, timestamp, None)
     )
     val coalesced = service.coalesceResponsivityReports(reports)
     Future.successful {
@@ -254,12 +253,25 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
   it must "coalesce versionString: report None if no report for the site had one" in {
     val site = sites.head
     val reports = ListBuffer(
-      ResponsivityReport(site, Responsivity.failure, None),
-      ResponsivityReport(site, Responsivity.failure, None)
+      ResponsivityReport(site, Responsivity.failure, timestamp, None),
+      ResponsivityReport(site, Responsivity.failure, timestamp, None)
     )
     val coalesced = service.coalesceResponsivityReports(reports)
     Future.successful {
       assert(coalesced.forall(_.versionString.isEmpty))
+    }
+  }
+
+  it must "coalesce timestamp: pick the latest of the site's reports" in {
+    val site = sites.head
+    val later = timestamp.plusSeconds(30)
+    val reports = ListBuffer(
+      ResponsivityReport(site, Responsivity.success, later),
+      ResponsivityReport(site, Responsivity.failure, timestamp)
+    )
+    val coalesced = service.coalesceResponsivityReports(reports)
+    Future.successful {
+      coalesced.map(_.timestamp) mustBe List(later)
     }
   }
 
@@ -435,9 +447,9 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     )
     val Seq(updated, outdated, withoutVersion) = sites.take(3)
     val responseLog = new ConcurrentLinkedQueue[ResponsivityReport]
-    responseLog.add(ResponsivityReport(updated, Responsivity.success, Some("1.3.2")))
-    responseLog.add(ResponsivityReport(outdated, Responsivity.success, Some("1.3.1")))
-    responseLog.add(ResponsivityReport(withoutVersion, Responsivity.failure))
+    responseLog.add(ResponsivityReport(updated, Responsivity.success, timestamp, Some("1.3.2")))
+    responseLog.add(ResponsivityReport(outdated, Responsivity.success, timestamp, Some("1.3.1")))
+    responseLog.add(ResponsivityReport(withoutVersion, Responsivity.failure, timestamp))
 
     testService.syncDeletions(Seq(updated, outdated, withoutVersion), responseLog).map { _ =>
       queriedSites.asScala.toSet mustBe Set(updated)

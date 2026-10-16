@@ -2,6 +2,7 @@ package de.dnpm.ccdn.connector
 
 
 import java.time.{Instant, LocalDateTime}
+import java.util.Date
 import ch.qos.logback.classic.{Level, Logger}
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
@@ -11,7 +12,9 @@ import org.slf4j.LoggerFactory
 import scala.jdk.CollectionConverters._
 import de.dnpm.ccdn.core.EncryptionService.Encrypted
 import de.dnpm.ccdn.core.dip.Report
-import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.coding.{Code, Coding}
+import de.dnpm.ccdn.core.{Responsivity, ResponsivityReport}
+import play.api.libs.json.Json
 import de.dnpm.dip.model.{HealthInsurance, Id, Site}
 import de.dnpm.dip.service.mvh.UseCase
 import de.dnpm.dip.service.mvh.Submission.Type
@@ -37,12 +40,26 @@ final class MongodbPersistenceServiceImplTests extends AnyFlatSpec
     logger.addAppender(appender)
 
     try {
-      impl.writeSiteAvailabilityReports(Seq.empty, Instant.now())
+      impl.writeSiteAvailabilityReports(Seq.empty)
     } finally {
       val _ = logger.detachAppender(appender) // value discard is compile error
     }
 
     appender.list.asScala.filter(_.getLevel == Level.WARN) must not be empty
+  }
+
+  it must "serialize a ResponsivityReport with the timestamp as date" in {
+    import MongodbPersistenceServiceImpl.responsivityReportWrites
+    val timestamp = Instant.parse("2026-04-30T12:00:00.123Z")
+    val doc =
+      Document.parse(Json.stringify(Json.toJson(
+        ResponsivityReport(Code[Site]("UKT"), Responsivity.success, timestamp)
+      )))
+
+    doc.getString("site") mustBe "UKT"
+    doc.getString("responsivity") mustBe Responsivity.success.toString
+    doc.getString("apiVersion") mustBe "???"
+    doc.getDate("timestamp") mustBe Date.from(timestamp)
   }
 
   it must "reject a malformed MongoDB URI" in {
