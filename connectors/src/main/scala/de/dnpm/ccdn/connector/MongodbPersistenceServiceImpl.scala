@@ -99,6 +99,18 @@ object MongodbPersistenceServiceImpl extends Logging
   }
 
   /**
+   * Types of documents in [[BACKUP_COLLECTION]] (and their parts in
+   * [[LARGE_BACKUP_PARTS_COLLECTION]]), stored as the value's name in field "type"
+   */
+  private[connector] object BackupDocumentType extends Enumeration
+  {
+    val Report: Value     = Value("report")
+    val Submission: Value = Value("submission")
+    val Deletion: Value   = Value("deletion")
+    //also manual-deletion
+  }
+
+  /**
    * The report in plain JSON, with "createdAt" replaced by a floating UTC date, and
    * "year" and "quarter" derived from it.
    */
@@ -294,7 +306,7 @@ final class MongodbPersistenceServiceImpl private (
   override def backupReport(report: Report, content: => EncryptionService.Encrypted): Either[String, Unit] =
     storeBackup(
       report,
-      "report",
+      BackupDocumentType.Report,
       content,
       s"Report ${report.id.value} from site ${report.site.code}"
     )
@@ -305,7 +317,7 @@ final class MongodbPersistenceServiceImpl private (
   override def backupSubmission(report: Report, content: => EncryptionService.Encrypted): Either[String, Unit] =
     storeBackup(
       report,
-      "submission",
+      BackupDocumentType.Submission,
       content,
       s"Submission ${report.id.value} from site ${report.site.code}"
     )
@@ -321,12 +333,13 @@ final class MongodbPersistenceServiceImpl private (
       site,
       usecase,
       deletionEvent.dateTime,
-      "deletion",
+      BackupDocumentType.Deletion,
       content,
       s"DeletionEvent ${deletionEvent.tan.value} from site ${site.code}"
     )
 
-  private def storeBackup(report: Report,documentType: String,content: => EncryptionService.Encrypted,context: String
+  private def storeBackup(report: Report,documentType: BackupDocumentType.Value,
+                          content: => EncryptionService.Encrypted,context: String
   ): Either[String, Unit] =
     storeBackup(report.id.value, report.site, report.useCase, report.createdAt, documentType, content, context)
 
@@ -345,7 +358,7 @@ final class MongodbPersistenceServiceImpl private (
    * is a failure like any other database error, and logged as error.
    */
   private def storeBackup(tan: String,site: Coding[Site],usecase: UseCase.Value,
-                          submittedAt: LocalDateTime,documentType: String,
+                          submittedAt: LocalDateTime,documentType: BackupDocumentType.Value,
                           content: => EncryptionService.Encrypted, context: String
   ): Either[String, Unit] =
     for {
@@ -360,7 +373,7 @@ final class MongodbPersistenceServiceImpl private (
                         coll.find(
                           Filters.and(
                             Filters.eq("tan", tan),
-                            Filters.eq("type", documentType),
+                            Filters.eq("type", documentType.toString),
                             Filters.eq("site", site.code.value),
                             Filters.eq("usecase", usecase.toString)
                           )
@@ -372,7 +385,7 @@ final class MongodbPersistenceServiceImpl private (
                           new Document("tan", tan)
                             .append("site", site.code.value)
                             .append("usecase", usecase.toString)
-                            .append("type", documentType)
+                            .append("type", documentType.toString)
                             .append("content", encrypted)
                             .append("submittedAt", submittedAt.format(ISO_LOCAL_DATE_TIME))
                         if (parts.isEmpty) coll.insertOne(doc)
@@ -383,7 +396,7 @@ final class MongodbPersistenceServiceImpl private (
                               .append("tan", tan)
                               .append("site", site.code.value)
                               .append("usecase", usecase.toString)
-                              .append("type", documentType)
+                              .append("type", documentType.toString)
                           }
                           // one by one, since a single insert command is limited to 48 MB
                           parts.foreach(partsColl.insertOne)
@@ -441,7 +454,9 @@ final class MongodbPersistenceServiceImpl private (
               Filters.eq("tan", tan),
               Filters.eq("site", site.code.value),
               Filters.eq("usecase", usecase.toString),
-              Filters.in("type", "submission", "report")
+              Filters.in("type",
+                BackupDocumentType.Submission.toString,
+                BackupDocumentType.Report.toString)
             )
           val deleted = db.getCollection(BACKUP_COLLECTION).deleteMany(filter).getDeletedCount
           // after the backup documents, so that none is left pointing to removed parts
