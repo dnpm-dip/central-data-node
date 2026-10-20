@@ -1,7 +1,7 @@
 package de.dnpm.ccdn.core
 
 
-import de.dnpm.ccdn.core.EncryptionService.Encrypted
+import de.dnpm.ccdn.core.Encryptor.Encrypted
 import de.dnpm.ccdn.core.dip.Report
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.Site

@@ -1,7 +1,7 @@
 package de.dnpm.ccdn.connector
 
 
-import de.dnpm.ccdn.core.EncryptionService
+import de.dnpm.ccdn.core.Encryptor
 
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
@@ -14,9 +14,9 @@ import org.scalatest.flatspec.AnyFlatSpec
 import play.api.libs.json.Json
 
 
-class RsaHybridEncryptionServiceImplTests extends AnyFlatSpec
+class RsaHybridEncryptorTests extends AnyFlatSpec
 {
-  behavior of "RsaHybridEncryptionServiceImpl"
+  behavior of "RsaHybridEncryptor"
 
   private val keyPair = {
     val gen = KeyPairGenerator.getInstance("RSA")
@@ -35,16 +35,16 @@ class RsaHybridEncryptionServiceImplTests extends AnyFlatSpec
   }
 
   private val toTest =
-    new RsaHybridEncryptionServiceImpl(
-      RsaHybridEncryptionServiceImpl.loadPublicKey(publicKeyPemFile.toString)
+    new RsaHybridEncryptor(
+      RsaHybridEncryptor.loadPublicKey(publicKeyPemFile.toString)
     )
 
   /**
-   * Mirrors the two-step shell decryption documented on [[RsaHybridEncryptionServiceImpl]]:
+   * Mirrors the two-step shell decryption documented on [[RsaHybridEncryptor]]:
    * first recover the AES key with the RSA private key, then decrypt the
    * payload with that AES key and the transmitted IV
    */
-  private def decrypt(encrypted: EncryptionService.Encrypted, privateKey: PrivateKey): String = {
+  private def decrypt(encrypted: Encryptor.Encrypted, privateKey: PrivateKey): String = {
     // Parameters spelled out as in the documented openssl call (rsa_oaep_md:sha256, rsa_mgf1_md:sha256),
     // not taken from the JCE defaults, which use MGF1 with SHA-1
     val rsaCipher = Cipher.getInstance("RSA/ECB/OAEPPadding")
@@ -107,12 +107,12 @@ class RsaHybridEncryptionServiceImplTests extends AnyFlatSpec
   }
 
   it must "load from a valid public key file" in {
-    RsaHybridEncryptionServiceImpl.fromPublicKeyFile(publicKeyPemFile.toString)
+    RsaHybridEncryptor.fromPublicKeyFile(publicKeyPemFile.toString)
   }
 
   it must "fail to load from a missing public key file" in {
     assertThrows[Exception](
-      RsaHybridEncryptionServiceImpl.fromPublicKeyFile(publicKeyPemFile.toString + ".missing")
+      RsaHybridEncryptor.fromPublicKeyFile(publicKeyPemFile.toString + ".missing")
     )
   }
 
@@ -121,7 +121,7 @@ class RsaHybridEncryptionServiceImplTests extends AnyFlatSpec
     Files.write(file, "-----BEGIN PUBLIC KEY-----\nbm90IGEga2V5\n-----END PUBLIC KEY-----\n".getBytes(UTF_8))
 
     assertThrows[Exception](
-      RsaHybridEncryptionServiceImpl.fromPublicKeyFile(file.toString)
+      RsaHybridEncryptor.fromPublicKeyFile(file.toString)
     )
   }
 

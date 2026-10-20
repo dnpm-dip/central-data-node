@@ -17,7 +17,7 @@ import de.dnpm.ccdn.core.{
   ResponsivityReport,
   PersistenceService,
   PersistenceServiceProvider,
-  EncryptionService
+  Encryptor
 }
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.Site
@@ -165,7 +165,7 @@ object MongodbPersistenceServiceImpl extends Logging
    * The concatenation of the parts' "ciphertext" in this order is the original ciphertext.
    */
   private[connector] def splitEncrypted(
-    encrypted: EncryptionService.Encrypted,
+    encrypted: Encryptor.Encrypted,
     maxCiphertextLength: Int = MAX_CIPHERTEXT_LENGTH
   ): (Document, Seq[Document]) =
     if (encrypted.ciphertext.length <= maxCiphertextLength)
@@ -303,7 +303,7 @@ final class MongodbPersistenceServiceImpl private (
   /**
    * Stores the encrypted report in collection [[BACKUP_COLLECTION]].
    */
-  override def backupReport(report: Report, content: => EncryptionService.Encrypted): Either[String, Unit] =
+  override def backupReport(report: Report, content: => Encryptor.Encrypted): Either[String, Unit] =
     storeBackup(
       report,
       BackupDocumentType.Report,
@@ -314,7 +314,7 @@ final class MongodbPersistenceServiceImpl private (
   /**
    * Stores the encrypted submission in collection [[BACKUP_COLLECTION]].
    */
-  override def backupSubmission(report: Report, content: => EncryptionService.Encrypted): Either[String, Unit] =
+  override def backupSubmission(report: Report, content: => Encryptor.Encrypted): Either[String, Unit] =
     storeBackup(
       report,
       BackupDocumentType.Submission,
@@ -327,7 +327,7 @@ final class MongodbPersistenceServiceImpl private (
    * Its "submittedAt" is the time of deletion.
    */
   override def backupDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent,
-                              content: => EncryptionService.Encrypted): Either[String, Unit] =
+                              content: => Encryptor.Encrypted): Either[String, Unit] =
     storeBackup(
       deletionEvent.tan.value,
       site,
@@ -339,7 +339,7 @@ final class MongodbPersistenceServiceImpl private (
     )
 
   private def storeBackup(report: Report,documentType: BackupDocumentType.Value,
-                          content: => EncryptionService.Encrypted,context: String
+                          content: => Encryptor.Encrypted,context: String
   ): Either[String, Unit] =
     storeBackup(report.id.value, report.site, report.useCase, report.createdAt, documentType, content, context)
 
@@ -359,7 +359,7 @@ final class MongodbPersistenceServiceImpl private (
    */
   private def storeBackup(tan: String,site: Coding[Site],usecase: UseCase.Value,
                           submittedAt: LocalDateTime,documentType: BackupDocumentType.Value,
-                          content: => EncryptionService.Encrypted, context: String
+                          content: => Encryptor.Encrypted, context: String
   ): Either[String, Unit] =
     for {
       inserted <- Try {
@@ -442,7 +442,7 @@ final class MongodbPersistenceServiceImpl private (
    * [[backupDeletion]] (which skips the insert if it is already present).
    */
   override def applyDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent,
-                             content: => EncryptionService.Encrypted): Either[String, Unit] = {
+                             content: => Encryptor.Encrypted): Either[String, Unit] = {
     val tan     = deletionEvent.tan.value
     val context = s"DeletionEvent $tan from site ${site.code}"
     for {

@@ -10,7 +10,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers._
 import org.slf4j.LoggerFactory
 import scala.jdk.CollectionConverters._
-import de.dnpm.ccdn.core.EncryptionService.Encrypted
+import de.dnpm.ccdn.core.Encryptor.Encrypted
 import de.dnpm.ccdn.core.dip.Report
 import de.dnpm.dip.coding.{Code, Coding}
 import de.dnpm.ccdn.core.{Responsivity, ResponsivityReport}

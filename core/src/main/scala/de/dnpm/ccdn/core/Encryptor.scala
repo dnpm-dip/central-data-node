@@ -17,22 +17,22 @@ import play.api.libs.json.{
  * submission backup workflow (see [[Submission.Report.Status.submissionBackedup]]).
  *
  * Implementations are expected to only ever hold the public half of an
- * asymmetric keypair, so that this service is able to encrypt but never to
+ * asymmetric keypair, so that this encryptor is able to encrypt but never to
  * decrypt; the matching private key required for decryption is kept
  * entirely outside of this application (see the implementation's
  * documentation for how to decrypt a result with it).
  */
-trait EncryptionService
+trait Encryptor
 {
-  def encrypt(payload: JsValue): EncryptionService.Encrypted
+  def encrypt(payload: JsValue): Encryptor.Encrypted
 }
 
 
-object EncryptionService extends SPILoader[EncryptionServiceProvider]
+object Encryptor extends SPILoader[EncryptorProvider]
 {
 
   /**
-   * Result of [[EncryptionService.encrypt]]: a JSON payload encrypted
+   * Result of [[Encryptor.encrypt]]: a JSON payload encrypted
    * with a hybrid RSA/AES scheme, i.e. a single-use AES key encrypts the
    * payload and is itself encrypted with an RSA public key. All binary
    * fields are base64-encoded.
@@ -54,4 +54,4 @@ object EncryptionService extends SPILoader[EncryptionServiceProvider]
 }
 
 
-trait EncryptionServiceProvider extends SPI[EncryptionService]
+trait EncryptorProvider extends SPI[Encryptor]

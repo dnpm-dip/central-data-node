@@ -35,7 +35,7 @@ object MVHReportingService extends Logging
       dip.DipConnector.getInstance.get,
       bfarm.BfarmConnector.getInstance.get,
       PersistenceService.getInstance.get,
-      EncryptionService.getInstance.get
+      Encryptor.getInstance.get
     )
 
   /**
@@ -76,7 +76,7 @@ class MVHReportingService
   private[core] val dipConnector: DipConnector,
   private[core] val bfarmConnector: BfarmConnector,
   private[core] val persistenceService: PersistenceService,
-  private[core] val encryptionService: EncryptionService
+  private[core] val encryptor: Encryptor
 )(
   implicit ec: ExecutionContext
 )
@@ -472,7 +472,7 @@ with BatchingUtil
     )(
       report => dipConnector.downloadSubmission(report).map {
         case Right(submission) =>
-          persistence.backupSubmission(report,encryptionService.encrypt(submission)) match {
+          persistence.backupSubmission(report,encryptor.encrypt(submission)) match {
             case Right(_) =>
               //backup saved successful
               val asBackedUp = report.copy(status = Status.SubmissionBackedup)
@@ -498,7 +498,7 @@ with BatchingUtil
   def backupReports(persistence: PersistenceService = persistenceService):Seq[Either[String,Report]] = {
     pollingQueue.entries(_.status == Status.SubmissionBackedup).map(
 
-      report => persistence.backupReport(report,encryptionService.encrypt(Json.toJson(report))) match {
+      report => persistence.backupReport(report,encryptor.encrypt(Json.toJson(report))) match {
         case Right(_) =>
           //backup saved successful
           val asBackedUp: Report = report.copy(status = Status.ReportBackedup)
@@ -579,7 +579,7 @@ with BatchingUtil
     ){
       case (site,useCase) =>
         deletionEventService.deletionEvents(site,useCase) { event =>
-          persistence.applyDeletion(Coding[Site](site.value),useCase,event,encryptionService.encrypt(Json.toJson(event)))
+          persistence.applyDeletion(Coding[Site](site.value),useCase,event,encryptor.encrypt(Json.toJson(event)))
             .left.map { err =>
               log.error(s"Failed to apply DeletionEvent ${event.tan.value} of site $site: $err")
               err

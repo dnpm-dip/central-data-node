@@ -12,17 +12,17 @@ import scala.util.Properties.{envOrNone, propOrNone}
 import scala.util.{Failure, Try}
 import play.api.libs.json.{JsValue, Json}
 import de.dnpm.dip.util.Logging
-import de.dnpm.ccdn.core.{EncryptionService, EncryptionServiceProvider}
+import de.dnpm.ccdn.core.{Encryptor, EncryptorProvider}
 
 
-final class RsaHybridEncryptionServiceProviderImpl extends EncryptionServiceProvider
+final class RsaHybridEncryptorProviderImpl extends EncryptorProvider
 {
-  override def getInstance: EncryptionService =
-    RsaHybridEncryptionServiceImpl.instance
+  override def getInstance: Encryptor =
+    RsaHybridEncryptor.instance
 }
 
 
-object RsaHybridEncryptionServiceImpl extends Logging
+object RsaHybridEncryptor extends Logging
 {
 
   private val PUBLIC_KEY_PATH_ENV  = "CCDN_BACKUP_ENCRYPTION_PUBLIC_KEY_PATH"
@@ -50,7 +50,7 @@ object RsaHybridEncryptionServiceImpl extends Logging
    * (see [[fromPublicKeyFile]]), so that the service does not start without being able
    * to encrypt backups
    */
-  lazy val instance: RsaHybridEncryptionServiceImpl = {
+  lazy val instance: RsaHybridEncryptor = {
     val path =
       envOrNone(PUBLIC_KEY_PATH_ENV).filter(_.nonEmpty)
         .orElse(propOrNone(PUBLIC_KEY_PATH_PROP).filter(_.nonEmpty))
@@ -67,7 +67,7 @@ object RsaHybridEncryptionServiceImpl extends Logging
   /**
    * Fails if the file is missing, unreadable or contains no valid RSA public key
    */
-  private[connector] def fromPublicKeyFile(path: String): RsaHybridEncryptionServiceImpl = {
+  private[connector] def fromPublicKeyFile(path: String): RsaHybridEncryptor = {
     if (!Files.isReadable(Paths.get(path))) {
       val msg = s"RSA public key file '$path' doesn't exist or isn't readable"
       log.error(msg)
@@ -80,7 +80,7 @@ object RsaHybridEncryptionServiceImpl extends Logging
           log.error(s"Couldn't load RSA public key from '$path', expected an X.509 PEM file ('-----BEGIN PUBLIC KEY-----')", t)
           Failure(t)
       }
-      .map(new RsaHybridEncryptionServiceImpl(_))
+      .map(new RsaHybridEncryptor(_))
       .get
   }
 
@@ -98,7 +98,7 @@ object RsaHybridEncryptionServiceImpl extends Logging
  *     using OAEP padding (SHA-256 for both the OAEP and the MGF1 hash)
  *
  * Only the RSA public key needs to be present on this system; decryption
- * requires the matching private key, which this service never holds
+ * requires the matching private key, which this encryptor never holds
  * (per the requirement that the key used to decrypt backups be kept
  * separately, itself password-protected).
  *
@@ -130,7 +130,7 @@ object RsaHybridEncryptionServiceImpl extends Logging
  *     -out payload.json
  * }}}
  */
-final class RsaHybridEncryptionServiceImpl(publicKey: PublicKey) extends EncryptionService
+final class RsaHybridEncryptor(publicKey: PublicKey) extends Encryptor
 {
 
   private val AesKeySizeBits = 256
@@ -146,7 +146,7 @@ final class RsaHybridEncryptionServiceImpl(publicKey: PublicKey) extends Encrypt
   private def encode(bytes: Array[Byte]): String =
     Base64.getEncoder.encodeToString(bytes)
 
-  override def encrypt(payload: JsValue): EncryptionService.Encrypted = {
+  override def encrypt(payload: JsValue): Encryptor.Encrypted = {
 
     val aesKey = {
       val keyGen = KeyGenerator.getInstance("AES")
@@ -165,7 +165,7 @@ final class RsaHybridEncryptionServiceImpl(publicKey: PublicKey) extends Encrypt
     rsaCipher.init(Cipher.ENCRYPT_MODE, publicKey, OaepParams)
     val encryptedKey = rsaCipher.doFinal(aesKey.getEncoded)
 
-    EncryptionService.Encrypted(
+    Encryptor.Encrypted(
       "RSA-OAEP-SHA256+AES-256-CBC",
       encode(encryptedKey),
       encode(iv),

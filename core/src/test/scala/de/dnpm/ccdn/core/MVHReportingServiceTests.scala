@@ -1,7 +1,7 @@
 package de.dnpm.ccdn.core
 
 
-import de.dnpm.ccdn.core.EncryptionService.Encrypted
+import de.dnpm.ccdn.core.Encryptor.Encrypted
 import de.dnpm.ccdn.core.dip.Report
 import de.dnpm.ccdn.core.dip.Report.Status
 import org.scalatest.flatspec.AsyncFlatSpec
@@ -44,7 +44,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       fakeDipConnector,
       fakeBfarmConnector,
       new FakePersistenceService,
-      new FakeEncryptionService
+      new FakeEncryptor
     )
 
   private val sites = Config.instance.sites.keys.toSeq
@@ -117,7 +117,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       connectorReturningVersion("0.9.0"),
       fakeBfarmConnector,
       capturingReporter,
-      new FakeEncryptionService
+      new FakeEncryptor
     )
     testService.clock = Clock.fixed(fixedInstant, ZoneOffset.UTC)
 
@@ -134,7 +134,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     val preCutover = Instant.parse("2026-05-31T23:59:59Z")
     val testService = new MVHReportingService(
       Config.instance, FakeReportRepository(), connectorReturningVersion("0.9.0"),
-      fakeBfarmConnector, new FakePersistenceService, new FakeEncryptionService
+      fakeBfarmConnector, new FakePersistenceService, new FakeEncryptor
     )
     testService.clock = Clock.fixed(preCutover, ZoneOffset.UTC)
 
@@ -151,7 +151,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       connectorReturningVersion("1.3.0-RELEASE_5"),
       fakeBfarmConnector,
       new FakePersistenceService,
-      new FakeEncryptionService
+      new FakeEncryptor
     )
     testService.clock = Clock.fixed(onCutover, ZoneOffset.UTC)
 
@@ -168,7 +168,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       connectorReturningVersion("1.2.4-BETA5-HOTFIX#133742"),
       fakeBfarmConnector,
       new FakePersistenceService,
-      new FakeEncryptionService
+      new FakeEncryptor
     )
     testService.clock = Clock.fixed(onCutover, ZoneOffset.UTC)
 
@@ -221,7 +221,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       failingDataConnector,
       fakeBfarmConnector,
       capturingReporter,
-      new FakeEncryptionService
+      new FakeEncryptor
     )
     testService.clock = Clock.fixed(preCutover, ZoneOffset.UTC)
 
@@ -367,7 +367,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
         override def backupSubmission(report: Report, content: => Encrypted): Either[String, Unit] =
           Right(())
       },
-      new FakeEncryptionService
+      new FakeEncryptor
     ) {
       override private[core] val nSimultaneousSubmissionDownloads: Int = batchSize
     }
@@ -409,7 +409,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
         override def backupForQuarterReport(report: Report): Either[String, Unit] =
           if (report.id == failing.id) Left("simulated storage failure") else Right(())
       },
-      new FakeEncryptionService
+      new FakeEncryptor
     )
 
     testService.flushReportQueue()
@@ -443,7 +443,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     }
     val testService = new MVHReportingService(
       Config.instance, FakeReportRepository(), connector, fakeBfarmConnector,
-      new FakePersistenceService, new FakeEncryptionService
+      new FakePersistenceService, new FakeEncryptor
     )
     val Seq(updated, outdated, withoutVersion) = sites.take(3)
     val responseLog = new ConcurrentLinkedQueue[ResponsivityReport]

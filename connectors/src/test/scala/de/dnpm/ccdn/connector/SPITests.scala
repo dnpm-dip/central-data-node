@@ -9,7 +9,7 @@ import java.util.Base64
 import scala.util.Failure
 import org.scalatest.flatspec.AnyFlatSpec
 import com.mongodb.MongoTimeoutException
-import de.dnpm.ccdn.core.{EncryptionService, ReportRepository, PersistenceService}
+import de.dnpm.ccdn.core.{Encryptor, ReportRepository, PersistenceService}
 import de.dnpm.ccdn.core.bfarm.BfarmConnector
 import de.dnpm.ccdn.core.dip.DipConnector
 
@@ -67,15 +67,15 @@ final class SPITests extends AnyFlatSpec
   private val persistenceService =
     PersistenceService.getInstance
 
-  private val encryptionService =
-    EncryptionService.getInstance
+  private val encryptor =
+    Encryptor.getInstance
 
 
   "SPI Loaders" must "load implementations" in {
     assert(dipConnector.isSuccess)
     assert(bfarmConnector.isSuccess)
     assert(reportQueue.isSuccess)
-    assert(encryptionService.isSuccess)
+    assert(encryptor.isSuccess)
   }
 
   it must "fail to load the PersistenceService if MongoDB is unreachable" in {
