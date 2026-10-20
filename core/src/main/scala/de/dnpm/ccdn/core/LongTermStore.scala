@@ -20,7 +20,7 @@ import de.dnpm.dip.util.{
  * Supposed to longterm persist some data, for example whether DIP
  * sites were available or backup of submission data
  */
-trait PersistenceService
+trait LongTermStore
 {
   def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport]): Unit
 
@@ -58,14 +58,14 @@ trait PersistenceService
   def backupForQuarterReport(report: Report): Either[String, Unit]
 
   /**
-   * Runs `f` with a PersistenceService whose operations all share the same underlying
+   * Runs `f` with a LongTermStore whose operations all share the same underlying
    * resources (e.g. a database client), which are released once the returned Future completes.
-   * By default, `f` is simply run with this service itself.
+   * By default, `f` is simply run with this store itself.
    */
-  def withSession[T](f: PersistenceService => Future[T])(implicit @unused ec: ExecutionContext): Future[T] =
+  def withSession[T](f: LongTermStore => Future[T])(implicit @unused ec: ExecutionContext): Future[T] =
     f(this)
 }
 
-trait PersistenceServiceProvider extends SPI[PersistenceService]
+trait LongTermStoreProvider extends SPI[LongTermStore]
 
-object PersistenceService extends SPILoader[PersistenceServiceProvider]
+object LongTermStore extends SPILoader[LongTermStoreProvider]

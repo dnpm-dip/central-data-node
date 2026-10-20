@@ -43,7 +43,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       ReportRepository.getInstance.get,
       fakeDipConnector,
       fakeBfarmConnector,
-      new FakePersistenceService,
+      new FakeLongTermStore,
       new FakeEncryptor
     )
 
@@ -98,7 +98,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     val fixedInstant = Instant.parse("2026-04-30T12:00:00Z")
 
     val capturedReports = ListBuffer.empty[ResponsivityReport]
-    val capturingReporter = new PersistenceService {
+    val capturingReporter = new LongTermStore {
       override def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport]): Unit =
         capturedReports ++= reports
 
@@ -134,7 +134,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     val preCutover = Instant.parse("2026-05-31T23:59:59Z")
     val testService = new MVHReportingService(
       Config.instance, FakeReportRepository(), connectorReturningVersion("0.9.0"),
-      fakeBfarmConnector, new FakePersistenceService, new FakeEncryptor
+      fakeBfarmConnector, new FakeLongTermStore, new FakeEncryptor
     )
     testService.clock = Clock.fixed(preCutover, ZoneOffset.UTC)
 
@@ -150,7 +150,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       FakeReportRepository(),
       connectorReturningVersion("1.3.0-RELEASE_5"),
       fakeBfarmConnector,
-      new FakePersistenceService,
+      new FakeLongTermStore,
       new FakeEncryptor
     )
     testService.clock = Clock.fixed(onCutover, ZoneOffset.UTC)
@@ -167,7 +167,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       FakeReportRepository(),
       connectorReturningVersion("1.2.4-BETA5-HOTFIX#133742"),
       fakeBfarmConnector,
-      new FakePersistenceService,
+      new FakeLongTermStore,
       new FakeEncryptor
     )
     testService.clock = Clock.fixed(onCutover, ZoneOffset.UTC)
@@ -200,7 +200,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     }
 
     val capturedResponsivityReports = ListBuffer.empty[ResponsivityReport]
-    val capturingReporter = new PersistenceService {
+    val capturingReporter = new LongTermStore {
       override def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport]): Unit =
         capturedResponsivityReports ++= reports
 
@@ -363,7 +363,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       queue,
       countingConnector,
       fakeBfarmConnector,
-      new FakePersistenceService {
+      new FakeLongTermStore {
         override def backupSubmission(report: Report, content: => Encrypted): Either[String, Unit] =
           Right(())
       },
@@ -405,7 +405,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       queue,
       fakeDipConnector,
       fakeBfarmConnector,
-      new FakePersistenceService {
+      new FakeLongTermStore {
         override def backupForQuarterReport(report: Report): Either[String, Unit] =
           if (report.id == failing.id) Left("simulated storage failure") else Right(())
       },
@@ -443,7 +443,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     }
     val testService = new MVHReportingService(
       Config.instance, FakeReportRepository(), connector, fakeBfarmConnector,
-      new FakePersistenceService, new FakeEncryptor
+      new FakeLongTermStore, new FakeEncryptor
     )
     val Seq(updated, outdated, withoutVersion) = sites.take(3)
     val responseLog = new ConcurrentLinkedQueue[ResponsivityReport]

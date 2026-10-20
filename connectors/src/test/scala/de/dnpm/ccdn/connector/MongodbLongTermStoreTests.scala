@@ -21,20 +21,20 @@ import de.dnpm.dip.service.mvh.Submission.Type
 import org.bson.Document
 
 
-final class MongodbPersistenceServiceImplTests extends AnyFlatSpec
+final class MongodbLongTermStoreTests extends AnyFlatSpec
 {
 
-  behavior of "MongodbPersistenceServiceImpl"
+  behavior of "MongodbLongTermStore"
 
   it must "log a warning when called with an empty set of reports" in {
     // While SLF4J is being initialized (possibly concurrently by another suite),
     // it hands out SubstituteLoggers, so wait for the actual logback Logger
     val logger =
-      Iterator.continually(LoggerFactory.getLogger(classOf[MongodbPersistenceServiceImpl]))
+      Iterator.continually(LoggerFactory.getLogger(classOf[MongodbLongTermStore]))
         .collectFirst { case l: Logger => l }
         .get
     // created afterwards, so that it doesn't get a SubstituteLogger itself
-    val impl = new MongodbPersistenceServiceImpl("mongodb://somewhere")
+    val impl = new MongodbLongTermStore("mongodb://somewhere")
     val appender = new ListAppender[ILoggingEvent]
     appender.start()
     logger.addAppender(appender)
@@ -49,7 +49,7 @@ final class MongodbPersistenceServiceImplTests extends AnyFlatSpec
   }
 
   it must "serialize a ResponsivityReport with the timestamp as date" in {
-    import MongodbPersistenceServiceImpl.responsivityReportWrites
+    import MongodbLongTermStore.responsivityReportWrites
     val timestamp = Instant.parse("2026-04-30T12:00:00.123Z")
     val doc =
       Document.parse(Json.stringify(Json.toJson(
@@ -63,7 +63,7 @@ final class MongodbPersistenceServiceImplTests extends AnyFlatSpec
   }
 
   it must "reject a malformed MongoDB URI" in {
-    an [IllegalArgumentException] must be thrownBy new MongodbPersistenceServiceImpl("somewhere")
+    an [IllegalArgumentException] must be thrownBy new MongodbLongTermStore("somewhere")
   }
 
   private def reportCreatedAt(createdAt: LocalDateTime): Report =
@@ -83,7 +83,7 @@ final class MongodbPersistenceServiceImplTests extends AnyFlatSpec
 
   it must "store createdAt as floating UTC date, keeping the wall-clock time" in {
     val createdAt = LocalDateTime.of(2026, 3, 29, 2, 30) // non-existent hour in Germany (DST change)
-    val doc = MongodbPersistenceServiceImpl.quarterReportDocument(reportCreatedAt(createdAt))
+    val doc = MongodbLongTermStore.quarterReportDocument(reportCreatedAt(createdAt))
 
     doc.get("createdAt") mustBe a [java.util.Date]
     doc.getDate("createdAt").toInstant mustBe Instant.parse("2026-03-29T02:30:00Z")
@@ -91,7 +91,7 @@ final class MongodbPersistenceServiceImplTests extends AnyFlatSpec
 
   it must "derive year and quarter from createdAt at the quarter boundaries" in {
     def yearAndQuarter(createdAt: LocalDateTime): (Int, Int) = {
-      val doc = MongodbPersistenceServiceImpl.quarterReportDocument(reportCreatedAt(createdAt))
+      val doc = MongodbLongTermStore.quarterReportDocument(reportCreatedAt(createdAt))
       (doc.getInteger("year").intValue, doc.getInteger("quarter").intValue)
     }
 
@@ -105,7 +105,7 @@ final class MongodbPersistenceServiceImplTests extends AnyFlatSpec
   }
 
   it must "contain the fields the quarter report indexes are built on" in {
-    val doc = MongodbPersistenceServiceImpl.quarterReportDocument(reportCreatedAt(LocalDateTime.now))
+    val doc = MongodbLongTermStore.quarterReportDocument(reportCreatedAt(LocalDateTime.now))
 
     doc.getString("id") mustBe "123"
     doc.get("site", classOf[Document]).getString("code") mustBe "UKT"
@@ -116,8 +116,8 @@ final class MongodbPersistenceServiceImplTests extends AnyFlatSpec
     Encrypted("RSA/AES", "key", "iv", "A" * length)
 
   it must "keep a ciphertext of the maximum length in the backup document" in {
-    val max = MongodbPersistenceServiceImpl.MAX_CIPHERTEXT_LENGTH
-    val (content, parts) = MongodbPersistenceServiceImpl.splitEncrypted(encryptedWithCiphertextLength(max))
+    val max = MongodbLongTermStore.MAX_CIPHERTEXT_LENGTH
+    val (content, parts) = MongodbLongTermStore.splitEncrypted(encryptedWithCiphertextLength(max))
 
     parts mustBe empty
     content.getString("ciphertext").length mustBe max
@@ -125,9 +125,9 @@ final class MongodbPersistenceServiceImplTests extends AnyFlatSpec
   }
 
   it must "split a ciphertext exceeding the maximum length into parts pointed to by the backup document" in {
-    val max       = MongodbPersistenceServiceImpl.MAX_CIPHERTEXT_LENGTH
+    val max       = MongodbLongTermStore.MAX_CIPHERTEXT_LENGTH
     val encrypted = encryptedWithCiphertextLength(max + 1)
-    val (content, parts) = MongodbPersistenceServiceImpl.splitEncrypted(encrypted)
+    val (content, parts) = MongodbLongTermStore.splitEncrypted(encrypted)
 
     content.containsKey("ciphertext") mustBe false
     content.getString("algorithm") mustBe encrypted.algorithm

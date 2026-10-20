@@ -9,7 +9,7 @@ import java.util.Base64
 import scala.util.Failure
 import org.scalatest.flatspec.AnyFlatSpec
 import com.mongodb.MongoTimeoutException
-import de.dnpm.ccdn.core.{Encryptor, ReportRepository, PersistenceService}
+import de.dnpm.ccdn.core.{Encryptor, ReportRepository, LongTermStore}
 import de.dnpm.ccdn.core.bfarm.BfarmConnector
 import de.dnpm.ccdn.core.dip.DipConnector
 
@@ -64,8 +64,8 @@ final class SPITests extends AnyFlatSpec
           Failure(t)
       }
 
-  private val persistenceService =
-    PersistenceService.getInstance
+  private val longTermStore =
+    LongTermStore.getInstance
 
   private val encryptor =
     Encryptor.getInstance
@@ -78,9 +78,9 @@ final class SPITests extends AnyFlatSpec
     assert(encryptor.isSuccess)
   }
 
-  it must "fail to load the PersistenceService if MongoDB is unreachable" in {
+  it must "fail to load the LongTermStore if MongoDB is unreachable" in {
     // the timeout of the ping shows that the implementation was found and instantiated
-    assert(persistenceService.failed.toOption.exists(_.isInstanceOf[MongoTimeoutException]))
+    assert(longTermStore.failed.toOption.exists(_.isInstanceOf[MongoTimeoutException]))
   }
 
 }

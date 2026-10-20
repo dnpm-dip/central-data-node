@@ -9,15 +9,15 @@ import de.dnpm.dip.service.mvh.{MVHService, UseCase}
 
 
 
-final class FakePersistenceServiceProvider extends PersistenceServiceProvider
+final class FakeLongTermStoreProvider extends LongTermStoreProvider
 {
-  override def getInstance: PersistenceService =
-    new FakePersistenceService
+  override def getInstance: LongTermStore =
+    new FakeLongTermStore
 }
 
 // Only implements the methods the tests need, the rest is left as ???
 //noinspection NotImplementedCode
-class FakePersistenceService extends PersistenceService
+class FakeLongTermStore extends LongTermStore
 {
   override def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport]): Unit = ()
 

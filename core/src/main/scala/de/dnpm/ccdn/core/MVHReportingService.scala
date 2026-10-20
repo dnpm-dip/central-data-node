@@ -34,7 +34,7 @@ object MVHReportingService extends Logging
       ReportRepository.getInstance.get,
       dip.DipConnector.getInstance.get,
       bfarm.BfarmConnector.getInstance.get,
-      PersistenceService.getInstance.get,
+      LongTermStore.getInstance.get,
       Encryptor.getInstance.get
     )
 
@@ -75,7 +75,7 @@ class MVHReportingService
   private[core] val pollingQueue: ReportRepository,
   private[core] val dipConnector: DipConnector,
   private[core] val bfarmConnector: BfarmConnector,
-  private[core] val persistenceService: PersistenceService,
+  private[core] val longTermStore: LongTermStore,
   private[core] val encryptor: Encryptor
 )(
   implicit ec: ExecutionContext
@@ -190,8 +190,8 @@ with BatchingUtil
   /**
    * Executes one full cycle of the reporting workflow: checks site API versions,
    * drains any pre-existing queue entries, polls new reports, uploads them to
-   * BfArM, and confirms back. Logs responsivity via [[PersistenceService]].
-   * All persistence operations share one session, see [[PersistenceService.withSession]]
+   * BfArM, and confirms back. Logs responsivity via [[LongTermStore]].
+   * All persistence operations share one session, see [[LongTermStore.withSession]]
    */
   private[core] def conductReportingWorkflow(): Future[Unit] = {
 
@@ -203,7 +203,7 @@ with BatchingUtil
     // checkSiteApiVersion will store a success item for every site that was
     // available, so it is sufficient for the other functions to merely report
     // failures. The endresult is reduced into a single value per site after the for loop.
-    persistenceService.withSession { persistence => for {
+    longTermStore.withSession { persistence => for {
       responseLog <- Future.successful(new ConcurrentLinkedQueue[ResponsivityReport])
       validSites <- getApiCompatibleDipSites(responseLog)
       // Start by draining the report queue, if non-empty (in case the service
@@ -457,7 +457,7 @@ with BatchingUtil
 
   def backupSubmissions(minNumDownloads:Int, validSites: Seq[Code[Site]],
                         availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport],
-                        persistence: PersistenceService = persistenceService):Future[Any] = {
+                        persistence: LongTermStore = longTermStore):Future[Any] = {
     val numDownloads:Int = minNumDownloads match {
       //download and store at least as many submissions as reports were fetched, but at least config.polling.minNumSubmissionDownloads
       case n if n >= config.polling.minNumSubmissionDownloads => n
@@ -495,7 +495,7 @@ with BatchingUtil
    * Stores the reports (with MVH consent) after their submission was stored
    * @return
    */
-  def backupReports(persistence: PersistenceService = persistenceService):Seq[Either[String,Report]] = {
+  def backupReports(persistence: LongTermStore = longTermStore):Seq[Either[String,Report]] = {
     pollingQueue.entries(_.status == Status.SubmissionBackedup).map(
 
       report => persistence.backupReport(report,encryptor.encrypt(Json.toJson(report))) match {
@@ -514,12 +514,12 @@ with BatchingUtil
 
   /**
    * Checks the queue for submissions the final state, stores them for the quarter report
-   * via [[PersistenceService.backupForQuarterReport]] and removes them from the queue.
+   * via [[LongTermStore.backupForQuarterReport]] and removes them from the queue.
    * If storing fails, the report stays in the queue and is retried in the next cycle.
    * Right now, using ArchivingReportRepository removal additionally means, that they are
    * archived in the filesystem
    */
-  def flushReportQueue(persistence: PersistenceService = persistenceService):Unit = {
+  def flushReportQueue(persistence: LongTermStore = longTermStore):Unit = {
 
     pollingQueue.entries(
         report => report.status == Status.ReportBackedup ||
@@ -549,14 +549,14 @@ with BatchingUtil
    * and their active UseCases. The other sites are skipped, which is logged once at info level.
    * For each, fetches every
    * [[DeletionEvent]] that occurred since each was last queried, via [[deletionEventService]],
-   * and applies each of them to the backups via [[PersistenceService.applyDeletion]].
+   * and applies each of them to the backups via [[LongTermStore.applyDeletion]].
    * A site's last-queried timestamp is only advanced if all of its events were applied successfully.
    *
    * @return all successfully applied DeletionEvents
    */
   def syncDeletions(validSites: Seq[Code[Site]],
                     availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport],
-                    persistence: PersistenceService = persistenceService):Future[Seq[DeletionEvent]] = {
+                    persistence: LongTermStore = longTermStore):Future[Seq[DeletionEvent]] = {
     val versions =
       availabilityBuffer.asScala
         .collect { case ResponsivityReport(site, _, _, Some(version)) => site -> version }

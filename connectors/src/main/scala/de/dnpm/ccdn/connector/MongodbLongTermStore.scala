@@ -15,8 +15,8 @@ import org.bson.conversions.Bson
 import de.dnpm.dip.util.Logging
 import de.dnpm.ccdn.core.{
   ResponsivityReport,
-  PersistenceService,
-  PersistenceServiceProvider,
+  LongTermStore,
+  LongTermStoreProvider,
   Encryptor
 }
 import de.dnpm.dip.coding.Coding
@@ -31,13 +31,13 @@ import scala.util.{Failure, Success, Try}
 import scala.util.Properties.{envOrNone, propOrNone}
 
 
-final class PersistenceServiceProviderImpl extends PersistenceServiceProvider
+final class LongTermStoreProviderImpl extends LongTermStoreProvider
 {
-  override def getInstance: PersistenceService =
-    MongodbPersistenceServiceImpl.instance
+  override def getInstance: LongTermStore =
+    MongodbLongTermStore.instance
 }
 
-object MongodbPersistenceServiceImpl extends Logging
+object MongodbLongTermStore extends Logging
 {
   private val MONGODBURIJVMPROP = "ccdn.mongodb.uri"
   private val MONGODBURIENVVAR  = "CCDN_MONGODB_URI"
@@ -189,10 +189,10 @@ object MongodbPersistenceServiceImpl extends Logging
 
   /**
    * Fails (like the other connectors) if the MongoDB URI is not configured or malformed,
-   * or if the database cannot be reached with it (see [[MongodbPersistenceServiceImpl#ping]]),
+   * or if the database cannot be reached with it (see [[MongodbLongTermStore#ping]]),
    * so that the service does not start without being able to persist backups
    */
-  lazy val instance: MongodbPersistenceServiceImpl = {
+  lazy val instance: MongodbLongTermStore = {
     val uri =
       envOrNone(MONGODBURIENVVAR).filter(_.nonEmpty)
         .orElse(propOrNone(MONGODBURIJVMPROP).filter(_.nonEmpty))
@@ -203,7 +203,7 @@ object MongodbPersistenceServiceImpl extends Logging
           throw new Exception(msg)
         }
 
-    Try(new MongodbPersistenceServiceImpl(uri))
+    Try(new MongodbLongTermStore(uri))
       .recoverWith {
         case t =>
           log.error(s"Invalid MongoDB URI configured via ENV variable $MONGODBURIENVVAR or system property $MONGODBURIJVMPROP", t)
@@ -228,13 +228,13 @@ object MongodbPersistenceServiceImpl extends Logging
  * @param sharedClient      if defined, used by all operations (and not closed by them), see
  *                          [[withSession]]; otherwise each operation creates and closes its own client
  */
-final class MongodbPersistenceServiceImpl private (
+final class MongodbLongTermStore private (
   val mongoUri: String,
   sharedClient: Option[MongoClient]
-) extends PersistenceService with Logging
+) extends LongTermStore with Logging
 {
 
-  import MongodbPersistenceServiceImpl._
+  import MongodbLongTermStore._
 
   def this(mongoUri: String) = this(mongoUri, None)
 
@@ -266,16 +266,16 @@ final class MongodbPersistenceServiceImpl private (
     }
 
   /**
-   * Runs `f` with a view of this service whose operations all use one MongoClient (which is
+   * Runs `f` with a view of this store whose operations all use one MongoClient (which is
    * thread safe), closed once the returned Future completes. If the client cannot be created,
-   * `f` runs with this service, whose operations then each try (and report failures) on their own.
+   * `f` runs with this store, whose operations then each try (and report failures) on their own.
    */
-  override def withSession[T](f: PersistenceService => Future[T])(implicit ec: ExecutionContext): Future[T] =
+  override def withSession[T](f: LongTermStore => Future[T])(implicit ec: ExecutionContext): Future[T] =
     sharedClient match {
       case None =>
         Try(MongoClients.create(connectionString)) match {
           case Success(client) =>
-            Future.delegate(f(new MongodbPersistenceServiceImpl(mongoUri, Some(client))))
+            Future.delegate(f(new MongodbLongTermStore(mongoUri, Some(client))))
               .andThen { case _ => client.close() }
           case Failure(exc) =>
             log.error(s"Failed to create MongoDB client for session: ${exc.getMessage}")
