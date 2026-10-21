@@ -92,7 +92,8 @@ with BatchingUtil
     new DeletionEventService(config, dipConnector)
 
   /**
-   * Executes the runnable in [[pollingTask]] in regular intervals
+   * Executes the runnables in [[pollingTask]] and [[deletionTask]] in regular intervals.
+   * Being single-threaded, it ensures both workflows never run concurrently
    */
   private val pollingExecutor: ScheduledExecutorService =
     Executors.newSingleThreadScheduledExecutor
@@ -112,6 +113,15 @@ with BatchingUtil
    * Managed by [[pollingExecutor]]
    */
   private[core] var pollingTask: Option[JavaFuture[_]] = None
+
+  /**
+   * Regularly queries DIP sites for [[DeletionEvent]]s and applies them to the
+   * backups ([[conductDeletionWorkflow]]). The interval is retrieved from
+   * [[config#deletionEventPolling]].
+   *
+   * Managed by [[pollingExecutor]]
+   */
+  private[core] var deletionTask: Option[JavaFuture[_]] = None
 
   private val toSeconds =
     Map(
@@ -154,6 +164,26 @@ with BatchingUtil
           },
           delay,
           period,
+          TimeUnit.SECONDS
+        )
+      )
+
+    val deletionPeriod =
+      config.deletionEventPolling.period*toSeconds(config.deletionEventPolling.timeUnit)
+
+    log.info(s"Scheduling deletion event polling to start in $delay s with $deletionPeriod s period")
+
+    deletionTask =
+      Some(
+        pollingExecutor.scheduleAtFixedRate(
+          () => try {
+            Await.result(conductDeletionWorkflow(), Duration(45, TimeUnit.MINUTES))
+          } catch {
+            case _: java.util.concurrent.TimeoutException =>
+              log.error("Deletion workflow did not complete within the 45-minute timeout")
+          },
+          delay,
+          deletionPeriod,
           TimeUnit.SECONDS
         )
       )
@@ -219,7 +249,6 @@ with BatchingUtil
       _ <- backupSubmissions(numReportsThisIteration,validSites,responseLog,persistence) //should process as at least as many submissions
       _ = backupReports(persistence)
       _ = flushReportQueue(persistence)
-      _ <- syncDeletions(validSites,responseLog,persistence)
     } yield {
       persistence.writeSiteAvailabilityReports(
         coalesceResponsivityReports(responseLog.asScala))
@@ -227,11 +256,31 @@ with BatchingUtil
     }}
   }
 
+  /**
+   * Executes one full cycle of the deletion workflow: checks site API versions
+   * and applies all [[DeletionEvent]]s since the last cycle via [[syncDeletions]].
+   * Unlike [[conductReportingWorkflow]], no responsivity is logged.
+   * All persistence operations share one session, see [[LongTermStore.withSession]]
+   */
+  private[core] def conductDeletionWorkflow(): Future[Unit] = {
+
+    log.info("Conducting scheduled deletion workflow")
+
+    longTermStore.withSession { persistence => for {
+      // Only used to pass the sites' API versions on to syncDeletions, not persisted
+      versionLog <- Future.successful(new ConcurrentLinkedQueue[ResponsivityReport])
+      validSites <- getApiCompatibleDipSites(versionLog)
+      _ <- syncDeletions(validSites,versionLog,persistence)
+    } yield log.debug("Deletion workflow completed")
+    }
+  }
+
   def stop(): Unit = {
     log.info("Stopping MVH Reporting service")
 
-    // Gracefully stop pollingTask, if running
+    // Gracefully stop pollingTask and deletionTask, if running
     pollingTask.foreach(_ cancel false)
+    deletionTask.foreach(_ cancel false)
 
     log.debug("Finished stopping MVH Reporting service")
   }
@@ -515,6 +564,7 @@ with BatchingUtil
   /**
    * Checks the queue for submissions the final state, stores them for the quarter report
    * via [[LongTermStore.backupForQuarterReport]] and removes them from the queue.
+   * If storing fails, the report stays in the queue and is retried in the next cycle.
    * If storing fails, the report stays in the queue and is retried in the next cycle.
    * Right now, using ArchivingReportRepository removal additionally means, that they are
    * archived in the filesystem
