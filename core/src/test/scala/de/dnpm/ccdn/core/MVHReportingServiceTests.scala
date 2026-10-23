@@ -57,16 +57,12 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
       responseLog <- Future.successful(new ConcurrentLinkedQueue[ResponsivityReport])
       validSites <- service.getApiCompatibleDipSites(responseLog)
-      // Start by draining the report queue, if non-empty (in case the service
-      // had been interrupted) and it thus contains reports whose upload hasn't
-      // been confirmed to the origin DIP), in order to avoid polling them again
-      _ <- if (service.pollingQueue.exists(_.status == Status.Unsubmitted)) service.uploadReports else Future.unit
-      oldConfirmations <- if (service.pollingQueue.exists(_.status == Status.SubmittedToBfarm)) service.confirmReports(responseLog) else Future.successful(Seq.empty)
+      _ <- if (service.pollingQueue.exists(_.status == Status.SubmittedToBfarm)) service.confirmReportsToSource(responseLog) else Future.unit
       _ <- service.pollReports(validSites,responseLog)
-      _ <- service.uploadReports
-      freshConfirmations <- service.confirmReports(responseLog)
-      _ <- service.backupSubmissions(freshConfirmations.concat(oldConfirmations).count(_.isRight),validSites,responseLog) //should process as at least as many submissions
+      _ <- service.backupSubmissions(validSites,responseLog)
       _ = service.backupReports()
+      _ <- service.uploadReportsToBfarm
+      _ <- service.confirmReportsToSource(responseLog)
       _ = service.flushReportQueue()
       _ <- service.syncDeletions(validSites,responseLog)
 
@@ -294,9 +290,9 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
       _ <- service.pollReports(sites, new ConcurrentLinkedQueue())
 
-      _ <- service.uploadReports
+      _ <- service.uploadReportsToBfarm
 
-      _ <- service.confirmReports(new ConcurrentLinkedQueue())
+      _ <- service.confirmReportsToSource(new ConcurrentLinkedQueue())
 
     } yield{
 
@@ -343,7 +339,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
         LocalDateTime.of(2026, 7, 1, 12, 0),
         Id[Patient]("42"),
         None,
-        Status.ConfirmedToSource,
+        Status.Unsubmitted,
         Coding[Site](site.value),
         UseCase.MTB,
         Type.Initial,
@@ -373,10 +369,85 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     }
 
     for {
-      _ <- testService.backupSubmissions(nReports, Seq(site), new ConcurrentLinkedQueue())
+      _ <- testService.backupSubmissions(Seq(site), new ConcurrentLinkedQueue())
     } yield {
       assertResult(nReports, "Setup assertion failed: not all submissions were downloaded")(nDownloads.get)
       assert(maxSimultaneousDownloads.get <= batchSize)
+    }
+  }
+
+  it must "back up submission and report before uploading to BfArM and confirming to the source" in {
+    val site = sites.head
+    // Records the order of the steps per TAN
+    val steps = new ConcurrentLinkedQueue[(String, String)]
+
+    def report(tan: String, mvhConsent: Boolean) =
+      Report(
+        Id[TransferTAN](tan),
+        LocalDateTime.of(2026, 7, 1, 12, 0),
+        Id[Patient]("42"),
+        None,
+        Status.Unsubmitted,
+        Coding[Site](site.value),
+        UseCase.MTB,
+        Type.Initial,
+        None, None, None,
+        HealthInsurance.Type.GKV,
+        Some(Map(Consent.Category.ModelProject -> mvhConsent)),
+        None, None
+      )
+    val consented    = report("consented", mvhConsent = true)
+    val notConsented = report("not-consented", mvhConsent = false)
+    val failing      = report("failing-download", mvhConsent = true)
+
+    val connector = new FakeDIPConnector {
+      override def submissionReports(site: Code[Site], useCase: UseCase.Value, filter: Report.Filter)
+          (implicit ec: ExecutionContext): Future[Either[String, Seq[Report]]] =
+        Future.successful(Right(Seq.empty))
+      override def confirmSubmitted(report: Report)(implicit ec: ExecutionContext)
+      : Future[Either[String, Report]] = {
+        steps.add(report.id.value -> "confirm")
+        Future.successful(Right(report))
+      }
+      override def downloadSubmission(report: Report)(implicit env: ExecutionContext)
+      : Future[Either[String, JsValue]] =
+        Future.successful(
+          if (report.id == failing.id) Left("simulated deleted submission")
+          else Right(Json.obj("tan" -> report.id.value))
+        )
+    }
+    val bfarmConnector = new FakeBfarmConnector {
+      override def upload(report: bfarm.SubmissionReport)(implicit ec: ExecutionContext)
+      : Future[Either[String, Unit]] = {
+        steps.add(report.SubmittedCase.tan.value -> "upload")
+        Future.successful(Right(()))
+      }
+    }
+    val store = new FakeLongTermStore {
+      override def backupSubmission(report: Report, content: => Encrypted): Either[String, Unit] = {
+        steps.add(report.id.value -> "backupSubmission")
+        Right(())
+      }
+      override def backupReport(report: Report, content: => Encrypted): Either[String, Unit] = {
+        steps.add(report.id.value -> "backupReport")
+        Right(())
+      }
+    }
+
+    val queue = FakeReportRepository()
+    queue.saveIfAbsent(Seq(consented, notConsented, failing))
+    val testService = new MVHReportingService(
+      Config.instance, queue, connector, bfarmConnector, store, new FakeEncryptor
+    )
+
+    def stepsOf(r: Report) = steps.asScala.collect { case (tan, step) if tan == r.id.value => step }.toList
+
+    testService.conductReportingWorkflow().map { _ =>
+      stepsOf(consented) mustBe List("backupSubmission", "backupReport", "upload", "confirm")
+      stepsOf(notConsented) mustBe List("upload", "confirm")
+      // Without a backup, the report must neither be submitted to BfArM nor confirmed
+      stepsOf(failing) mustBe empty
+      queue.entries(_ => true).map(r => r.id -> r.status) must contain only (failing.id -> Status.Unsubmitted)
     }
   }
 

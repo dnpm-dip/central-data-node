@@ -56,8 +56,7 @@ object Config extends Logging
   (
     period: Long,
     timeUnit: TimeUnit,
-    startTime: Option[LocalTime],
-    minNumSubmissionDownloads: Int = 25
+    startTime: Option[LocalTime]
   )
 
   final case class DeletionEventPolling
@@ -73,7 +72,7 @@ object Config extends Logging
     Json.reads[SiteInfo]
 
   implicit val readsPolling: Reads[Polling] =
-    Json.using[Json.WithDefaultValues].reads[Polling]
+    Json.reads[Polling]
 
   implicit val readsDeletionEventPolling: Reads[DeletionEventPolling] =
     Json.reads[DeletionEventPolling]

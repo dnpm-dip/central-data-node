@@ -100,12 +100,13 @@ with BatchingUtil
 
 
   /**
-   * Regularly queries DIP sites for new submissions ([[pollReports]]), uploads
-   * them to BfArM ([[uploadReports]]) and sends a confirmation to dip sites
-   * ([[confirmReports]]). The interval is retrieved from [[config#polling]]
+   * Regularly queries DIP sites for new submissions ([[pollReports]]), backs them
+   * up ([[backupSubmissions]], [[backupReports]]), uploads them to BfArM
+   * ([[uploadReportsToBfarm]]) and sends a confirmation to dip sites
+   * ([[confirmReportsToSource]]). The interval is retrieved from [[config#polling]]
    *
-   * Before polling for new reports, the [[pollingQueue]] is checked for preexisting items,
-   * which are processed before polling for new items in [[pollReports]]
+   * Before polling for new reports, the [[pollingQueue]] is checked for preexisting
+   * unconfirmed items, which are confirmed before polling for new items in [[pollReports]]
    *
    * The state of this process is stored in the [[pollingQueue]] and in the
    * [[Report.status]] of it's items.
@@ -236,18 +237,17 @@ with BatchingUtil
     longTermStore.withSession { persistence => for {
       responseLog <- Future.successful(new ConcurrentLinkedQueue[ResponsivityReport])
       validSites <- getApiCompatibleDipSites(responseLog)
-      // Start by draining the report queue, if non-empty (in case the service
-      // had been interrupted) and it thus contains reports whose upload hasn't
-      // been confirmed to the origin DIP), in order to avoid polling them again
-      _ <- if (pollingQueue.exists(_.status == Status.Unsubmitted)) uploadReports else Future.unit
-      oldConfirmations <- if (pollingQueue.exists(_.status == Status.SubmittedToBfarm)) confirmReports(responseLog) else Future.successful(Seq.empty)
+      // Start by draining confirmations remaining in the report queue (in case the
+      // service had been interrupted), in order to avoid polling them again
+      _ <- if (pollingQueue.exists(_.status == Status.SubmittedToBfarm)) confirmReportsToSource(responseLog) else Future.unit
       _ <- pollReports(validSites,responseLog)
-      _ <- uploadReports
-      //TODO sicherstellen, dass das alles hier auch dann funktioniert, wenn der zKDK wieder auf multiUsecase gestellt wird. Der Usecase sollte zum sitecode immer mitgegeben werden.
-      freshConfirmations <- confirmReports(responseLog)
-      numReportsThisIteration = freshConfirmations.concat(oldConfirmations).count(_.isRight)
-      _ <- backupSubmissions(numReportsThisIteration,validSites,responseLog,persistence) //should process as at least as many submissions
+      // Back up before submitting to BfArM and confirming to the source DIP node,
+      // which may delete the submission once it has been confirmed
+      _ <- backupSubmissions(validSites,responseLog,persistence)
       _ = backupReports(persistence)
+      _ <- uploadReportsToBfarm
+      //TODO sicherstellen, dass das alles hier auch dann funktioniert, wenn der zKDK wieder auf multiUsecase gestellt wird. Der Usecase sollte zum sitecode immer mitgegeben werden.
+      _ <- confirmReportsToSource(responseLog)
       _ = flushReportQueue(persistence)
     } yield {
       persistence.writeSiteAvailabilityReports(
@@ -288,7 +288,7 @@ with BatchingUtil
   /**
    * Converts the submission report (reporting a genome sequencing and asking
    * for reimbursement) as it comes from the DIP node (in [[pollReports]]) into
-   * a report that will be transmitted to the BfArM (in [[uploadReports]])
+   * a report that will be transmitted to the BfArM (in [[uploadReportsToBfarm]])
    */
   private val BfarmReport: Report => bfarm.SubmissionReport = {
 
@@ -416,14 +416,18 @@ with BatchingUtil
   /**
    * Communicates with the BfArM, sends them [[BfarmReport]] entities, each based
    * on one of all the [[Report]] entities in the [[pollingQueue]]
-   * that are in status [[Status.Unsubmitted]]. After this upload their status is
-   * changed to [[Status.SubmittedToBfarm]]
+   * that are ready for submission, i.e. in status [[Status.ReportBackedup]], or
+   * in status [[Status.Unsubmitted]] if no backup is required (no MVH consent).
+   * After this upload their status is changed to [[Status.SubmittedToBfarm]]
    */
-  private[core] def uploadReports: Future[Seq[Either[String,Unit]]] = {
+  private[core] def uploadReportsToBfarm: Future[Seq[Either[String,Unit]]] = {
 
     log.info("Uploading SubmissionReports...")
-   
-    pollingQueue.entries(_.status == Status.Unsubmitted).traverse(
+
+    pollingQueue.entries(
+      report => report.status == Status.ReportBackedup ||
+        (report.status == Status.Unsubmitted && !report.hasMvhConsent)
+    ).traverse(
       report =>
         bfarmConnector.upload(BfarmReport(report))
           .map {
@@ -450,7 +454,7 @@ with BatchingUtil
 
   /**
    * Limits the number of submissions that can be processed simultaneously
-   * in [[confirmReports]], which is additionally limited by the actual
+   * in [[confirmReportsToSource]], which is additionally limited by the actual
    * number of available threads
    */
   private[core] val nSimultaneousSubmissionConfirmations:Int = 50
@@ -466,7 +470,7 @@ with BatchingUtil
    * batching is applied to avoid deadlock in case more than 200
    * SubmissionReports were processed in parallel here.
    */
-  private[core] def confirmReports(availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport])
+  private[core] def confirmReportsToSource(availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport])
   :Future[Seq[Either[String,Report]]] =
     batchTraverse[Report, Seq, Future, Either[String, Report]](
       pollingQueue.entries(_.status == Status.SubmittedToBfarm),
@@ -504,19 +508,19 @@ with BatchingUtil
 
     )
 
-  def backupSubmissions(minNumDownloads:Int, validSites: Seq[Code[Site]],
+  /**
+   * Downloads, encrypts and stores the submissions of the reports (with MVH consent)
+   * in status [[Status.Unsubmitted]], before they are submitted to BfArM. If successful,
+   * the report is elevated to status [[Status.SubmissionBackedup]], otherwise it
+   * remains unsubmitted and is retried in the next cycle.
+   */
+  def backupSubmissions(validSites: Seq[Code[Site]],
                         availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport],
                         persistence: LongTermStore = longTermStore):Future[Any] = {
-    val numDownloads:Int = minNumDownloads match {
-      //download and store at least as many submissions as reports were fetched, but at least config.polling.minNumSubmissionDownloads
-      case n if n >= config.polling.minNumSubmissionDownloads => n
-      case _ => config.polling.minNumSubmissionDownloads //in turn up to as many as there are in pollingQueue
-    }
     batchTraverse[Report, Seq, Future, Either[String, Report]](
-      pollingQueue.entries(report => report.status == Status.ConfirmedToSource)
+      pollingQueue.entries(report => report.status == Status.Unsubmitted)
         .filter(report => validSites.contains(report.site.code))
-        .filter(report => report.hasMvhConsent)
-        .take(numDownloads),
+        .filter(report => report.hasMvhConsent),
       nSimultaneousSubmissionDownloads
     )(
       report => dipConnector.downloadSubmission(report).map {
@@ -562,18 +566,14 @@ with BatchingUtil
   }
 
   /**
-   * Checks the queue for submissions the final state, stores them for the quarter report
-   * via [[LongTermStore.backupForQuarterReport]] and removes them from the queue.
+   * Checks the queue for submissions in the final state [[Status.ConfirmedToSource]],
+   * stores them for the quarter report via [[LongTermStore.backupForQuarterReport]]
+   * and removes them from the queue.
    * If storing fails, the report stays in the queue and is retried in the next cycle.
-   * If storing fails, the report stays in the queue and is retried in the next cycle.
-   * Right now, using ArchivingReportRepository removal additionally means, that they are
-   * archived in the filesystem
    */
   def flushReportQueue(persistence: LongTermStore = longTermStore):Unit = {
 
-    pollingQueue.entries(
-        report => report.status == Status.ReportBackedup ||
-          (report.status == Status.ConfirmedToSource && !report.hasMvhConsent))
+    pollingQueue.entries(_.status == Status.ConfirmedToSource)
       .foreach(report =>
         persistence.backupForQuarterReport(report)
           .foreach(_ => pollingQueue.removeFromQueue(report))

@@ -41,7 +41,7 @@ sealed trait CDN
 
 
 /**
- * A DTO for the exact JSON object that is sent to BfArM in [[de.dnpm.ccdn.core.MVHReportingService.uploadReports]]
+ * A DTO for the exact JSON object that is sent to BfArM in [[de.dnpm.ccdn.core.MVHReportingService.uploadReportsToBfarm]]
  *
  * Per one of these submitted, a line is to be added to the Quarter-report to the BfArM ("Anlage 2")
  */
