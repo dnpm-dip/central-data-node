@@ -18,11 +18,13 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.jdk.CollectionConverters.CollectionHasAsScala
 import scala.util.Success
+import scala.util.control.NonFatal
+import play.api.libs.json.Json
 
 
 
 
-object MVHReportingService
+object MVHReportingService extends Logging
 {
   import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -32,14 +34,26 @@ object MVHReportingService
       ReportRepository.getInstance.get,
       dip.DipConnector.getInstance.get,
       bfarm.BfarmConnector.getInstance.get,
-      PersistenceService.getInstance.get
+      LongTermStore.getInstance.get,
+      Encryptor.getInstance.get
     )
 
   /**
    * Entrypoint of the deployment for the JVM (see entrypoint.sh)
    */
   def main(args: Array[String]): Unit = {
-    
+
+    // Loading the service validates the configuration of all its components. On failure,
+    // exit explicitly, since components loaded before (e.g. the DipConnector's HTTP client)
+    // may have started non-daemon threads that would otherwise keep the JVM running
+    try {
+      val _ = service
+    } catch {
+      case NonFatal(t) =>
+        log.error(s"Invalid configuration, MVH Reporting service not started: ${t.getMessage}", t)
+        System.exit(1)
+    }
+
     Runtime.getRuntime.addShutdownHook(
       new Thread {
         override def run(): Unit = {
@@ -61,7 +75,8 @@ class MVHReportingService
   private[core] val pollingQueue: ReportRepository,
   private[core] val dipConnector: DipConnector,
   private[core] val bfarmConnector: BfarmConnector,
-  private[core] val persistenceService: PersistenceService
+  private[core] val longTermStore: LongTermStore,
+  private[core] val encryptor: Encryptor
 )(
   implicit ec: ExecutionContext
 )
@@ -77,19 +92,21 @@ with BatchingUtil
     new DeletionEventService(config, dipConnector)
 
   /**
-   * Executes the runnable in [[pollingTask]] in regular intervals
+   * Executes the runnables in [[pollingTask]] and [[deletionTask]] in regular intervals.
+   * Being single-threaded, it ensures both workflows never run concurrently
    */
   private val pollingExecutor: ScheduledExecutorService =
     Executors.newSingleThreadScheduledExecutor
 
 
   /**
-   * Regularly queries DIP sites for new submissions ([[pollReports]]), uploads
-   * them to BfArM ([[uploadReports]]) and sends a confirmation to dip sites
-   * ([[confirmReports]]). The interval is retrieved from [[config#polling]]
+   * Regularly queries DIP sites for new submissions ([[pollReports]]), backs them
+   * up ([[backupSubmissions]], [[backupReports]]), uploads them to BfArM
+   * ([[uploadReportsToBfarm]]) and sends a confirmation to dip sites
+   * ([[confirmReportsToSource]]). The interval is retrieved from [[config#polling]]
    *
-   * Before polling for new reports, the [[pollingQueue]] is checked for preexisting items,
-   * which are processed before polling for new items in [[pollReports]]
+   * Before polling for new reports, the [[pollingQueue]] is checked for preexisting
+   * unconfirmed items, which are confirmed before polling for new items in [[pollReports]]
    *
    * The state of this process is stored in the [[pollingQueue]] and in the
    * [[Report.status]] of it's items.
@@ -97,6 +114,15 @@ with BatchingUtil
    * Managed by [[pollingExecutor]]
    */
   private[core] var pollingTask: Option[JavaFuture[_]] = None
+
+  /**
+   * Regularly queries DIP sites for [[DeletionEvent]]s and applies them to the
+   * backups ([[conductDeletionWorkflow]]). The interval is retrieved from
+   * [[config#deletionEventPolling]].
+   *
+   * Managed by [[pollingExecutor]]
+   */
+  private[core] var deletionTask: Option[JavaFuture[_]] = None
 
   private val toSeconds =
     Map(
@@ -142,13 +168,34 @@ with BatchingUtil
           TimeUnit.SECONDS
         )
       )
+
+    val deletionPeriod =
+      config.deletionEventPolling.period*toSeconds(config.deletionEventPolling.timeUnit)
+
+    log.info(s"Scheduling deletion event polling to start in $delay s with $deletionPeriod s period")
+
+    deletionTask =
+      Some(
+        pollingExecutor.scheduleAtFixedRate(
+          () => try {
+            Await.result(conductDeletionWorkflow(), Duration(45, TimeUnit.MINUTES))
+          } catch {
+            case _: java.util.concurrent.TimeoutException =>
+              log.error("Deletion workflow did not complete within the 45-minute timeout")
+          },
+          delay,
+          deletionPeriod,
+          TimeUnit.SECONDS
+        )
+      )
   }
 
   /**
    * The functions in the [[DipConnector]] that communicate with external sites
    * return a report about connectivity. To end up with a single report per site
    * per attempt, this function coalesces the information collected in.
-   * [[conductReportingWorkflow]]
+   * [[conductReportingWorkflow]]. The coalesced report carries the latest timestamp
+   * of the site's reports, i.e. the time of the last communication attempt.
    * @param responseLog collected base data
    * @return one report per site
    */
@@ -168,14 +215,14 @@ with BatchingUtil
         // getApiCompatibleDipSites would return a ResponsivityReport with a
         // version and all version info should be consistent anyway
         val version = reports.flatMap(_.versionString).headOption
-        ResponsivityReport(site, responsivity, version)
+        ResponsivityReport(site, responsivity, reports.map(_.timestamp).max, version)
       }
 
   /**
    * Executes one full cycle of the reporting workflow: checks site API versions,
    * drains any pre-existing queue entries, polls new reports, uploads them to
-   * BfArM, and confirms back. Logs responsivity via [[PersistenceService]].
-   * All persistence operations share one session, see [[PersistenceService.withSession]]
+   * BfArM, and confirms back. Logs responsivity via [[LongTermStore]].
+   * All persistence operations share one session, see [[LongTermStore.withSession]]
    */
   private[core] def conductReportingWorkflow(): Future[Unit] = {
 
@@ -187,35 +234,53 @@ with BatchingUtil
     // checkSiteApiVersion will store a success item for every site that was
     // available, so it is sufficient for the other functions to merely report
     // failures. The endresult is reduced into a single value per site after the for loop.
-    persistenceService.withSession { persistence => for {
+    longTermStore.withSession { persistence => for {
       responseLog <- Future.successful(new ConcurrentLinkedQueue[ResponsivityReport])
       validSites <- getApiCompatibleDipSites(responseLog)
-      // Start by draining the report queue, if non-empty (in case the service
-      // had been interrupted) and it thus contains reports whose upload hasn't
-      // been confirmed to the origin DIP), in order to avoid polling them again
-      _ <- if (pollingQueue.exists(_.status == Status.Unsubmitted)) uploadReports else Future.unit
-      oldConfirmations <- if (pollingQueue.exists(_.status == Status.SubmittedToBfarm)) confirmReports(responseLog) else Future.successful(Seq.empty)
+      // Start by draining confirmations remaining in the report queue (in case the
+      // service had been interrupted), in order to avoid polling them again
+      _ <- if (pollingQueue.exists(_.status == Status.SubmittedToBfarm)) confirmReportsToSource(responseLog) else Future.unit
       _ <- pollReports(validSites,responseLog)
-      _ <- uploadReports
-      //TODO sicherstellen, dass das alles hier auch dann funktioniert, wenn der zKDK wieder auf multiUsecase gestellt wird. Der Usecase sollte zum sitecode immer mitgegeben werden.
-      freshConfirmations <- confirmReports(responseLog)
-      numReportsThisIteration = freshConfirmations.concat(oldConfirmations).count(_.isRight)
-      _ <- backupSubmissions(numReportsThisIteration,validSites,responseLog,persistence) //should process as at least as many submissions
+      // Back up before submitting to BfArM and confirming to the source DIP node,
+      // which may delete the submission once it has been confirmed
+      _ <- backupSubmissions(validSites,responseLog,persistence)
       _ = backupReports(persistence)
+      _ <- uploadReportsToBfarm
+      //TODO sicherstellen, dass das alles hier auch dann funktioniert, wenn der zKDK wieder auf multiUsecase gestellt wird. Der Usecase sollte zum sitecode immer mitgegeben werden.
+      _ <- confirmReportsToSource(responseLog)
       _ = flushReportQueue(persistence)
-      _ <- syncDeletions(validSites,responseLog,persistence)
     } yield {
       persistence.writeSiteAvailabilityReports(
-        coalesceResponsivityReports(responseLog.asScala), Instant.now(clock))
+        coalesceResponsivityReports(responseLog.asScala))
       log.debug("Reporting workflow completed")
     }}
+  }
+
+  /**
+   * Executes one full cycle of the deletion workflow: checks site API versions
+   * and applies all [[DeletionEvent]]s since the last cycle via [[syncDeletions]].
+   * Unlike [[conductReportingWorkflow]], no responsivity is logged.
+   * All persistence operations share one session, see [[LongTermStore.withSession]]
+   */
+  private[core] def conductDeletionWorkflow(): Future[Unit] = {
+
+    log.info("Conducting scheduled deletion workflow")
+
+    longTermStore.withSession { persistence => for {
+      // Only used to pass the sites' API versions on to syncDeletions, not persisted
+      versionLog <- Future.successful(new ConcurrentLinkedQueue[ResponsivityReport])
+      validSites <- getApiCompatibleDipSites(versionLog)
+      _ <- syncDeletions(validSites,versionLog,persistence)
+    } yield log.debug("Deletion workflow completed")
+    }
   }
 
   def stop(): Unit = {
     log.info("Stopping MVH Reporting service")
 
-    // Gracefully stop pollingTask, if running
+    // Gracefully stop pollingTask and deletionTask, if running
     pollingTask.foreach(_ cancel false)
+    deletionTask.foreach(_ cancel false)
 
     log.debug("Finished stopping MVH Reporting service")
   }
@@ -223,7 +288,7 @@ with BatchingUtil
   /**
    * Converts the submission report (reporting a genome sequencing and asking
    * for reimbursement) as it comes from the DIP node (in [[pollReports]]) into
-   * a report that will be transmitted to the BfArM (in [[uploadReports]])
+   * a report that will be transmitted to the BfArM (in [[uploadReportsToBfarm]])
    */
   private val BfarmReport: Report => bfarm.SubmissionReport = {
 
@@ -281,18 +346,18 @@ with BatchingUtil
       dipConnector.getApiVersion(site)
         .map {
           case Right(v) if isSiteApiVersionSupported(v) =>
-            availabilityBuffer.add(ResponsivityReport(site, Responsivity.success,Some(v)))
+            availabilityBuffer.add(ResponsivityReport(site, Responsivity.success, Instant.now(clock), Some(v)))
             Some(site)
           case Right(v) =>
-            availabilityBuffer.add(ResponsivityReport(site, Responsivity.success, Some(v)))
+            availabilityBuffer.add(ResponsivityReport(site, Responsivity.success, Instant.now(clock), Some(v)))
             None
           case Left(_) =>
-            availabilityBuffer.add(ResponsivityReport(site, Responsivity.failure))
+            availabilityBuffer.add(ResponsivityReport(site, Responsivity.failure, Instant.now(clock)))
             None
         }
         .recover {
           case _ =>
-            availabilityBuffer.add(ResponsivityReport(site, Responsivity.failure))
+            availabilityBuffer.add(ResponsivityReport(site, Responsivity.failure, Instant.now(clock)))
             None
         }
     }.map(_.flatten)
@@ -333,14 +398,14 @@ with BatchingUtil
                 case Success(Left(err)) =>
                   log.error(s"Problem polling $useCase SubmissionReports of " +
                     s"site $site: $err")
-                  availabilityBuffer.add(ResponsivityReport(site,Responsivity.failure))
+                  availabilityBuffer.add(ResponsivityReport(site, Responsivity.failure, Instant.now(clock)))
               }
               // Recover lest the Future traversal be "short-circuited" into a failed Future
               .recover {
                 case t =>
                   log.error(s"Error(s) occurred polling $useCase " +
                     s"SubmissionReports of $site", t)
-                  availabilityBuffer.add(ResponsivityReport(site,Responsivity.failure))
+                  availabilityBuffer.add(ResponsivityReport(site, Responsivity.failure, Instant.now(clock)))
                   t.getMessage.asLeft
               }
           }
@@ -351,14 +416,18 @@ with BatchingUtil
   /**
    * Communicates with the BfArM, sends them [[BfarmReport]] entities, each based
    * on one of all the [[Report]] entities in the [[pollingQueue]]
-   * that are in status [[Status.Unsubmitted]]. After this upload their status is
-   * changed to [[Status.SubmittedToBfarm]]
+   * that are ready for submission, i.e. in status [[Status.ReportBackedup]], or
+   * in status [[Status.Unsubmitted]] if no backup is required (no MVH consent).
+   * After this upload their status is changed to [[Status.SubmittedToBfarm]]
    */
-  private[core] def uploadReports: Future[Seq[Either[String,Unit]]] = {
+  private[core] def uploadReportsToBfarm: Future[Seq[Either[String,Unit]]] = {
 
     log.info("Uploading SubmissionReports...")
-   
-    pollingQueue.entries(_.status == Status.Unsubmitted).traverse(
+
+    pollingQueue.entries(
+      report => report.status == Status.ReportBackedup ||
+        (report.status == Status.Unsubmitted && !report.hasMvhConsent)
+    ).traverse(
       report =>
         bfarmConnector.upload(BfarmReport(report))
           .map {
@@ -385,7 +454,7 @@ with BatchingUtil
 
   /**
    * Limits the number of submissions that can be processed simultaneously
-   * in [[confirmReports]], which is additionally limited by the actual
+   * in [[confirmReportsToSource]], which is additionally limited by the actual
    * number of available threads
    */
   private[core] val nSimultaneousSubmissionConfirmations:Int = 50
@@ -401,7 +470,7 @@ with BatchingUtil
    * batching is applied to avoid deadlock in case more than 200
    * SubmissionReports were processed in parallel here.
    */
-  private[core] def confirmReports(availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport])
+  private[core] def confirmReportsToSource(availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport])
   :Future[Seq[Either[String,Report]]] =
     batchTraverse[Report, Seq, Future, Either[String, Report]](
       pollingQueue.entries(_.status == Status.SubmittedToBfarm),
@@ -425,7 +494,7 @@ with BatchingUtil
         //Logs either the error message from the submission confirmation request
         // or from queue removal
         case Success(Left(msg)) =>
-          availabilityBuffer.add(ResponsivityReport(report.site.code,Responsivity.failure))
+          availabilityBuffer.add(ResponsivityReport(report.site.code, Responsivity.failure, Instant.now(clock)))
           log.error(msg)
       }
       // Recover lest the Future traversal be "short-circuited" into a failed Future
@@ -433,30 +502,30 @@ with BatchingUtil
         case t =>
           log.error(s"Problem confirming submission: Site ${report.site.code}, " +
             s"TAN ${report.id} - ${t.getMessage}")
-          availabilityBuffer.add(ResponsivityReport(report.site.code,Responsivity.failure))
+          availabilityBuffer.add(ResponsivityReport(report.site.code, Responsivity.failure, Instant.now(clock)))
           t.getMessage.asLeft[Report]
       }
 
     )
 
-  def backupSubmissions(minNumDownloads:Int, validSites: Seq[Code[Site]],
+  /**
+   * Downloads, encrypts and stores the submissions of the reports (with MVH consent)
+   * in status [[Status.Unsubmitted]], before they are submitted to BfArM. If successful,
+   * the report is elevated to status [[Status.SubmissionBackedup]], otherwise it
+   * remains unsubmitted and is retried in the next cycle.
+   */
+  def backupSubmissions(validSites: Seq[Code[Site]],
                         availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport],
-                        persistence: PersistenceService = persistenceService):Future[Any] = {
-    val numDownloads:Int = minNumDownloads match {
-      //download and store at least as many submissions as reports were fetched, but at least config.polling.minNumSubmissionDownloads
-      case n if n >= config.polling.minNumSubmissionDownloads => n
-      case _ => config.polling.minNumSubmissionDownloads //in turn up to as many as there are in pollingQueue
-    }
+                        persistence: LongTermStore = longTermStore):Future[Any] = {
     batchTraverse[Report, Seq, Future, Either[String, Report]](
-      pollingQueue.entries(report => report.status == Status.ConfirmedToSource)
+      pollingQueue.entries(report => report.status == Status.Unsubmitted)
         .filter(report => validSites.contains(report.site.code))
-        .filter(report => report.hasMvhConsent)
-        .take(numDownloads),
+        .filter(report => report.hasMvhConsent),
       nSimultaneousSubmissionDownloads
     )(
       report => dipConnector.downloadSubmission(report).map {
         case Right(submission) =>
-          persistence.backupSubmission(report,submission) match {
+          persistence.backupSubmission(report,encryptor.encrypt(submission)) match {
             case Right(_) =>
               //backup saved successful
               val asBackedUp = report.copy(status = Status.SubmissionBackedup)
@@ -468,7 +537,7 @@ with BatchingUtil
           }
 
         case Left(downloadError) =>
-          availabilityBuffer.add(ResponsivityReport(report.site.code,Responsivity.failure))
+          availabilityBuffer.add(ResponsivityReport(report.site.code, Responsivity.failure, Instant.now(clock)))
           (s"Problem downloading submission for backup: Site ${report.site.code}, " +
             s"TAN ${report.id} - $downloadError").asLeft[Report]
       }
@@ -479,10 +548,10 @@ with BatchingUtil
    * Stores the reports (with MVH consent) after their submission was stored
    * @return
    */
-  def backupReports(persistence: PersistenceService = persistenceService):Seq[Either[String,Report]] = {
+  def backupReports(persistence: LongTermStore = longTermStore):Seq[Either[String,Report]] = {
     pollingQueue.entries(_.status == Status.SubmissionBackedup).map(
 
-      report => persistence.backupReport(report) match {
+      report => persistence.backupReport(report,encryptor.encrypt(Json.toJson(report))) match {
         case Right(_) =>
           //backup saved successful
           val asBackedUp: Report = report.copy(status = Status.ReportBackedup)
@@ -497,17 +566,14 @@ with BatchingUtil
   }
 
   /**
-   * Checks the queue for submissions the final state, stores them for the quarter report
-   * via [[PersistenceService.backupForQuarterReport]] and removes them from the queue.
+   * Checks the queue for submissions in the final state [[Status.ConfirmedToSource]],
+   * stores them for the quarter report via [[LongTermStore.backupForQuarterReport]]
+   * and removes them from the queue.
    * If storing fails, the report stays in the queue and is retried in the next cycle.
-   * Right now, using ArchivingReportRepository removal additionally means, that they are
-   * archived in the filesystem
    */
-  def flushReportQueue(persistence: PersistenceService = persistenceService):Unit = {
+  def flushReportQueue(persistence: LongTermStore = longTermStore):Unit = {
 
-    pollingQueue.entries(
-        report => report.status == Status.ReportBackedup ||
-          (report.status == Status.ConfirmedToSource && !report.hasMvhConsent))
+    pollingQueue.entries(_.status == Status.ConfirmedToSource)
       .foreach(report =>
         persistence.backupForQuarterReport(report)
           .foreach(_ => pollingQueue.removeFromQueue(report))
@@ -533,17 +599,17 @@ with BatchingUtil
    * and their active UseCases. The other sites are skipped, which is logged once at info level.
    * For each, fetches every
    * [[DeletionEvent]] that occurred since each was last queried, via [[deletionEventService]],
-   * and applies each of them to the backups via [[PersistenceService.applyDeletion]].
+   * and applies each of them to the backups via [[LongTermStore.applyDeletion]].
    * A site's last-queried timestamp is only advanced if all of its events were applied successfully.
    *
    * @return all successfully applied DeletionEvents
    */
   def syncDeletions(validSites: Seq[Code[Site]],
                     availabilityBuffer:ConcurrentLinkedQueue[ResponsivityReport],
-                    persistence: PersistenceService = persistenceService):Future[Seq[DeletionEvent]] = {
+                    persistence: LongTermStore = longTermStore):Future[Seq[DeletionEvent]] = {
     val versions =
       availabilityBuffer.asScala
-        .collect { case ResponsivityReport(site, _, Some(version)) => site -> version }
+        .collect { case ResponsivityReport(site, _, _, Some(version)) => site -> version }
         .toMap
     val (compatibleSites, outdatedSites) =
       validSites.partition(site => versions.get(site).exists(supportsDeletionEndpoint))
@@ -563,7 +629,7 @@ with BatchingUtil
     ){
       case (site,useCase) =>
         deletionEventService.deletionEvents(site,useCase) { event =>
-          persistence.applyDeletion(Coding[Site](site.value),useCase,event)
+          persistence.applyDeletion(Coding[Site](site.value),useCase,event,encryptor.encrypt(Json.toJson(event)))
             .left.map { err =>
               log.error(s"Failed to apply DeletionEvent ${event.tan.value} of site $site: $err")
               err
@@ -572,12 +638,12 @@ with BatchingUtil
           .andThen {
             case Success(Left(err)) =>
               log.error(s"Problem polling $useCase DeletionEvents of site $site: $err")
-              availabilityBuffer.add(ResponsivityReport(site,Responsivity.failure))
+              availabilityBuffer.add(ResponsivityReport(site, Responsivity.failure, Instant.now(clock)))
           }
           .recover {
             case t =>
               log.error(s"Error(s) occurred polling $useCase DeletionEvents of site $site", t)
-              availabilityBuffer.add(ResponsivityReport(site,Responsivity.failure))
+              availabilityBuffer.add(ResponsivityReport(site, Responsivity.failure, Instant.now(clock)))
               t.getMessage.asLeft
           }
     }

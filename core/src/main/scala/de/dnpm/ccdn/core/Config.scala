@@ -25,6 +25,7 @@ import de.dnpm.ccdn.core.bfarm.{
 final case class Config
 (
   polling: Config.Polling,
+  deletionEventPolling: Config.DeletionEventPolling,
   dataNodeIds: Map[UseCase.Value,Id[CDN]],
   sites: Map[Code[Site],Config.SiteInfo]
 ){
@@ -55,8 +56,13 @@ object Config extends Logging
   (
     period: Long,
     timeUnit: TimeUnit,
-    startTime: Option[LocalTime],
-    minNumSubmissionDownloads: Int = 25
+    startTime: Option[LocalTime]
+  )
+
+  final case class DeletionEventPolling
+  (
+    period: Long,
+    timeUnit: TimeUnit
   )
 
   implicit val readsTimeUnit: Reads[TimeUnit] =
@@ -66,7 +72,10 @@ object Config extends Logging
     Json.reads[SiteInfo]
 
   implicit val readsPolling: Reads[Polling] =
-    Json.using[Json.WithDefaultValues].reads[Polling]
+    Json.reads[Polling]
+
+  implicit val readsDeletionEventPolling: Reads[DeletionEventPolling] =
+    Json.reads[DeletionEventPolling]
 
   implicit val reads: Reads[Config] =
     Json.reads[Config]

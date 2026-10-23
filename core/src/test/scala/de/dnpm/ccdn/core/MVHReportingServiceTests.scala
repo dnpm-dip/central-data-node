@@ -1,6 +1,7 @@
 package de.dnpm.ccdn.core
 
 
+import de.dnpm.ccdn.core.Encryptor.Encrypted
 import de.dnpm.ccdn.core.dip.Report
 import de.dnpm.ccdn.core.dip.Report.Status
 import org.scalatest.flatspec.AsyncFlatSpec
@@ -42,10 +43,13 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       ReportRepository.getInstance.get,
       fakeDipConnector,
       fakeBfarmConnector,
-      new FakePersistenceService
+      new FakeLongTermStore,
+      new FakeEncryptor
     )
 
   private val sites = Config.instance.sites.keys.toSeq
+
+  private val timestamp = Instant.parse("2026-04-30T12:00:00Z")
 
   it must "handle multiple uploads from every DIP node in one go" in {
     log.info("FakeDipConnector sending "+fakeDipConnector.nSubmissions+ " submissions per site")
@@ -53,16 +57,12 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
       responseLog <- Future.successful(new ConcurrentLinkedQueue[ResponsivityReport])
       validSites <- service.getApiCompatibleDipSites(responseLog)
-      // Start by draining the report queue, if non-empty (in case the service
-      // had been interrupted) and it thus contains reports whose upload hasn't
-      // been confirmed to the origin DIP), in order to avoid polling them again
-      _ <- if (service.pollingQueue.exists(_.status == Status.Unsubmitted)) service.uploadReports else Future.unit
-      oldConfirmations <- if (service.pollingQueue.exists(_.status == Status.SubmittedToBfarm)) service.confirmReports(responseLog) else Future.successful(Seq.empty)
+      _ <- if (service.pollingQueue.exists(_.status == Status.SubmittedToBfarm)) service.confirmReportsToSource(responseLog) else Future.unit
       _ <- service.pollReports(validSites,responseLog)
-      _ <- service.uploadReports
-      freshConfirmations <- service.confirmReports(responseLog)
-      _ <- service.backupSubmissions(freshConfirmations.concat(oldConfirmations).count(_.isRight),validSites,responseLog) //should process as at least as many submissions
+      _ <- service.backupSubmissions(validSites,responseLog)
       _ = service.backupReports()
+      _ <- service.uploadReportsToBfarm
+      _ <- service.confirmReportsToSource(responseLog)
       _ = service.flushReportQueue()
       _ <- service.syncDeletions(validSites,responseLog)
 
@@ -94,17 +94,16 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     val fixedInstant = Instant.parse("2026-04-30T12:00:00Z")
 
     val capturedReports = ListBuffer.empty[ResponsivityReport]
-    var capturedInstant: Option[Instant] = None
-    val capturingReporter = new PersistenceService {
-      override def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport], now: Instant): Unit = {
+    val capturingReporter = new LongTermStore {
+      override def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport]): Unit =
         capturedReports ++= reports
-        capturedInstant = Some(now)
-      }
 
-      override def backupReport(report: Report): Either[String, Unit] = ???
-      override def backupSubmission(report: Report, submission: JsValue): Either[String, Unit] = ???
-      override def backupDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = ???
-      override def applyDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = ???
+      override def backupReport(report: Report, content: => Encrypted): Either[String, Unit] = ???
+      override def backupSubmission(report: Report, content: => Encrypted): Either[String, Unit] = ???
+      override def backupDeletion(site: Coding[Site], usecase: UseCase.Value,
+                                  deletionEvent: DeletionEvent, content: => Encrypted): Either[String, Unit] = ???
+      override def applyDeletion(site: Coding[Site], usecase: UseCase.Value,
+                                 deletionEvent: DeletionEvent, content: => Encrypted): Either[String, Unit] = ???
       override def backupForQuarterReport(report: Report): Either[String, Unit] = ???
     }
 
@@ -113,15 +112,16 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       FakeReportRepository(),
       connectorReturningVersion("0.9.0"),
       fakeBfarmConnector,
-      capturingReporter
+      capturingReporter,
+      new FakeEncryptor
     )
     testService.clock = Clock.fixed(fixedInstant, ZoneOffset.UTC)
 
     for {
       _ <- testService.conductReportingWorkflow()
     } yield {
-      capturedInstant must be(Some(fixedInstant))
       capturedReports must not be empty
+      assert(capturedReports.forall(_.timestamp == fixedInstant))
       assert(capturedReports.forall(_.responsivity == Responsivity.success))
     }
   }
@@ -130,7 +130,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     val preCutover = Instant.parse("2026-05-31T23:59:59Z")
     val testService = new MVHReportingService(
       Config.instance, FakeReportRepository(), connectorReturningVersion("0.9.0"),
-      fakeBfarmConnector, new FakePersistenceService
+      fakeBfarmConnector, new FakeLongTermStore, new FakeEncryptor
     )
     testService.clock = Clock.fixed(preCutover, ZoneOffset.UTC)
 
@@ -146,7 +146,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       FakeReportRepository(),
       connectorReturningVersion("1.3.0-RELEASE_5"),
       fakeBfarmConnector,
-      new FakePersistenceService
+      new FakeLongTermStore,
+      new FakeEncryptor
     )
     testService.clock = Clock.fixed(onCutover, ZoneOffset.UTC)
 
@@ -162,7 +163,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       FakeReportRepository(),
       connectorReturningVersion("1.2.4-BETA5-HOTFIX#133742"),
       fakeBfarmConnector,
-      new FakePersistenceService
+      new FakeLongTermStore,
+      new FakeEncryptor
     )
     testService.clock = Clock.fixed(onCutover, ZoneOffset.UTC)
 
@@ -194,17 +196,19 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     }
 
     val capturedResponsivityReports = ListBuffer.empty[ResponsivityReport]
-    val capturingReporter = new PersistenceService {
-      override def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport], now: Instant): Unit =
+    val capturingReporter = new LongTermStore {
+      override def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport]): Unit =
         capturedResponsivityReports ++= reports
 
-      override def backupReport(report: Report): Either[String, Unit] = ???
-      override def backupSubmission(report: Report, submission: JsValue): Either[String, Unit] = ???
+      override def backupReport(report: Report, content: => Encrypted): Either[String, Unit] = ???
+      override def backupSubmission(report: Report, content: => Encrypted): Either[String, Unit] = ???
 
       override def backupForQuarterReport(report: Report): Either[String, Unit] = ???
 
-      override def backupDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = ???
-      override def applyDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = ???
+      override def backupDeletion(site: Coding[Site], usecase: UseCase.Value,
+                                  deletionEvent: DeletionEvent, content: => Encrypted): Either[String, Unit] = ???
+      override def applyDeletion(site: Coding[Site], usecase: UseCase.Value,
+                                 deletionEvent: DeletionEvent, content: => Encrypted): Either[String, Unit] = ???
     }
 
     val testService = new MVHReportingService(
@@ -212,7 +216,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       FakeReportRepository(),
       failingDataConnector,
       fakeBfarmConnector,
-      capturingReporter
+      capturingReporter,
+      new FakeEncryptor
     )
     testService.clock = Clock.fixed(preCutover, ZoneOffset.UTC)
 
@@ -232,8 +237,8 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
     val site = sites.head
     val version = "1.3.0"
     val reports = ListBuffer(
-      ResponsivityReport(site, Responsivity.success, Some(version)),
-      ResponsivityReport(site, Responsivity.failure, None)
+      ResponsivityReport(site, Responsivity.success, timestamp, Some(version)),
+      ResponsivityReport(site, Responsivity.failure, timestamp, None)
     )
     val coalesced = service.coalesceResponsivityReports(reports)
     Future.successful {
@@ -244,12 +249,25 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
   it must "coalesce versionString: report None if no report for the site had one" in {
     val site = sites.head
     val reports = ListBuffer(
-      ResponsivityReport(site, Responsivity.failure, None),
-      ResponsivityReport(site, Responsivity.failure, None)
+      ResponsivityReport(site, Responsivity.failure, timestamp, None),
+      ResponsivityReport(site, Responsivity.failure, timestamp, None)
     )
     val coalesced = service.coalesceResponsivityReports(reports)
     Future.successful {
       assert(coalesced.forall(_.versionString.isEmpty))
+    }
+  }
+
+  it must "coalesce timestamp: pick the latest of the site's reports" in {
+    val site = sites.head
+    val later = timestamp.plusSeconds(30)
+    val reports = ListBuffer(
+      ResponsivityReport(site, Responsivity.success, later),
+      ResponsivityReport(site, Responsivity.failure, timestamp)
+    )
+    val coalesced = service.coalesceResponsivityReports(reports)
+    Future.successful {
+      coalesced.map(_.timestamp) mustBe List(later)
     }
   }
 
@@ -272,9 +290,9 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
 
       _ <- service.pollReports(sites, new ConcurrentLinkedQueue())
 
-      _ <- service.uploadReports
+      _ <- service.uploadReportsToBfarm
 
-      _ <- service.confirmReports(new ConcurrentLinkedQueue())
+      _ <- service.confirmReportsToSource(new ConcurrentLinkedQueue())
 
     } yield{
 
@@ -321,7 +339,7 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
         LocalDateTime.of(2026, 7, 1, 12, 0),
         Id[Patient]("42"),
         None,
-        Status.ConfirmedToSource,
+        Status.Unsubmitted,
         Coding[Site](site.value),
         UseCase.MTB,
         Type.Initial,
@@ -341,19 +359,95 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       queue,
       countingConnector,
       fakeBfarmConnector,
-      new FakePersistenceService {
-        override def backupSubmission(report: Report, submission: JsValue): Either[String, Unit] =
+      new FakeLongTermStore {
+        override def backupSubmission(report: Report, content: => Encrypted): Either[String, Unit] =
           Right(())
-      }
+      },
+      new FakeEncryptor
     ) {
       override private[core] val nSimultaneousSubmissionDownloads: Int = batchSize
     }
 
     for {
-      _ <- testService.backupSubmissions(nReports, Seq(site), new ConcurrentLinkedQueue())
+      _ <- testService.backupSubmissions(Seq(site), new ConcurrentLinkedQueue())
     } yield {
       assertResult(nReports, "Setup assertion failed: not all submissions were downloaded")(nDownloads.get)
       assert(maxSimultaneousDownloads.get <= batchSize)
+    }
+  }
+
+  it must "back up submission and report before uploading to BfArM and confirming to the source" in {
+    val site = sites.head
+    // Records the order of the steps per TAN
+    val steps = new ConcurrentLinkedQueue[(String, String)]
+
+    def report(tan: String, mvhConsent: Boolean) =
+      Report(
+        Id[TransferTAN](tan),
+        LocalDateTime.of(2026, 7, 1, 12, 0),
+        Id[Patient]("42"),
+        None,
+        Status.Unsubmitted,
+        Coding[Site](site.value),
+        UseCase.MTB,
+        Type.Initial,
+        None, None, None,
+        HealthInsurance.Type.GKV,
+        Some(Map(Consent.Category.ModelProject -> mvhConsent)),
+        None, None
+      )
+    val consented    = report("consented", mvhConsent = true)
+    val notConsented = report("not-consented", mvhConsent = false)
+    val failing      = report("failing-download", mvhConsent = true)
+
+    val connector = new FakeDIPConnector {
+      override def submissionReports(site: Code[Site], useCase: UseCase.Value, filter: Report.Filter)
+          (implicit ec: ExecutionContext): Future[Either[String, Seq[Report]]] =
+        Future.successful(Right(Seq.empty))
+      override def confirmSubmitted(report: Report)(implicit ec: ExecutionContext)
+      : Future[Either[String, Report]] = {
+        steps.add(report.id.value -> "confirm")
+        Future.successful(Right(report))
+      }
+      override def downloadSubmission(report: Report)(implicit env: ExecutionContext)
+      : Future[Either[String, JsValue]] =
+        Future.successful(
+          if (report.id == failing.id) Left("simulated deleted submission")
+          else Right(Json.obj("tan" -> report.id.value))
+        )
+    }
+    val bfarmConnector = new FakeBfarmConnector {
+      override def upload(report: bfarm.SubmissionReport)(implicit ec: ExecutionContext)
+      : Future[Either[String, Unit]] = {
+        steps.add(report.SubmittedCase.tan.value -> "upload")
+        Future.successful(Right(()))
+      }
+    }
+    val store = new FakeLongTermStore {
+      override def backupSubmission(report: Report, content: => Encrypted): Either[String, Unit] = {
+        steps.add(report.id.value -> "backupSubmission")
+        Right(())
+      }
+      override def backupReport(report: Report, content: => Encrypted): Either[String, Unit] = {
+        steps.add(report.id.value -> "backupReport")
+        Right(())
+      }
+    }
+
+    val queue = FakeReportRepository()
+    queue.saveIfAbsent(Seq(consented, notConsented, failing))
+    val testService = new MVHReportingService(
+      Config.instance, queue, connector, bfarmConnector, store, new FakeEncryptor
+    )
+
+    def stepsOf(r: Report) = steps.asScala.collect { case (tan, step) if tan == r.id.value => step }.toList
+
+    testService.conductReportingWorkflow().map { _ =>
+      stepsOf(consented) mustBe List("backupSubmission", "backupReport", "upload", "confirm")
+      stepsOf(notConsented) mustBe List("upload", "confirm")
+      // Without a backup, the report must neither be submitted to BfArM nor confirmed
+      stepsOf(failing) mustBe empty
+      queue.entries(_ => true).map(r => r.id -> r.status) must contain only (failing.id -> Status.Unsubmitted)
     }
   }
 
@@ -382,10 +476,11 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       queue,
       fakeDipConnector,
       fakeBfarmConnector,
-      new FakePersistenceService {
+      new FakeLongTermStore {
         override def backupForQuarterReport(report: Report): Either[String, Unit] =
           if (report.id == failing.id) Left("simulated storage failure") else Right(())
-      }
+      },
+      new FakeEncryptor
     )
 
     testService.flushReportQueue()
@@ -418,13 +513,14 @@ final class MVHReportingServiceTests extends AsyncFlatSpec
       }
     }
     val testService = new MVHReportingService(
-      Config.instance, FakeReportRepository(), connector, fakeBfarmConnector, new FakePersistenceService
+      Config.instance, FakeReportRepository(), connector, fakeBfarmConnector,
+      new FakeLongTermStore, new FakeEncryptor
     )
     val Seq(updated, outdated, withoutVersion) = sites.take(3)
     val responseLog = new ConcurrentLinkedQueue[ResponsivityReport]
-    responseLog.add(ResponsivityReport(updated, Responsivity.success, Some("1.3.2")))
-    responseLog.add(ResponsivityReport(outdated, Responsivity.success, Some("1.3.1")))
-    responseLog.add(ResponsivityReport(withoutVersion, Responsivity.failure))
+    responseLog.add(ResponsivityReport(updated, Responsivity.success, timestamp, Some("1.3.2")))
+    responseLog.add(ResponsivityReport(outdated, Responsivity.success, timestamp, Some("1.3.1")))
+    responseLog.add(ResponsivityReport(withoutVersion, Responsivity.failure, timestamp))
 
     testService.syncDeletions(Seq(updated, outdated, withoutVersion), responseLog).map { _ =>
       queriedSites.asScala.toSet mustBe Set(updated)

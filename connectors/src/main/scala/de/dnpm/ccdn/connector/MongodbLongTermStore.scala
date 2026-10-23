@@ -2,9 +2,9 @@ package de.dnpm.ccdn.connector
 
 
 import java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME
-import java.time.{Instant, LocalDateTime, ZoneOffset}
+import java.time.{LocalDateTime, ZoneOffset}
 import java.util.Date
-import com.mongodb.{ErrorCategory, MongoCommandException, MongoWriteException}
+import com.mongodb.{ConnectionString, ErrorCategory, MongoCommandException, MongoWriteException}
 import com.mongodb.client.{MongoClient, MongoClients, MongoDatabase}
 import com.mongodb.client.model.{CreateCollectionOptions, Filters, IndexOptions, Indexes, ValidationOptions}
 import com.mongodb.client.model.mql.MqlValues
@@ -15,15 +15,15 @@ import org.bson.conversions.Bson
 import de.dnpm.dip.util.Logging
 import de.dnpm.ccdn.core.{
   ResponsivityReport,
-  PersistenceService,
-  PersistenceServiceProvider,
-  EncryptionService
+  LongTermStore,
+  LongTermStoreProvider,
+  Encryptor
 }
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.Site
 import de.dnpm.dip.service.mvh.MVHService.DeletionEvent
 import de.dnpm.dip.service.mvh.UseCase
-import play.api.libs.json.{JsValue, Json}
+import play.api.libs.json.{Json, OWrites}
 import scala.jdk.CollectionConverters._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -31,13 +31,13 @@ import scala.util.{Failure, Success, Try}
 import scala.util.Properties.{envOrNone, propOrNone}
 
 
-final class PersistenceServiceProviderImpl extends PersistenceServiceProvider
+final class LongTermStoreProviderImpl extends LongTermStoreProvider
 {
-  override def getInstance: PersistenceService =
-    MongodbPersistenceServiceImpl.instance
+  override def getInstance: LongTermStore =
+    MongodbLongTermStore.instance
 }
 
-object MongodbPersistenceServiceImpl
+object MongodbLongTermStore extends Logging
 {
   private val MONGODBURIJVMPROP = "ccdn.mongodb.uri"
   private val MONGODBURIENVVAR  = "CCDN_MONGODB_URI"
@@ -57,6 +57,20 @@ object MongodbPersistenceServiceImpl
 
   /** MongoDB error code for creating a collection that already exists */
   private val NAMESPACE_EXISTS = 48
+
+  /**
+   * Serializes a [[ResponsivityReport]] into a document of collection "siteAvailabilityReports".
+   * The timestamp is written as extended JSON date, so that it is stored as BSON date.
+   */
+  private[connector] implicit val responsivityReportWrites: OWrites[ResponsivityReport] =
+    OWrites { report =>
+      Json.obj(
+        "site"         -> report.site.value,
+        "responsivity" -> report.responsivity.toString,
+        "apiVersion"   -> report.versionString.getOrElse[String]("???"),
+        "timestamp"    -> Json.obj("$date" -> Json.obj("$numberLong" -> report.timestamp.toEpochMilli.toString))
+      )
+    }
 
   /**
    * Reports carry German wall-clock time without zone information. They are stored as
@@ -82,6 +96,18 @@ object MongodbPersistenceServiceImpl
     val CreatedAt = "createdAt"
     val Year      = "year"
     val Quarter   = "quarter"
+  }
+
+  /**
+   * Types of documents in [[BACKUP_COLLECTION]] (and their parts in
+   * [[LARGE_BACKUP_PARTS_COLLECTION]]), stored as the value's name in field "type"
+   */
+  private[connector] object BackupDocumentType extends Enumeration
+  {
+    val Report: Value     = Value("report")
+    val Submission: Value = Value("submission")
+    val Deletion: Value   = Value("deletion")
+    //also manual-deletion
   }
 
   /**
@@ -139,7 +165,7 @@ object MongodbPersistenceServiceImpl
    * The concatenation of the parts' "ciphertext" in this order is the original ciphertext.
    */
   private[connector] def splitEncrypted(
-    encrypted: EncryptionService.Encrypted,
+    encrypted: Encryptor.Encrypted,
     maxCiphertextLength: Int = MAX_CIPHERTEXT_LENGTH
   ): (Document, Seq[Document]) =
     if (encrypted.ciphertext.length <= maxCiphertextLength)
@@ -161,84 +187,110 @@ object MongodbPersistenceServiceImpl
       (content, parts)
     }
 
-  lazy val instance = new MongodbPersistenceServiceImpl(
-    envOrNone(MONGODBURIENVVAR).orElse(propOrNone(MONGODBURIJVMPROP))
-  )
+  /**
+   * Fails (like the other connectors) if the MongoDB URI is not configured or malformed,
+   * or if the database cannot be reached with it (see [[MongodbLongTermStore#ping]]),
+   * so that the service does not start without being able to persist backups
+   */
+  lazy val instance: MongodbLongTermStore = {
+    val uri =
+      envOrNone(MONGODBURIENVVAR).filter(_.nonEmpty)
+        .orElse(propOrNone(MONGODBURIJVMPROP).filter(_.nonEmpty))
+        .getOrElse {
+          val msg = s"Couldn't find MongoDB URI, configure it via " +
+            s"ENV variable $MONGODBURIENVVAR or system property $MONGODBURIJVMPROP"
+          log.error(msg)
+          throw new Exception(msg)
+        }
+
+    Try(new MongodbLongTermStore(uri))
+      .recoverWith {
+        case t =>
+          log.error(s"Invalid MongoDB URI configured via ENV variable $MONGODBURIENVVAR or system property $MONGODBURIJVMPROP", t)
+          Failure(t)
+      }
+      .flatMap { service =>
+        Try(service.ping())
+          .map(_ => service)
+          .recoverWith {
+            case t =>
+              log.error(s"Couldn't connect to MongoDB: ${t.getMessage}", t)
+              Failure(t)
+          }
+      }
+      .get
+  }
 }
 
 /**
- * @param encryptionService by-name, so that a missing public key only fails
- *                          the backups, not the construction of this service
+ * @param mongoUri          must be a valid MongoDB connection string, otherwise the
+ *                          constructor throws an IllegalArgumentException
  * @param sharedClient      if defined, used by all operations (and not closed by them), see
  *                          [[withSession]]; otherwise each operation creates and closes its own client
  */
-final class MongodbPersistenceServiceImpl private (
-  val mongoUri: Option[String],
-  encryptionService: => EncryptionService,
+final class MongodbLongTermStore private (
+  val mongoUri: String,
   sharedClient: Option[MongoClient]
-) extends PersistenceService with Logging
+) extends LongTermStore with Logging
 {
 
-  import MongodbPersistenceServiceImpl._
+  import MongodbLongTermStore._
 
-  def this(
-    mongoUri: Option[String],
-    encryptionService: => EncryptionService = RsaHybridEncryptionServiceImpl.instance
-  ) = this(mongoUri, encryptionService, None)
+  def this(mongoUri: String) = this(mongoUri, None)
 
-  if (sharedClient.isEmpty) mongoUri match {
-    case Some(uri) => log.debug(s"MongoDB URI: $uri")
-    case None      => log.warn("MongoDB URI is not configured; site availability reports will not be persisted")
-  }
+  /** Parsing validates the URI */
+  private val connectionString = new ConnectionString(mongoUri)
+
+  if (sharedClient.isEmpty)
+    log.debug(s"MongoDB hosts: ${connectionString.getHosts.asScala.mkString(", ")}")
+
+  /**
+   * Checks that the database is reachable and the credentials are accepted, throws otherwise
+   * (after the client's server selection timeout, 30 s by default, if the server is unreachable)
+   */
+  def ping(): Unit =
+    withClient { client =>
+      val _ = client.getDatabase(DATABASE).runCommand(new Document("ping", 1))
+      log.info("Connected to MongoDB")
+    }
 
   /**
    * Runs `f` with the shared client if there is one, otherwise with a new one closed afterwards
    */
-  private def withClient[T](uri: String)(f: MongoClient => T): T =
+  private def withClient[T](f: MongoClient => T): T =
     sharedClient match {
       case Some(client) => f(client)
       case None =>
-        val client = MongoClients.create(uri)
+        val client = MongoClients.create(connectionString)
         try f(client) finally client.close()
     }
 
   /**
-   * Runs `f` with a view of this service whose operations all use one MongoClient (which is
+   * Runs `f` with a view of this store whose operations all use one MongoClient (which is
    * thread safe), closed once the returned Future completes. If the client cannot be created,
-   * `f` runs with this service, whose operations then each try (and report failures) on their own.
+   * `f` runs with this store, whose operations then each try (and report failures) on their own.
    */
-  override def withSession[T](f: PersistenceService => Future[T])(implicit ec: ExecutionContext): Future[T] =
-    (sharedClient, mongoUri) match {
-      case (None, Some(uri)) =>
-        Try(MongoClients.create(uri)) match {
+  override def withSession[T](f: LongTermStore => Future[T])(implicit ec: ExecutionContext): Future[T] =
+    sharedClient match {
+      case None =>
+        Try(MongoClients.create(connectionString)) match {
           case Success(client) =>
-            Future.delegate(f(new MongodbPersistenceServiceImpl(mongoUri, encryptionService, Some(client))))
+            Future.delegate(f(new MongodbLongTermStore(mongoUri, Some(client))))
               .andThen { case _ => client.close() }
           case Failure(exc) =>
             log.error(s"Failed to create MongoDB client for session: ${exc.getMessage}")
             f(this)
         }
-      case _ => f(this)
+      case Some(_) => f(this)
     }
 
-  override def writeSiteAvailabilityReports(
-    reports: Iterable[ResponsivityReport],
-    now: Instant
-  ): Unit =
-    if (reports.nonEmpty) mongoUri.foreach { uri =>
+  override def writeSiteAvailabilityReports(reports: Iterable[ResponsivityReport]): Unit =
+    if (reports.nonEmpty) {
       try {
-        withClient(uri) { client =>
+        withClient { client =>
           val coll = client.getDatabase(DATABASE).getCollection("siteAvailabilityReports")
-          val docs = new java.util.ArrayList[Document]()
-          reports.foreach { r =>
-            docs.add(
-              new Document("site", r.site.value)
-                .append("responsivity", r.responsivity.toString)
-                .append("apiVersion", r.versionString.getOrElse("???"))
-                .append("timestamp", java.util.Date.from(now))
-            )
-          }
-          coll.insertMany(docs)
+          val docs = reports.map(r => Document.parse(Json.stringify(Json.toJson(r)))).toList
+          coll.insertMany(docs.asJava)
           log.debug("Successfully persisted responsivity logs")
         }
       } catch {
@@ -249,73 +301,69 @@ final class MongodbPersistenceServiceImpl private (
     else log.warn("Empty set of reports passed to writeSiteAvailabilityReports")
 
   /**
-   * Stores the report, encrypted, in collection [[BACKUP_COLLECTION]].
+   * Stores the encrypted report in collection [[BACKUP_COLLECTION]].
    */
-  override def backupReport(report: Report): Either[String, Unit] =
+  override def backupReport(report: Report, content: => Encryptor.Encrypted): Either[String, Unit] =
     storeBackup(
       report,
-      "report",
-      Json.toJson(report),
+      BackupDocumentType.Report,
+      content,
       s"Report ${report.id.value} from site ${report.site.code}"
     )
 
   /**
-   * Stores the submission, encrypted, in collection [[BACKUP_COLLECTION]].
+   * Stores the encrypted submission in collection [[BACKUP_COLLECTION]].
    */
-  override def backupSubmission(report: Report, submission: JsValue): Either[String, Unit] =
+  override def backupSubmission(report: Report, content: => Encryptor.Encrypted): Either[String, Unit] =
     storeBackup(
       report,
-      "submission",
-      submission,
+      BackupDocumentType.Submission,
+      content,
       s"Submission ${report.id.value} from site ${report.site.code}"
     )
 
   /**
-   * Stores the deletion event, encrypted, in collection [[BACKUP_COLLECTION]].
+   * Stores the encrypted deletion event in collection [[BACKUP_COLLECTION]].
    * Its "submittedAt" is the time of deletion.
    */
-  override def backupDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] =
+  override def backupDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent,
+                              content: => Encryptor.Encrypted): Either[String, Unit] =
     storeBackup(
       deletionEvent.tan.value,
       site,
       usecase,
       deletionEvent.dateTime,
-      "deletion",
-      Json.toJson(deletionEvent),
+      BackupDocumentType.Deletion,
+      content,
       s"DeletionEvent ${deletionEvent.tan.value} from site ${site.code}"
     )
 
-  private def storeBackup(report: Report,documentType: String,content: JsValue,context: String
+  private def storeBackup(report: Report,documentType: BackupDocumentType.Value,
+                          content: => Encryptor.Encrypted,context: String
   ): Either[String, Unit] =
     storeBackup(report.id.value, report.site, report.useCase, report.createdAt, documentType, content, context)
 
   /**
-   * Encrypts `content` and splits it if it is too large for a single document, see [[splitEncrypted]]
-   */
-  private def encryptContent(content: JsValue): (Document, Seq[Document]) =
-    splitEncrypted(encryptionService.encrypt(content))
-
-  /**
    * Common scheme of all backup documents: "tan", "site", "usecase", "type", "submittedAt"
-   * in plain text, and `content` encrypted.
+   * in plain text, and the already encrypted `content`.
    * If the encrypted content is too large, its ciphertext is stored in parts in collection
    * [[LARGE_BACKUP_PARTS_COLLECTION]], see [[splitEncrypted]]. The parts carry the identifying
    * fields of their backup document, too, and are inserted before it; if inserting the backup
    * document fails, they are removed again.
    * ("tan", "type", "site", "usecase") identifies a backup, whose data never changes, so if
-   * such a document already exists, nothing is encrypted or inserted.
+   * such a document already exists, nothing is inserted, and `content` is not evaluated
+   * (i.e. not encrypted).
    * A unique index over these fields is ensured on every connect (createIndex is a no-op if it
    * already exists) for safety against concurrent inserts; a resulting duplicate key error
    * is a failure like any other database error, and logged as error.
    */
   private def storeBackup(tan: String,site: Coding[Site],usecase: UseCase.Value,
-                          submittedAt: LocalDateTime,documentType: String,
-                          content: JsValue, context: String
+                          submittedAt: LocalDateTime,documentType: BackupDocumentType.Value,
+                          content: => Encryptor.Encrypted, context: String
   ): Either[String, Unit] =
     for {
-      uri      <- mongoUri.toRight(s"MongoDB URI is not configured; cannot back up $context")
       inserted <- Try {
-                    withClient(uri) { client =>
+                    withClient { client =>
                       val coll = client.getDatabase(DATABASE).getCollection(BACKUP_COLLECTION)
                       coll.createIndex(
                         Indexes.ascending("tan", "type", "site", "usecase"),
@@ -325,19 +373,19 @@ final class MongodbPersistenceServiceImpl private (
                         coll.find(
                           Filters.and(
                             Filters.eq("tan", tan),
-                            Filters.eq("type", documentType),
+                            Filters.eq("type", documentType.toString),
                             Filters.eq("site", site.code.value),
                             Filters.eq("usecase", usecase.toString)
                           )
                         )
                         .first()
                       if (existing == null) {
-                        val (encrypted, parts) = encryptContent(content)
+                        val (encrypted, parts) = splitEncrypted(content)
                         val doc =
                           new Document("tan", tan)
                             .append("site", site.code.value)
                             .append("usecase", usecase.toString)
-                            .append("type", documentType)
+                            .append("type", documentType.toString)
                             .append("content", encrypted)
                             .append("submittedAt", submittedAt.format(ISO_LOCAL_DATE_TIME))
                         if (parts.isEmpty) coll.insertOne(doc)
@@ -348,7 +396,7 @@ final class MongodbPersistenceServiceImpl private (
                               .append("tan", tan)
                               .append("site", site.code.value)
                               .append("usecase", usecase.toString)
-                              .append("type", documentType)
+                              .append("type", documentType.toString)
                           }
                           // one by one, since a single insert command is limited to 48 MB
                           parts.foreach(partsColl.insertOne)
@@ -393,20 +441,22 @@ final class MongodbPersistenceServiceImpl private (
    * as well as the matching report in [[QUARTER_REPORT_COLLECTION]], then backs up the deletion event itself via
    * [[backupDeletion]] (which skips the insert if it is already present).
    */
-  override def applyDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent): Either[String, Unit] = {
+  override def applyDeletion(site: Coding[Site], usecase: UseCase.Value, deletionEvent: DeletionEvent,
+                             content: => Encryptor.Encrypted): Either[String, Unit] = {
     val tan     = deletionEvent.tan.value
     val context = s"DeletionEvent $tan from site ${site.code}"
     for {
-      uri     <- mongoUri.toRight(s"MongoDB URI is not configured; cannot apply $context")
       deleted <- Try {
-        withClient(uri) { client =>
+        withClient { client =>
           val db = client.getDatabase(DATABASE)
           val filter =
             Filters.and(
               Filters.eq("tan", tan),
               Filters.eq("site", site.code.value),
               Filters.eq("usecase", usecase.toString),
-              Filters.in("type", "submission", "report")
+              Filters.in("type",
+                BackupDocumentType.Submission.toString,
+                BackupDocumentType.Report.toString)
             )
           val deleted = db.getCollection(BACKUP_COLLECTION).deleteMany(filter).getDeletedCount
           // after the backup documents, so that none is left pointing to removed parts
@@ -430,7 +480,7 @@ final class MongodbPersistenceServiceImpl private (
           msg
         }
       _        = log.info(s"Removed ${deleted._1} backup document(s) and ${deleted._2} quarter report document(s) for $context")
-      _       <- backupDeletion(site, usecase, deletionEvent)
+      _       <- backupDeletion(site, usecase, deletionEvent, content)
     } yield ()
   }
 
@@ -441,13 +491,11 @@ final class MongodbPersistenceServiceImpl private (
    * identifies a report, and an already existing one is left untouched.
    * An index over ("year", "quarter") serves fetching the reports of a quarter.
    */
-  //TODO should eventually replace ArchivingReportRepository
   override def backupForQuarterReport(report: Report): Either[String, Unit] = {
     val context = s"Report ${report.id.value} from site ${report.site.code} for quarter report"
     for {
-      uri      <- mongoUri.toRight(s"MongoDB URI is not configured; cannot store $context")
       inserted <- Try {
-                    withClient(uri) { client =>
+                    withClient { client =>
                       val coll = quarterReportCollection(client.getDatabase(DATABASE))
                       val existing =
                         coll.find(

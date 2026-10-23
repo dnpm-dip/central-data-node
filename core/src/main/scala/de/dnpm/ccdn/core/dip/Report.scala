@@ -40,6 +40,11 @@ object Report extends JsonEnumKeyHelpers
   /**
    * The processing state of a report that develops between the time a report was
    * downloaded into the zKDK from a DIP node until it was removed from the queue again.
+   *
+   * Backups (only if MVH consent is given, see [[Report.hasMvhConsent]]) are made
+   * before the report is submitted to BfArM and confirmed to the source DIP node,
+   * since the source DIP node may delete the submission once it has been confirmed.
+   * Without MVH consent, the backup states are skipped.
    */
   object Status extends Enumeration
   {
@@ -49,25 +54,23 @@ object Report extends JsonEnumKeyHelpers
      */
     val Unsubmitted: Value = Value("unsubmitted")
     /**
-     * 2nd state. When a submission is submitted to BfArM
-     */
-    val SubmittedToBfarm: Value = Value("submitted")
-    /**
-     * 3rd state. When submission to BfArM has been reported back to
-     * the source DIP node.
-     *
-     * If no MVH consent is given [[Report.hasMvhConsent]], this is the final state
-     */
-    val ConfirmedToSource: Value = Value("confirmed")
-    /**
-     * 4th state. Associated submission has been downloaded from source DIP
-     * node, encrytped and stored.
+     * 2nd state (only with MVH consent). Associated submission has been
+     * downloaded from source DIP node, encrypted and stored.
      */
     val SubmissionBackedup: Value = Value("submissionbackedup")
     /**
-     * 5th and final state. The report was also backed up.
+     * 3rd state (only with MVH consent). The report was also backed up.
      */
     val ReportBackedup: Value = Value("reportbackedup")
+    /**
+     * 4th state. When a submission is submitted to BfArM
+     */
+    val SubmittedToBfarm: Value = Value("submitted")
+    /**
+     * 5th and final state. When submission to BfArM has been reported back to
+     * the source DIP node.
+     */
+    val ConfirmedToSource: Value = Value("confirmed")
 
 
 
